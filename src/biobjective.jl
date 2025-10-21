@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -8,7 +8,7 @@
 
 Se the biobjective functions in `subproblem`.
 
-This must be called from inside [`SDDP.parameterize`](@ref).
+This must be called from inside [`MSUC.parameterize`](@ref).
 
 We recommend you define both objectives as JuMP expressions.
 
@@ -28,7 +28,7 @@ end
 
 Run some initialization code to setup a biobjective problem.
 
-This must be called outside [`SDDP.parameterize`](@ref).
+This must be called outside [`MSUC.parameterize`](@ref).
 
 !!! warning
     This function is experimental! It may change in any future release.
@@ -95,7 +95,7 @@ function train_biobjective(
     model::PolicyGraph;
     solution_limit::Int,
     include_timing::Bool = false,
-    log_file_prefix::String = "SDDP",
+    log_file_prefix::String = "MSUC",
     stopping_rules::Function = weight -> AbstractStoppingRule[],
     kwargs...,
 )

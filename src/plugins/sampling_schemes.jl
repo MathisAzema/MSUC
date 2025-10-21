@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -95,13 +95,13 @@ for the stagewise-independent noise terms, and out-of-sample probabilities for
 the node-transition matrix.
 
 `f` is a function that takes the name of a node and returns a tuple containing
-a vector of new [`SDDP.Noise`](@ref) terms for the children of that node, and
-a vector of new [`SDDP.Noise`](@ref) terms for the stagewise-independent
+a vector of new [`MSUC.Noise`](@ref) terms for the children of that node, and
+a vector of new [`MSUC.Noise`](@ref) terms for the stagewise-independent
 noise.
 
 If `f` is called with the name of the root node (e.g., `0` in a linear policy
 graph, `(0, 1)` in a Markovian Policy Graph), then return a vector of
-[`SDDP.Noise`](@ref) for the children of the root node.
+[`MSUC.Noise`](@ref) for the children of the root node.
 
 If `use_insample_transition`, the in-sample transition probabilities will be
 used. Therefore, `f` should only return a vector of the stagewise-independent
@@ -118,7 +118,7 @@ then `max_depth` must be set > 0.
 Control which node the trajectories start from using `initial_node`. If it is
 left as `nothing`, the root node is used as the starting node.
 
-If a node is deterministic, pass `[SDDP.Noise(nothing, 1.0)]` as the vector of
+If a node is deterministic, pass `[MSUC.Noise(nothing, 1.0)]` as the vector of
 noise terms.
 
 You can use `rollout_limit` to set iteration specific depth limits. For example:
@@ -133,10 +133,10 @@ Given linear policy graph `graph` with `T` stages:
 ```julia
 sampler = OutOfSampleMonteCarlo(graph) do node
     if node == 0
-        return [SDDP.Noise(1, 1.0)]
+        return [MSUC.Noise(1, 1.0)]
     else
-        noise_terms = [SDDP.Noise(node, 0.3), SDDP.Noise(node + 1, 0.7)]
-        children = node < T ? [SDDP.Noise(node + 1, 0.9)] : SDDP.Noise{Int}[]
+        noise_terms = [MSUC.Noise(node, 0.3), MSUC.Noise(node + 1, 0.7)]
+        children = node < T ? [MSUC.Noise(node + 1, 0.9)] : MSUC.Noise{Int}[]
         return children, noise_terms
     end
 end
@@ -145,7 +145,7 @@ end
 Given linear policy graph `graph` with `T` stages:
 ```julia
 sampler = OutOfSampleMonteCarlo(graph, use_insample_transition=true) do node
-    return [SDDP.Noise(node, 0.3), SDDP.Noise(node + 1, 0.7)]
+    return [MSUC.Noise(node, 0.3), MSUC.Noise(node + 1, 0.7)]
 end
 ```
 """
@@ -259,7 +259,7 @@ function sample_noise(noise_terms::Vector{<:Noise})
         end
     end
     return error(
-        "Internal SDDP error: unable to sample noise from $(noise_terms)",
+        "Internal MSUC error: unable to sample noise from $(noise_terms)",
     )
 end
 
@@ -310,7 +310,7 @@ function sample_scenario(
     end
     # Throw an error because we should never end up here.
     return error(
-        "Internal SDDP error: something went wrong sampling a scenario.",
+        "Internal MSUC error: something went wrong sampling a scenario.",
     )
 end
 
@@ -491,7 +491,7 @@ which returns a `Vector{Float64}` when called with no arguments like
 This sampling scheme must be used with a Markovian graph constructed from the
 same `simulator`.
 
-The sample space for [`SDDP.parameterize`](@ref) must be a tuple with 1 or 2
+The sample space for [`MSUC.parameterize`](@ref) must be a tuple with 1 or 2
 values, value is the Markov state and the second value is the random variable
 for the current node. If the node is deterministic, use `Ω = [(markov_state,)]`.
 
@@ -502,37 +502,37 @@ trajectory.
 ## Example
 
 ```julia
-julia> using SDDP
+julia> using MSUC
 
 julia> import HiGHS
 
 julia> simulator() = cumsum(rand(10))
 simulator (generic function with 1 method)
 
-julia> model = SDDP.PolicyGraph(
-           SDDP.MarkovianGraph(simulator; budget = 20, scenarios = 100);
+julia> model = MSUC.PolicyGraph(
+           MSUC.MarkovianGraph(simulator; budget = 20, scenarios = 100);
            sense = :Max,
            upper_bound = 12,
            optimizer = HiGHS.Optimizer,
        ) do sp, node
            t, markov_state = node
-           @variable(sp, x >= 0, SDDP.State, initial_value = 1)
+           @variable(sp, x >= 0, MSUC.State, initial_value = 1)
            @variable(sp, u >= 0)
            @constraint(sp, x.out == x.in - u)
            # Elements of Ω MUST be a tuple in which `markov_state` is the first
            # element.
            Ω = [(markov_state, (u = u_max,)) for u_max in (0.0, 0.5)]
-           SDDP.parameterize(sp, Ω) do (markov_state, ω)
+           MSUC.parameterize(sp, Ω) do (markov_state, ω)
                set_upper_bound(u, ω.u)
                @stageobjective(sp, markov_state * u)
            end
        end;
 
-julia> SDDP.train(
+julia> MSUC.train(
            model;
            print_level = 0,
            iteration_limit = 10,
-           sampling_scheme = SDDP.SimulatorSamplingScheme(simulator),
+           sampling_scheme = MSUC.SimulatorSamplingScheme(simulator),
        )
 
 ```

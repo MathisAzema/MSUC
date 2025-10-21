@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -26,7 +26,7 @@ end
 """
     Serial()
 
-Run SDDP in serial mode.
+Run MSUC in serial mode.
 """
 struct Serial <: AbstractParallelScheme end
 
@@ -86,7 +86,7 @@ end
         use_master::Bool = true,
     )
 
-Run SDDP in asynchronous mode workers with pid's `slave_pids`.
+Run MSUC in asynchronous mode workers with pid's `slave_pids`.
 
 After initializing the models on each worker, call `init_callback(model)`. Note
 that `init_callback` is run _locally on the worker_ and _not_ on the master
@@ -118,7 +118,7 @@ end
         use_master::Bool = true,
     )
 
-Run SDDP in asynchronous mode workers with pid's `slave_pids`.
+Run MSUC in asynchronous mode workers with pid's `slave_pids`.
 
 Set the optimizer on each worker by calling `JuMP.set_optimizer(model, solver)`.
 """
@@ -342,20 +342,20 @@ end
 """
     Threaded()
 
-Run SDDP in multi-threaded mode.
+Run MSUC in multi-threaded mode.
 
 Use `julia --threads N` to start Julia with `N` threads. In most cases, you
 should pick `N` to be the number of physical cores on your machine.
 
 !!! danger
-    This plug-in is experimental, and parts of SDDP.jl may not be threadsafe. If
+    This plug-in is experimental, and parts of MSUC.jl may not be threadsafe. If
     you encounter any problems or crashes, please open a GitHub issue.
 
 ## Example
 
 ```julia
-SDDP.train(model; parallel_scheme = SDDP.Threaded())
-SDDP.simulate(model; parallel_scheme = SDDP.Threaded())
+MSUC.train(model; parallel_scheme = MSUC.Threaded())
+MSUC.simulate(model; parallel_scheme = MSUC.Threaded())
 ```
 """
 struct Threaded <: AbstractParallelScheme end

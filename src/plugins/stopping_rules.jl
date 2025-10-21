@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
@@ -132,9 +132,9 @@ struct Statistical <: AbstractStoppingRule
             @warn(
                 "Are you really sure you want to use this stopping rule? " *
                 "Read why we don't recommend it by typing `? " *
-                "SDDP.Statistical` into the REPL to read the docstring.\n\n" *
+                "MSUC.Statistical` into the REPL to read the docstring.\n\n" *
                 "If you understand what you are doing, you can disable this " *
-                "warning with `SDDP.Statistical(; disable_warning = true)`",
+                "warning with `MSUC.Statistical(; disable_warning = true)`",
             )
         end
         return new(num_replications, iteration_period, z_score, verbose)
@@ -301,14 +301,14 @@ simulation. From each simulation, we record the value of the stage objective.
 We terminate the policy if each of the trajectories in two consecutive
 simulations differ by less than `distance_tol`.
 
-By default, `replications` and `period` are `-1`, and SDDP.jl will guess good
+By default, `replications` and `period` are `-1`, and MSUC.jl will guess good
 values for these. Over-ride the default behavior by setting an appropriate
 value.
 
 ## Example
 
 ```julia
-SDDP.train(model; stopping_rules = [SimulationStoppingRule()])
+MSUC.train(model; stopping_rules = [SimulationStoppingRule()])
 ```
 """
 function SimulationStoppingRule(;
@@ -434,7 +434,7 @@ consecutive iterations.
 ## Example
 
 ```julia
-SDDP.train(model; stopping_rules = [FirstStageStoppingRule()])
+MSUC.train(model; stopping_rules = [FirstStageStoppingRule()])
 ```
 """
 function FirstStageStoppingRule(; atol::Float64 = 1e-3, iterations::Int = 50)

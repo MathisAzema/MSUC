@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -7,7 +7,7 @@ module MSPFormat
 
 import JSON
 import JuMP
-import ..SDDP
+import ..MSUC
 
 function _parse_lattice(filename::String)
     data = JuMP.MOI.FileFormats.compressed_open(
@@ -16,7 +16,7 @@ function _parse_lattice(filename::String)
         "r",
         JuMP.MOI.FileFormats.AutomaticCompression(),
     )
-    graph = SDDP.Graph("root")
+    graph = MSUC.Graph("root")
     # Identify all nodes at the same stage
     max_stage = 0
     for value in values(data)
@@ -24,7 +24,7 @@ function _parse_lattice(filename::String)
     end
     stage_node_combinations = Dict(stage => String[] for stage in 0:max_stage)
     for (key, value) in data
-        SDDP.add_node(graph, key)
+        MSUC.add_node(graph, key)
         push!(stage_node_combinations[value["stage"]], key)
     end
     # Add edges, including those with zero probability, to retain the Markovian
@@ -35,14 +35,14 @@ function _parse_lattice(filename::String)
         end
         for child in sort!(stage_node_combinations[value["stage"]+1])
             prob = get(value["successors"], child, 0.0)
-            SDDP.add_edge(graph, key => child, prob)
+            MSUC.add_edge(graph, key => child, prob)
         end
     end
     # MSPFormat doesn't have explicit root -> stage 1 arcs. Assume uniform.
     # Also, MSPFormat uses 0-indexed stages.
     stage_zero = String[key for (key, value) in data if value["stage"] == 0]
     for key in stage_zero
-        SDDP.add_edge(graph, "root" => key, 1 / length(stage_zero))
+        MSUC.add_edge(graph, "root" => key, 1 / length(stage_zero))
     end
     return _reduce_lattice(graph, data)
 end
@@ -84,15 +84,15 @@ function _reduce_lattice(graph, data)
         )
         return graph, graph_data
     end
-    new_graph = SDDP.Graph("root")
+    new_graph = MSUC.Graph("root")
     for t in keys(nodes_by_stage)
-        SDDP.add_node(new_graph, "$t")
+        MSUC.add_node(new_graph, "$t")
     end
     for t in keys(nodes_by_stage)
         if t == 0
-            SDDP.add_edge(new_graph, "root" => "$t", 1.0)
+            MSUC.add_edge(new_graph, "root" => "$t", 1.0)
         else
-            SDDP.add_edge(new_graph, "$(t-1)" => "$t", 1.0)
+            MSUC.add_edge(new_graph, "$(t-1)" => "$t", 1.0)
         end
     end
     graph_data = Dict(
@@ -187,14 +187,14 @@ function _build_lhs(stage::Integer, sp::JuMP.Model, terms::Vector{Any})
         else
             # `x` is a state, so we need to distinguish whether we want the
             # `.in` or `.out` variables.
-            @assert x isa SDDP.State
+            @assert x isa MSUC.State
             if term["stage"] == stage
                 x = x.out
             elseif term["stage"] == stage - 1
                 x = x.in
             else
                 error(
-                    "SDDP.jl does not support this MSPFormat file because it " *
+                    "MSUC.jl does not support this MSPFormat file because it " *
                     "contains state variables from stages other than `t` or " *
                     "`t-1`. Got `t-$(stage - term["stage"])`",
                 )
@@ -236,7 +236,7 @@ end
         bound::Float64 = 1e6,
     )
 
-Return a [`SDDP.PolicyGraph`](@ref) built from the MSPFormat files
+Return a [`MSUC.PolicyGraph`](@ref) built from the MSPFormat files
 `problem_filename` and `lattice_filename`, which point to the `.problem.json`
 and `.lattice.json` files respectively.
 
@@ -257,7 +257,7 @@ function read_from_file(
     problem = JSON.parsefile(problem_filename)
     state_variables = _state_variables(problem)
     initial_values = Dict{Symbol,Float64}()
-    model = SDDP.PolicyGraph(
+    model = MSUC.PolicyGraph(
         graph;
         sense = problem["maximize"] ? :Max : :Min,
         lower_bound = problem["maximize"] ? -Inf : -bound,
@@ -292,7 +292,7 @@ function read_from_file(
             x = if variable["name"] in state_variables
                 sp[sym_name] = JuMP.@variable(
                     sp,
-                    variable_type = SDDP.State,
+                    variable_type = MSUC.State,
                     initial_value = initial_values[sym_name],
                     base_name = "$sym_name",
                 )
@@ -328,7 +328,7 @@ function read_from_file(
             if !haskey(JuMP.object_dictionary(sp), sym_name)
                 sp[sym_name] = JuMP.@variable(
                     sp,
-                    variable_type = SDDP.State,
+                    variable_type = MSUC.State,
                     initial_value = 0.0,
                     base_name = "$sym_name",
                 )
@@ -351,8 +351,8 @@ function read_from_file(
         end
         Ω = graph_data[node]["sample_space"]
         P = graph_data[node]["probability"]
-        SDDP.parameterize(sp, Ω, P) do ω
-            SDDP.@stageobjective(
+        MSUC.parameterize(sp, Ω, P) do ω
+            MSUC.@stageobjective(
                 sp,
                 stage_objective + sum(
                     x * _get_constant(terms, ω) for (x, terms) in ω_objective

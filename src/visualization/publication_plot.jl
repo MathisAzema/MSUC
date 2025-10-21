@@ -1,9 +1,9 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Internal function: convert dataset (from SDDP.simulate) into a matrix where
+# Internal function: convert dataset (from MSUC.simulate) into a matrix where
 # the rows are quantiles, and the columns are stages.
 function publication_data(
     dataset::Vector{<:Vector{<:AbstractDict}},
@@ -36,7 +36,7 @@ function publication_data(
 end
 
 """
-    SDDP.publication_plot(
+    MSUC.publication_plot(
         data_function, simulations;
         quantile = [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0],
         kwargs...)
@@ -47,7 +47,7 @@ See `Plots.jl` for the list of keyword arguments.
 
 ## Examples
 
-    SDDP.publication_plot(simulations; title = "My title") do data
+    MSUC.publication_plot(simulations; title = "My title") do data
         return data[:stage_objective]
     end
 """
@@ -58,7 +58,7 @@ function publication_plot(
 )
     # An annoying over-load so that we can provide a consistent interface
     # instead of the Plots.jl generated `publicationplot`.
-    return SDDP.publicationplot(simulations, data_function; kwargs...)
+    return MSUC.publicationplot(simulations, data_function; kwargs...)
 end
 
 RecipesBase.@userplot PublicationPlot

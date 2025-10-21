@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -21,7 +21,7 @@ function util_test_directory(dir, exclude = String[])
     return
 end
 
-@testset "SDDP.jl" begin
+@testset "MSUC.jl" begin
     util_test_directory(".", ["runtests.jl"])
     util_test_directory(joinpath(dirname(@__DIR__), "docs", "src", "examples"))
 end

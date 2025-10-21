@@ -1,15 +1,15 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestMSPFormat
 
-using SDDP
+using MSUC
 using Test
 import HiGHS
 
-import SDDP: MSPFormat
+import MSUC: MSPFormat
 
 function runtests()
     for name in names(@__MODULE__; all = true)
@@ -80,20 +80,20 @@ function test_SimpleHydroThermal()
     problem = joinpath(@__DIR__, "hydro_thermal")
     model = MSPFormat.read_from_file(problem)
     JuMP.set_optimizer(model, HiGHS.Optimizer)
-    SDDP.train(model; iteration_limit = 10, print_level = 0)
-    @test ≈(SDDP.calculate_bound(model), 8333.3333, atol = 1e-4)
+    MSUC.train(model; iteration_limit = 10, print_level = 0)
+    @test ≈(MSUC.calculate_bound(model), 8333.3333, atol = 1e-4)
     return
 end
 
 function test_SimpleHydroThermal_round_trip()
     problem = joinpath(@__DIR__, "hydro_thermal")
     src = MSPFormat.read_from_file(problem)
-    SDDP.write_to_file(src, "$problem.sof.json")
-    model, validation = SDDP.read_from_file("$problem.sof.json")
+    MSUC.write_to_file(src, "$problem.sof.json")
+    model, validation = MSUC.read_from_file("$problem.sof.json")
     @test validation === nothing
     JuMP.set_optimizer(model, HiGHS.Optimizer)
-    SDDP.train(model; iteration_limit = 10, print_level = 0)
-    @test ≈(SDDP.calculate_bound(model), 8333.3333, atol = 1e-4)
+    MSUC.train(model; iteration_limit = 10, print_level = 0)
+    @test ≈(MSUC.calculate_bound(model), 8333.3333, atol = 1e-4)
     rm("$problem.sof.json")
     return
 end
@@ -104,9 +104,9 @@ function test_electric_non_stagewise()
         joinpath(@__DIR__, "electric.lattice.json"),
     )
     @test length(model_stagewise.nodes) == 2
-    @test model_stagewise["0"].children == [SDDP.Noise("1", 1.0)]
+    @test model_stagewise["0"].children == [MSUC.Noise("1", 1.0)]
     @test length(model_stagewise["0"].noise_terms) == 1
-    @test model_stagewise["1"].children == SDDP.Noise{String}[]
+    @test model_stagewise["1"].children == MSUC.Noise{String}[]
     @test length(model_stagewise["1"].noise_terms) == 3
     model_tree = MSPFormat.read_from_file(
         joinpath(@__DIR__, "electric.problem.json"),
@@ -114,12 +114,12 @@ function test_electric_non_stagewise()
     )
     @test length(model_tree.nodes) == 5
     @test model_tree["0"].children ==
-          SDDP.Noise.(["2", "3", "4"], [0.3, 0.7, 0.0])
+          MSUC.Noise.(["2", "3", "4"], [0.3, 0.7, 0.0])
     @test model_tree["1"].children ==
-          SDDP.Noise.(["2", "3", "4"], [0.0, 0.4, 0.6])
-    @test model_tree["2"].children == SDDP.Noise{String}[]
-    @test model_tree["3"].children == SDDP.Noise{String}[]
-    @test model_tree["4"].children == SDDP.Noise{String}[]
+          MSUC.Noise.(["2", "3", "4"], [0.0, 0.4, 0.6])
+    @test model_tree["2"].children == MSUC.Noise{String}[]
+    @test model_tree["3"].children == MSUC.Noise{String}[]
+    @test model_tree["4"].children == MSUC.Noise{String}[]
     for i in 0:4
         @test length(model_tree["$i"].noise_terms) == 1
     end
@@ -130,21 +130,21 @@ function test_electric()
     problem = joinpath(@__DIR__, "electric")
     model = MSPFormat.read_from_file(problem)
     JuMP.set_optimizer(model, HiGHS.Optimizer)
-    SDDP.train(model; iteration_limit = 40, print_level = 0)
-    @test ≈(SDDP.calculate_bound(model), 381.8533, atol = 1e-4)
+    MSUC.train(model; iteration_limit = 40, print_level = 0)
+    @test ≈(MSUC.calculate_bound(model), 381.8533, atol = 1e-4)
     return
 end
 
 function test_stage_lead_time()
     sp = Model()
-    sp[:x] = SDDP.State(@variable(sp), @variable(sp))
+    sp[:x] = MSUC.State(@variable(sp), @variable(sp))
     terms = Any[
         Dict("name" => "x", "stage" => 2, "coefficient" => [1.0]),
         Dict("name" => "x", "stage" => 0, "coefficient" => [-1.0]),
     ]
     @test_throws(
         ErrorException(
-            "SDDP.jl does not support this MSPFormat file because it contains state variables from stages other than `t` or `t-1`. Got `t-2`",
+            "MSUC.jl does not support this MSPFormat file because it contains state variables from stages other than `t` or `t-1`. Got `t-2`",
         ),
         MSPFormat._build_lhs(2, sp, terms),
     )

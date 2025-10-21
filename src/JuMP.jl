@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors, Lea Kapelevich.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors, Lea Kapelevich.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -9,7 +9,7 @@
 #
 #   Usage:
 #   julia> @variable(subproblem, 0 <= x[i=1:2] <= i,
-#              SDDP.State, initial_value = i)
+#              MSUC.State, initial_value = i)
 #
 #   julia> x
 #   2-element Array{State{VariableRef},1}:
@@ -110,7 +110,7 @@ Broadcast.broadcastable(state::State{JuMP.VariableRef}) = Ref(state)
 
 # ==============================================================================
 
-function JuMP.set_optimizer(model::SDDP.PolicyGraph, optimizer)
+function JuMP.set_optimizer(model::MSUC.PolicyGraph, optimizer)
     for node in values(model.nodes)
         set_optimizer(node.subproblem, optimizer)
         node.optimizer = optimizer

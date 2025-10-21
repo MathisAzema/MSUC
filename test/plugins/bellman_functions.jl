@@ -1,11 +1,11 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestBellmanFunctions
 
-using SDDP
+using MSUC
 using Test
 import HiGHS
 
@@ -21,7 +21,7 @@ function runtests()
 end
 
 function _create_model(graph)
-    return SDDP.PolicyGraph(
+    return MSUC.PolicyGraph(
         graph;
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
@@ -29,7 +29,7 @@ function _create_model(graph)
         @variable(
             subproblem,
             5.0 <= reservoir <= 15.0,
-            SDDP.State,
+            MSUC.State,
             initial_value = 10.0
         )
         @variables(subproblem, begin
@@ -48,7 +48,7 @@ function _create_model(graph)
             end
         )
         @stageobjective(subproblem, 10 * spill + thermal_generation)
-        SDDP.parameterize(
+        MSUC.parameterize(
             subproblem,
             [
                 (inflow = 0.0, demand = 7.5),
@@ -66,16 +66,16 @@ function test_Read_write_cuts_to_file()
     graphs = [
         (
             "Symbol",
-            SDDP.Graph(
+            MSUC.Graph(
                 :root_node,
                 [:week],
                 [(:root_node => :week, 1.0), (:week => :week, 0.9)],
             ),
         ),
-        ("Int", SDDP.Graph(0, [1], [(0 => 1, 1.0), (1 => 1, 0.9)])),
+        ("Int", MSUC.Graph(0, [1], [(0 => 1, 1.0), (1 => 1, 0.9)])),
         (
             "NTuple",
-            SDDP.Graph(
+            MSUC.Graph(
                 (0, 1),
                 [(1, 1)],
                 [((0, 1) => (1, 1), 1.0), ((1, 1) => (1, 1), 0.9)],
@@ -84,91 +84,91 @@ function test_Read_write_cuts_to_file()
     ]
     for (T, graph) in graphs
         model = _create_model(graph)
-        @test SDDP.calculate_bound(model) ≈ 9.17 atol = 0.1
-        SDDP.train(model; iteration_limit = 50, print_level = 0)
-        @test SDDP.calculate_bound(model) ≈ 119.167 atol = 0.1
-        SDDP.write_cuts_to_file(model, "$(T).cuts.json")
+        @test MSUC.calculate_bound(model) ≈ 9.17 atol = 0.1
+        MSUC.train(model; iteration_limit = 50, print_level = 0)
+        @test MSUC.calculate_bound(model) ≈ 119.167 atol = 0.1
+        MSUC.write_cuts_to_file(model, "$(T).cuts.json")
         model_2 = _create_model(graph)
-        @test SDDP.calculate_bound(model_2) ≈ 9.17 atol = 0.1
-        SDDP.read_cuts_from_file(model_2, "$(T).cuts.json")
-        @test SDDP.calculate_bound(model_2) ≈ 119.167 atol = 0.1
+        @test MSUC.calculate_bound(model_2) ≈ 9.17 atol = 0.1
+        MSUC.read_cuts_from_file(model_2, "$(T).cuts.json")
+        @test MSUC.calculate_bound(model_2) ≈ 119.167 atol = 0.1
         rm("$(T).cuts.json")
     end
     return
 end
 
 function test_read_write_cuts_to_file_String()
-    graph = SDDP.Graph(
+    graph = MSUC.Graph(
         "root_node",
         ["week"],
         [("root_node" => "week", 1.0), ("week" => "week", 0.9)],
     )
     model = _create_model(graph)
-    @test SDDP.calculate_bound(model) ≈ 9.17 atol = 0.1
-    SDDP.train(model; iteration_limit = 50, cut_type = SDDP.MULTI_CUT)
-    @test SDDP.calculate_bound(model) ≈ 119.167 atol = 0.1
-    SDDP.write_cuts_to_file(model, "model.cuts.json")
+    @test MSUC.calculate_bound(model) ≈ 9.17 atol = 0.1
+    MSUC.train(model; iteration_limit = 50, cut_type = MSUC.MULTI_CUT)
+    @test MSUC.calculate_bound(model) ≈ 119.167 atol = 0.1
+    MSUC.write_cuts_to_file(model, "model.cuts.json")
     model_2 = _create_model(graph)
-    @test SDDP.calculate_bound(model_2) ≈ 9.17 atol = 0.1
-    @test_throws Exception SDDP.read_cuts_from_file(model_2, "model.cuts.json")
-    SDDP.read_cuts_from_file(
+    @test MSUC.calculate_bound(model_2) ≈ 9.17 atol = 0.1
+    @test_throws Exception MSUC.read_cuts_from_file(model_2, "model.cuts.json")
+    MSUC.read_cuts_from_file(
         model_2,
         "model.cuts.json";
         node_name_parser = (::Type{String}, x::String) -> x,
     )
-    @test SDDP.calculate_bound(model_2) ≈ 119.167 atol = 0.1
+    @test MSUC.calculate_bound(model_2) ≈ 119.167 atol = 0.1
     rm("model.cuts.json")
     return
 end
 
 function test_read_write_cuts_to_file_ValueFunction()
-    graph = SDDP.Graph(
+    graph = MSUC.Graph(
         "root_node",
         ["week"],
         [("root_node" => "week", 1.0), ("week" => "week", 0.9)],
     )
     model = _create_model(graph)
-    SDDP.train(model; iteration_limit = 50, print_level = 0)
-    @test SDDP.calculate_bound(model) ≈ 119.167 atol = 0.1
-    V = SDDP.ValueFunction(model; node = "week")
-    value_f = SDDP.evaluate(V; reservoir = 10)
-    SDDP.write_cuts_to_file(model, "model.cuts.json")
+    MSUC.train(model; iteration_limit = 50, print_level = 0)
+    @test MSUC.calculate_bound(model) ≈ 119.167 atol = 0.1
+    V = MSUC.ValueFunction(model; node = "week")
+    value_f = MSUC.evaluate(V; reservoir = 10)
+    MSUC.write_cuts_to_file(model, "model.cuts.json")
     model_2 = _create_model(graph)
-    @test SDDP.calculate_bound(model_2) ≈ 9.17 atol = 0.1
-    SDDP.read_cuts_from_file(
+    @test MSUC.calculate_bound(model_2) ≈ 9.17 atol = 0.1
+    MSUC.read_cuts_from_file(
         model_2,
         "model.cuts.json";
         node_name_parser = (::Type{String}, x::String) -> x,
     )
-    V2 = SDDP.ValueFunction(model_2; node = "week")
-    @test value_f == SDDP.evaluate(V2; reservoir = 10)
+    V2 = MSUC.ValueFunction(model_2; node = "week")
+    @test value_f == MSUC.evaluate(V2; reservoir = 10)
     rm("model.cuts.json")
     return
 end
 
 function test_read_read_cuts_from_file_nothing()
-    graph = SDDP.Graph(
+    graph = MSUC.Graph(
         "root_node",
         ["week"],
         [("root_node" => "week", 1.0), ("week" => "week", 0.9)],
     )
     model = _create_model(graph)
-    SDDP.train(model; iteration_limit = 50, print_level = 0)
-    @test SDDP.calculate_bound(model) ≈ 119.167 atol = 0.1
-    V = SDDP.ValueFunction(model; node = "week")
-    value_f = SDDP.evaluate(V; reservoir = 10)
-    SDDP.write_cuts_to_file(
+    MSUC.train(model; iteration_limit = 50, print_level = 0)
+    @test MSUC.calculate_bound(model) ≈ 119.167 atol = 0.1
+    V = MSUC.ValueFunction(model; node = "week")
+    value_f = MSUC.evaluate(V; reservoir = 10)
+    MSUC.write_cuts_to_file(
         model,
         "model.cuts.json";
         node_name_parser = s -> "myname_$s",
     )
     model_2 = _create_model(graph)
-    @test SDDP.calculate_bound(model_2) ≈ 9.17 atol = 0.1
+    @test MSUC.calculate_bound(model_2) ≈ 9.17 atol = 0.1
     function parser(::Type{String}, x::String)
         @test startswith(x, "myname_")
         return replace(x, "myname_" => "")
     end
-    SDDP.read_cuts_from_file(
+    MSUC.read_cuts_from_file(
         model_2,
         "model.cuts.json";
         node_name_parser = parser,
@@ -177,7 +177,7 @@ function test_read_read_cuts_from_file_nothing()
         model_2["week"].subproblem;
         count_variable_in_set_constraints = true,
     )
-    SDDP.read_cuts_from_file(
+    MSUC.read_cuts_from_file(
         model_2,
         "model.cuts.json";
         node_name_parser = (::Any, s) -> nothing,
@@ -192,25 +192,25 @@ function test_read_read_cuts_from_file_nothing()
 end
 
 function test_add_all_cuts_SINGLE_CUT()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 3,
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
     ) do sp, t
-        @variable(sp, 5 <= x <= 15, SDDP.State, initial_value = 10)
+        @variable(sp, 5 <= x <= 15, MSUC.State, initial_value = 10)
         @variable(sp, g >= 0)
         @variable(sp, h >= 0)
         @variable(sp, u >= 0)
         @constraint(sp, inflow, x.out == x.in - h - u)
         @constraint(sp, demand, h + g == 0)
         @stageobjective(sp, 10 * u + g)
-        SDDP.parameterize(sp, [(0, 7.5), (5, 5.0), (10, 2.5)]) do ω
+        MSUC.parameterize(sp, [(0, 7.5), (5, 5.0), (10, 2.5)]) do ω
             set_normalized_rhs(inflow, ω[1])
             set_normalized_rhs(demand, ω[2])
             return
         end
     end
-    SDDP.train(model; iteration_limit = 10)
+    MSUC.train(model; iteration_limit = 10)
     for (t, node) in model.nodes
         @test num_constraints(
             node.subproblem,
@@ -218,7 +218,7 @@ function test_add_all_cuts_SINGLE_CUT()
             MOI.GreaterThan{Float64},
         ) < 10
     end
-    SDDP.add_all_cuts(model)
+    MSUC.add_all_cuts(model)
     n_iter = length(model.most_recent_training_results.log)
     for (t, node) in model.nodes
         n = num_constraints(node.subproblem, AffExpr, MOI.GreaterThan{Float64})
@@ -228,25 +228,25 @@ function test_add_all_cuts_SINGLE_CUT()
 end
 
 function test_add_all_cuts_MULTI_CUT()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 3,
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
     ) do sp, t
-        @variable(sp, 5 <= x <= 15, SDDP.State, initial_value = 10)
+        @variable(sp, 5 <= x <= 15, MSUC.State, initial_value = 10)
         @variable(sp, g >= 0)
         @variable(sp, h >= 0)
         @variable(sp, u >= 0)
         @constraint(sp, inflow, x.out == x.in - h - u)
         @constraint(sp, demand, h + g == 0)
         @stageobjective(sp, 10 * u + g)
-        SDDP.parameterize(sp, [(0, 7.5), (5, 5.0), (10, 2.5)]) do ω
+        MSUC.parameterize(sp, [(0, 7.5), (5, 5.0), (10, 2.5)]) do ω
             set_normalized_rhs(inflow, ω[1])
             set_normalized_rhs(demand, ω[2])
             return
         end
     end
-    SDDP.train(model; iteration_limit = 10, cut_type = SDDP.MULTI_CUT)
+    MSUC.train(model; iteration_limit = 10, cut_type = MSUC.MULTI_CUT)
     for (t, node) in model.nodes
         @test num_constraints(
             node.subproblem,
@@ -254,7 +254,7 @@ function test_add_all_cuts_MULTI_CUT()
             MOI.GreaterThan{Float64},
         ) < 31
     end
-    SDDP.add_all_cuts(model)
+    MSUC.add_all_cuts(model)
     n_iter = length(model.most_recent_training_results.log)
     for (t, node) in model.nodes
         n = num_constraints(node.subproblem, AffExpr, MOI.GreaterThan{Float64})
@@ -266,7 +266,7 @@ end
 function test_belief_state_cut_selection()
     demand_values = [1.0, 2.0]
     demand_prob = Dict(:Ah => [0.2, 0.8], :Bh => [0.8, 0.2])
-    graph = SDDP.Graph(
+    graph = MSUC.Graph(
         :root_node,
         [:Ad, :Ah, :Bd, :Bh],
         [
@@ -276,9 +276,9 @@ function test_belief_state_cut_selection()
             (:Bd => :Bh, 1.0),
         ],
     )
-    SDDP.add_ambiguity_set(graph, [:Ad, :Bd], 1e2)
-    SDDP.add_ambiguity_set(graph, [:Ah, :Bh], 1e2)
-    model = SDDP.PolicyGraph(
+    MSUC.add_ambiguity_set(graph, [:Ad, :Bd], 1e2)
+    MSUC.add_ambiguity_set(graph, [:Ah, :Bh], 1e2)
+    model = MSUC.PolicyGraph(
         graph;
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
@@ -286,7 +286,7 @@ function test_belief_state_cut_selection()
         @variables(
             subproblem,
             begin
-                0 <= inventory <= 2, (SDDP.State, initial_value = 0.0)
+                0 <= inventory <= 2, (MSUC.State, initial_value = 0.0)
                 buy >= 0
                 demand
             end
@@ -296,13 +296,13 @@ function test_belief_state_cut_selection()
             JuMP.fix(demand, 0)
             @stageobjective(subproblem, buy)
         else
-            SDDP.parameterize(subproblem, demand_values, demand_prob[node]) do ω
+            MSUC.parameterize(subproblem, demand_values, demand_prob[node]) do ω
                 return JuMP.fix(demand, ω)
             end
             @stageobjective(subproblem, 2 * buy + inventory.out)
         end
     end
-    SDDP.train(
+    MSUC.train(
         model;
         iteration_limit = 20,
         cut_deletion_minimum = 30,
@@ -312,7 +312,7 @@ function test_belief_state_cut_selection()
         return cut.constraint_ref !== nothing
     end
     @test n_cuts == length(model.most_recent_training_results.log)
-    SDDP.train(
+    MSUC.train(
         model;
         iteration_limit = 1,
         add_to_existing_cuts = true,
@@ -326,12 +326,12 @@ function test_belief_state_cut_selection()
 end
 
 function test_biobjective_cut_selection()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 3,
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
     ) do subproblem, _
-        @variable(subproblem, 0 <= v <= 200, SDDP.State, initial_value = 50)
+        @variable(subproblem, 0 <= v <= 200, MSUC.State, initial_value = 50)
         @variables(subproblem, begin
             0 <= g[i = 1:2] <= 100
             0 <= u <= 150
@@ -350,19 +350,19 @@ function test_biobjective_cut_selection()
                 shortage_cost >= 80 - 4 * v.out
             end)
         ## You must call this for a biobjective problem!
-        SDDP.initialize_biobjective_subproblem(subproblem)
-        SDDP.parameterize(subproblem, 0.0:5:50.0) do ω
+        MSUC.initialize_biobjective_subproblem(subproblem)
+        MSUC.parameterize(subproblem, 0.0:5:50.0) do ω
             JuMP.set_normalized_rhs(inflow_constraint, ω)
             ## You must call `set_biobjective_functions` from within
-            ## `SDDP.parameterize`.
-            return SDDP.set_biobjective_functions(
+            ## `MSUC.parameterize`.
+            return MSUC.set_biobjective_functions(
                 subproblem,
                 objective_1,
                 objective_2,
             )
         end
     end
-    ret = SDDP.train_biobjective(
+    ret = MSUC.train_biobjective(
         model;
         solution_limit = 10,
         iteration_limit = 10,
@@ -373,7 +373,7 @@ function test_biobjective_cut_selection()
         return cut.constraint_ref !== nothing
     end
     @test n_cuts < 100
-    ret = SDDP.train_biobjective(
+    ret = MSUC.train_biobjective(
         model;
         solution_limit = 10,
         iteration_limit = 10,
@@ -385,24 +385,24 @@ function test_biobjective_cut_selection()
 end
 
 function test_cut_selection_flags()
-    graph = SDDP.Graph(
+    graph = MSUC.Graph(
         :root_node,
         [:week],
         [(:root_node => :week, 1.0), (:week => :week, 0.9)],
     )
     model = _create_model(graph)
-    @test SDDP.calculate_bound(model) ≈ 9.17 atol = 0.1
-    SDDP.train(model; iteration_limit = 50, cut_type = SDDP.MULTI_CUT)
-    @test SDDP.calculate_bound(model) ≈ 119.167 atol = 0.1
-    SDDP.write_cuts_to_file(
+    @test MSUC.calculate_bound(model) ≈ 9.17 atol = 0.1
+    MSUC.train(model; iteration_limit = 50, cut_type = MSUC.MULTI_CUT)
+    @test MSUC.calculate_bound(model) ≈ 119.167 atol = 0.1
+    MSUC.write_cuts_to_file(
         model,
         "model.cuts.json";
         write_only_selected_cuts = true,
     )
     model_2 = _create_model(graph)
-    @test SDDP.calculate_bound(model_2) ≈ 9.17 atol = 0.1
-    SDDP.read_cuts_from_file(model_2, "model.cuts.json"; cut_selection = false)
-    @test SDDP.calculate_bound(model_2) ≈ 119.167 atol = 0.1
+    @test MSUC.calculate_bound(model_2) ≈ 9.17 atol = 0.1
+    MSUC.read_cuts_from_file(model_2, "model.cuts.json"; cut_selection = false)
+    @test MSUC.calculate_bound(model_2) ≈ 119.167 atol = 0.1
     rm("model.cuts.json")
     return
 end

@@ -1,11 +1,11 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestVisualization
 
-using SDDP
+using MSUC
 using Test
 
 import Plots
@@ -34,28 +34,28 @@ function test_SpaghettiPlot()
             Dict(:x => 3.5, :y => 6.5),
         ],
     ]
-    plt = SDDP.SpaghettiPlot(simulations)
-    SDDP.add_spaghetti(plt; cumulative = true) do data
+    plt = MSUC.SpaghettiPlot(simulations)
+    MSUC.add_spaghetti(plt; cumulative = true) do data
         return data[:x]
     end
-    SDDP.add_spaghetti(plt; title = "y") do data
+    MSUC.add_spaghetti(plt; title = "y") do data
         return 2 * data[:y]
     end
-    SDDP.plot(plt, "test.html"; open = false)
+    MSUC.plot(plt, "test.html"; open = false)
     @test sprint(show, plt) == "A spaghetti plot with 2 scenarios and 3 stages."
     control = joinpath(@__DIR__, "control.html")
     if Sys.WORD_SIZE == 64
         # This fails on 32-bit machines.
         @test read("test.html", String) == read(control, String)
     end
-    SDDP.save(plt, "test.html"; open = false)
+    MSUC.save(plt, "test.html"; open = false)
     @test sprint(show, plt) == "A spaghetti plot with 2 scenarios and 3 stages."
     if Sys.WORD_SIZE == 64
         # This fails on 32-bit machines.
         @test read("test.html", String) == read(control, String)
     end
     rm("test.html")
-    @test SDDP.launch_file("test.html", identity) isa Cmd
+    @test MSUC.launch_file("test.html", identity) isa Cmd
     return
 end
 
@@ -65,11 +65,11 @@ function test_PublicationPlot()
         [Dict{Symbol,Any}(:x => 2), Dict{Symbol,Any}(:x => 6)],
         [Dict{Symbol,Any}(:x => 3), Dict{Symbol,Any}(:x => 4)],
     ]
-    plot = SDDP.publication_plot(simulations) do data
+    plot = MSUC.publication_plot(simulations) do data
         return data[:x]
     end
     @test plot isa Plots.Plot
-    data = SDDP.publication_data(simulations, [0.0, 0.25, 0.5, 1.0], d -> d[:x])
+    data = MSUC.publication_data(simulations, [0.0, 0.25, 0.5, 1.0], d -> d[:x])
     @test data == [1 4; 1.5 4.5; 2 5; 3 6]
     for val in (-Inf, Inf, NaN)
         simulations[2][2] = Dict{Symbol,Any}(:x => val)
@@ -79,7 +79,7 @@ function test_PublicationPlot()
                 "replication 2 contains data that is not finite. The data " *
                 "function must return a finite real-valued scalar. Got: $val",
             ),
-            SDDP.publication_data(simulations, [0.5], d -> d[:x]),
+            MSUC.publication_data(simulations, [0.5], d -> d[:x]),
         )
     end
     return
@@ -91,7 +91,7 @@ function test_PublicationPlot_different_lengths()
         [Dict{Symbol,Any}(:x => 2)],
         [Dict{Symbol,Any}(:x => 3), Dict{Symbol,Any}(:x => 4)],
     ]
-    data = SDDP.publication_data(simulations, [0.0, 0.25, 0.5, 1.0], d -> d[:x])
+    data = MSUC.publication_data(simulations, [0.0, 0.25, 0.5, 1.0], d -> d[:x])
     @test data == [1.0 4.0; 1.5 4.25; 2.0 4.5; 3.0 5.0]
     return
 end

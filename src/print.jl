@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -12,7 +12,7 @@ end
 
 function print_banner(io)
     println(io, _RULE)
-    println(io, "         SDDP.jl (c) Oscar Dowson and contributors, 2017-25")
+    println(io, "         MSUC.jl (c) Oscar Dowson and contributors, 2017-25")
     println(io, _RULE)
     return
 end
@@ -397,7 +397,7 @@ end
 
 Write the log of the most recent training to a csv for post-analysis.
 
-Assumes that the model has been trained via [`SDDP.train`](@ref).
+Assumes that the model has been trained via [`MSUC.train`](@ref).
 """
 function write_log_to_csv(model::PolicyGraph, filename::String)
     if model.most_recent_training_results === nothing

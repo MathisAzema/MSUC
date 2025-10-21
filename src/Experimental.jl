@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -69,7 +69,7 @@ function _throw_if_exisiting_cuts(model::PolicyGraph)
         if length(node.bellman_function.global_theta.cuts) != 0
             error(
                 "StochOptFormat does not support writing after a call to " *
-                "`SDDP.train`.",
+                "`MSUC.train`.",
             )
         end
     end
@@ -156,7 +156,7 @@ open("my_model.sof.json", "w") do io
         name = "MyModel",
         author = "@odow",
         date = "2020-07-20",
-        description = "Example problem for the SDDP.jl documentation",
+        description = "Example problem for the MSUC.jl documentation",
     )
 end
 ```
@@ -469,7 +469,7 @@ function _reformulate_objective(
     objective = convert(QuadExpr, copy(node.stage_objective))
     # Reformulate a changing objective constant.
     if changing_objective_constant
-        new_name = "_SDDPjl_random_objective_constant_"
+        new_name = "_MSUCjl_random_objective_constant_"
         y = _add_new_random_variable(
             node,
             new_name,
@@ -487,7 +487,7 @@ function _reformulate_objective(
     if length(changing_objective_coefficient) > 0
         # Reformulate changing objective coefficients.
         for x in changing_objective_coefficient
-            new_name = "_SDDPjl_random_objective_$(name(x))_"
+            new_name = "_MSUCjl_random_objective_$(name(x))_"
             y = _add_new_random_variable(
                 node,
                 new_name,
@@ -536,7 +536,7 @@ function _reformulate_lower_bound(
     variable_bound_storage::Vector,
     x::VariableRef,
 )
-    new_name = "_SDDPjl_lower_bound_$(name(x))_"
+    new_name = "_MSUCjl_lower_bound_$(name(x))_"
     y = _add_new_random_variable(
         node,
         new_name,
@@ -561,7 +561,7 @@ function _reformulate_upper_bound(
     variable_bound_storage::Vector,
     x::VariableRef,
 )
-    new_name = "_SDDPjl_upper_bound_$(name(x))_"
+    new_name = "_MSUCjl_upper_bound_$(name(x))_"
     y = _add_new_random_variable(
         node,
         new_name,
@@ -585,7 +585,7 @@ function _reformulate_constraint_rhs(
     constraint_rhs_storage,
     ci,
 )
-    new_name = "_SDDPjl_rhs_$(name(ci))_"
+    new_name = "_MSUCjl_rhs_$(name(ci))_"
     y = _add_new_random_variable(
         node,
         new_name,

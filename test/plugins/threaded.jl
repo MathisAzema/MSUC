@@ -1,11 +1,11 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestThreads
 
-using SDDP
+using MSUC
 using Test
 import HiGHS
 
@@ -31,7 +31,7 @@ function test_threaded()
     end
     c_eta, c_pt = [0.8, 0.5], [2, 5, 8, 11, 14]
     df_demand = rand(10:10:60, 24)
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 24,
         sense = :Min,
         lower_bound = 0.0,
@@ -40,7 +40,7 @@ function test_threaded()
         @variable(
             subproblem,
             0 <= x_volume[1:2] <= 8,
-            SDDP.State,
+            MSUC.State,
             initial_value = 1,
         )
         @variable(subproblem, u_u[1:2] >= 0)
@@ -57,21 +57,21 @@ function test_threaded()
             subproblem,
             sum(u_x) + sum(u_u) - sum(u_v) + u_slack == df_demand[t] + w_noise,
         )
-        SDDP.parameterize(subproblem, [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]) do w
+        MSUC.parameterize(subproblem, [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]) do w
             return JuMP.fix(w_noise, w)
         end
         @stageobjective(subproblem, c_pt' * u_x + 35 * u_slack)
         return
     end
-    SDDP.train(model; iteration_limit = 100, parallel_scheme = SDDP.Threaded())
+    MSUC.train(model; iteration_limit = 100, parallel_scheme = MSUC.Threaded())
     thread_ids_seen =
         Set{Int}(log.pid for log in model.most_recent_training_results.log)
     @test 2 <= length(thread_ids_seen) <= Threads.nthreads()
     recorder = Dict{Symbol,Function}(:thread_id => sp -> Threads.threadid())
-    simulations = SDDP.simulate(
+    simulations = MSUC.simulate(
         model,
         100;
-        parallel_scheme = SDDP.Threaded(),
+        parallel_scheme = MSUC.Threaded(),
         custom_recorders = recorder,
     )
     thread_ids_seen =
@@ -81,22 +81,22 @@ function test_threaded()
 end
 
 function test_threaded_warning()
-    model = SDDP.PolicyGraph(
-        SDDP.UnicyclicGraph(0.95);
+    model = MSUC.PolicyGraph(
+        MSUC.UnicyclicGraph(0.95);
         sense = :Min,
         lower_bound = 0.0,
         optimizer = HiGHS.Optimizer,
     ) do sp, t
-        @variable(sp, 0 <= x <= 1, SDDP.State, initial_value = 1)
+        @variable(sp, 0 <= x <= 1, MSUC.State, initial_value = 1)
         @stageobjective(sp, x.out)
         return
     end
-    parallel_scheme = SDDP.Threaded()
-    @test_logs((:warn,), SDDP.train(model; parallel_scheme))
+    parallel_scheme = MSUC.Threaded()
+    @test_logs((:warn,), MSUC.train(model; parallel_scheme))
     recorder = Dict{Symbol,Function}(:thread_id => sp -> Threads.threadid())
     ret = @test_logs(
         (:warn,),
-        SDDP.simulate(model, 10; parallel_scheme, custom_recorders = recorder),
+        MSUC.simulate(model, 10; parallel_scheme, custom_recorders = recorder),
     )
     # This might not be true because of thread migration. I'm not sure how to
     # test that we've spawned only one thread.
@@ -105,9 +105,9 @@ function test_threaded_warning()
 end
 
 function test_chunk_split()
-    @test SDDP._chunk_split(10, 1) == [1:10]
-    @test SDDP._chunk_split(10, 2) == [1:5, 6:10]
-    @test SDDP._chunk_split(10, 3) == [1:3, 4:6, 7:10]
+    @test MSUC._chunk_split(10, 1) == [1:10]
+    @test MSUC._chunk_split(10, 2) == [1:5, 6:10]
+    @test MSUC._chunk_split(10, 3) == [1:3, 4:6, 7:10]
     return
 end
 

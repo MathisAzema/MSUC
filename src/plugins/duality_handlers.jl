@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors, Lea Kapelevich.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors, Lea Kapelevich.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -6,7 +6,7 @@
 function _deprecate_integrality_handler()
     return error(
         """
-SDDP.jl v0.4.0 introduced a number of breaking changes in how we deal with
+MSUC.jl v0.4.0 introduced a number of breaking changes in how we deal with
 binary and integer variables.
 
 ## Breaking changes
@@ -14,7 +14,7 @@ binary and integer variables.
  * We have renamed `SDDiP` to `LagrangianDuality`.
  * We have renamed `ContinuousRelaxation` to `ContinuousConicDuality`.
  * Instead of passing the argument to `PolicyGraph`, you now pass it to
-   `train`, e.g., `SDDP.train(model; duality_handler = SDDP.LagrangianDuality())`
+   `train`, e.g., `MSUC.train(model; duality_handler = MSUC.LagrangianDuality())`
  * We no longer turn continuous and integer states into a binary expansion. If
    you want to binarize your states, do it manually.
 
@@ -38,7 +38,7 @@ variables up to the user. (Hint: we don't think you should do it!)
 ## Other additions
 
 We also added support for strengthened Benders cuts, which we call
-`SDDP.StrengthenedConicDuality()`.
+`MSUC.StrengthenedConicDuality()`.
 
 ## Future plans
 
@@ -48,7 +48,7 @@ handlers (e.g., start with ContinuousConicDuality, then shift to
 StrengthenedConicDuality, then LagrangianDuality).
 
 If these sorts of things interest you, the code is now much more hackable, so
-please reach out or read https://github.com/odow/SDDP.jl/issues/246.
+please reach out or read https://github.com/odow/MSUC.jl/issues/246.
 
 Alternatively, if you have interesting examples using SDDiP that you find are
 too slow, please send me the examples so we can use them as benchmarks in future
@@ -75,7 +75,7 @@ binary or integer restrictions as necessary.
 
 ## Arguments
 
- * `optimizer`: if  specified, SDDP.jl will call
+ * `optimizer`: if  specified, MSUC.jl will call
    `JuMP.set_optimizer(subproblem, optimizer)` before solving problems on the
    backward pass. Use this option only if your default optimizer does not
    support returning a dual solution after the integrality has been relaxed.
@@ -83,27 +83,27 @@ binary or integer restrictions as necessary.
 ## Example
 
 Train a model using `ContinuousConicDuality` by passing it to the
-`duality_handler` keyword argument of [`SDDP.train`](@ref):
+`duality_handler` keyword argument of [`MSUC.train`](@ref):
 
 ```jldoctest
-julia> import SDDP, HiGHS, Ipopt
+julia> import MSUC, HiGHS, Ipopt
 
-julia> duality_handler = SDDP.ContinuousConicDuality(Ipopt.Optimizer)
-SDDP.ContinuousConicDuality{DataType}(Ipopt.Optimizer)
+julia> duality_handler = MSUC.ContinuousConicDuality(Ipopt.Optimizer)
+MSUC.ContinuousConicDuality{DataType}(Ipopt.Optimizer)
 
-julia> model = SDDP.LinearPolicyGraph(;
+julia> model = MSUC.LinearPolicyGraph(;
            stages = 2,
            lower_bound = 0.0,
            optimizer = HiGHS.Optimizer,
        ) do sp, t
-           @variable(sp, x, SDDP.State, Int, initial_value = 0)
+           @variable(sp, x, MSUC.State, Int, initial_value = 0)
            @constraint(sp, x.out >= x.in + 0.5)
            @stageobjective(sp, x.out)
        end;
 
-julia> SDDP.train(
+julia> MSUC.train(
            model;
-           duality_handler = SDDP.ContinuousConicDuality(),
+           duality_handler = MSUC.ContinuousConicDuality(),
            print_level = 0,
        )
 ```
@@ -133,7 +133,7 @@ end
 
 function get_dual_solution(node::Node, ::ContinuousConicDuality)
     if !_has_dual_solution(node)
-        model = node.subproblem.ext[:sddp_policy_graph]
+        model = node.subproblem.ext[:MSUC_policy_graph]
         attempt_numerical_recovery(model, node; require_dual = true)
     end
     # Note: due to JuMP's dual convention, we need to flip the sign for
@@ -184,7 +184,7 @@ Obtain dual variables in the backward pass using Lagrangian duality.
 
 ## Arguments
 
- * `optimizer`: if  specified, SDDP.jl will call
+ * `optimizer`: if  specified, MSUC.jl will call
    `JuMP.set_optimizer(subproblem, optimizer)` before solving problems on the
    backward pass. Use this option only if your default optimizer does not
    support returning a dual solution after the integrality has been relaxed.
@@ -195,27 +195,27 @@ Obtain dual variables in the backward pass using Lagrangian duality.
 ## Example
 
 Train a model using `LagrangianDuality` by passing it to the `duality_handler`
-keyword argument of [`SDDP.train`](@ref):
+keyword argument of [`MSUC.train`](@ref):
 
 ```jldoctest
-julia> import SDDP, HiGHS, Ipopt
+julia> import MSUC, HiGHS, Ipopt
 
-julia> duality_handler = SDDP.LagrangianDuality(Ipopt.Optimizer)
-SDDP.LagrangianDuality{DataType}(SDDP.LocalImprovementSearch.BFGS(100), Ipopt.Optimizer)
+julia> duality_handler = MSUC.LagrangianDuality(Ipopt.Optimizer)
+MSUC.LagrangianDuality{DataType}(MSUC.LocalImprovementSearch.BFGS(100), Ipopt.Optimizer)
 
-julia> model = SDDP.LinearPolicyGraph(;
+julia> model = MSUC.LinearPolicyGraph(;
            stages = 2,
            lower_bound = 0.0,
            optimizer = HiGHS.Optimizer,
        ) do sp, t
-           @variable(sp, x, SDDP.State, Int, initial_value = 0)
+           @variable(sp, x, MSUC.State, Int, initial_value = 0)
            @constraint(sp, x.out >= x.in + 0.5)
            @stageobjective(sp, x.out)
        end;
 
-julia> SDDP.train(
+julia> MSUC.train(
            model;
-           duality_handler = SDDP.LagrangianDuality(),
+           duality_handler = MSUC.LagrangianDuality(),
            print_level = 0,
        )
 ```
@@ -340,7 +340,7 @@ This method is also known in the literature as Strengthened Benders.
 
 ## Arguments
 
- * `optimizer`: if  specified, SDDP.jl will call
+ * `optimizer`: if  specified, MSUC.jl will call
    `JuMP.set_optimizer(subproblem, optimizer)` before solving problems on the
    backward pass. Use this option only if your default optimizer does not
    support returning a dual solution after the integrality has been relaxed.
@@ -348,27 +348,27 @@ This method is also known in the literature as Strengthened Benders.
 ## Example
 
 Train a model using `StrengthenedConicDuality` by passing it to the
-`duality_handler` keyword argument of [`SDDP.train`](@ref):
+`duality_handler` keyword argument of [`MSUC.train`](@ref):
 
 ```jldoctest
-julia> import SDDP, HiGHS, Ipopt
+julia> import MSUC, HiGHS, Ipopt
 
-julia> duality_handler = SDDP.StrengthenedConicDuality(Ipopt.Optimizer)
-SDDP.StrengthenedConicDuality{DataType}(Ipopt.Optimizer)
+julia> duality_handler = MSUC.StrengthenedConicDuality(Ipopt.Optimizer)
+MSUC.StrengthenedConicDuality{DataType}(Ipopt.Optimizer)
 
-julia> model = SDDP.LinearPolicyGraph(;
+julia> model = MSUC.LinearPolicyGraph(;
            stages = 2,
            lower_bound = 0.0,
            optimizer = HiGHS.Optimizer,
        ) do sp, t
-           @variable(sp, x, SDDP.State, Int, initial_value = 0)
+           @variable(sp, x, MSUC.State, Int, initial_value = 0)
            @constraint(sp, x.out >= x.in + 0.5)
            @stageobjective(sp, x.out)
        end;
 
-julia> SDDP.train(
+julia> MSUC.train(
            model;
-           duality_handler = SDDP.StrengthenedConicDuality(),
+           duality_handler = MSUC.StrengthenedConicDuality(),
            print_level = 0,
        )
 ```
@@ -450,7 +450,7 @@ The default implementation of `BanditDuality` that picks between the arms:
  * [`ContinuousConicDuality`](@ref)
  * [`StrengthenedConicDuality`](@ref)
 
-If `optimizer` is specified, SDDP.jl will call
+If `optimizer` is specified, MSUC.jl will call
 `JuMP.set_optimizer(subproblem, optimizer)` before solving problems on the
 backward pass. Use this option only if your default optimizer does not support
 returning a dual solution after the integrality has been relaxed.
@@ -458,37 +458,37 @@ returning a dual solution after the integrality has been relaxed.
 ## Example
 
 Train a model using `BanditDuality` by passing it to the `duality_handler`
-keyword argument of [`SDDP.train`](@ref):
+keyword argument of [`MSUC.train`](@ref):
 
 ```jldoctest
-julia> import SDDP, HiGHS, Ipopt
+julia> import MSUC, HiGHS, Ipopt
 
-julia> SDDP.BanditDuality(Ipopt.Optimizer)
+julia> MSUC.BanditDuality(Ipopt.Optimizer)
 BanditDuality with arms:
- * SDDP.ContinuousConicDuality{DataType}(Ipopt.Optimizer)
- * SDDP.StrengthenedConicDuality{DataType}(Ipopt.Optimizer)
+ * MSUC.ContinuousConicDuality{DataType}(Ipopt.Optimizer)
+ * MSUC.StrengthenedConicDuality{DataType}(Ipopt.Optimizer)
 
-julia> duality_handler = SDDP.BanditDuality(
-           SDDP.ContinuousConicDuality(),
-           SDDP.StrengthenedConicDuality(),
-           SDDP.LagrangianDuality(),
+julia> duality_handler = MSUC.BanditDuality(
+           MSUC.ContinuousConicDuality(),
+           MSUC.StrengthenedConicDuality(),
+           MSUC.LagrangianDuality(),
        )
 BanditDuality with arms:
- * SDDP.ContinuousConicDuality{Nothing}(nothing)
- * SDDP.StrengthenedConicDuality{Nothing}(nothing)
- * SDDP.LagrangianDuality{Nothing}(SDDP.LocalImprovementSearch.BFGS(100), nothing)
+ * MSUC.ContinuousConicDuality{Nothing}(nothing)
+ * MSUC.StrengthenedConicDuality{Nothing}(nothing)
+ * MSUC.LagrangianDuality{Nothing}(MSUC.LocalImprovementSearch.BFGS(100), nothing)
 
-julia> model = SDDP.LinearPolicyGraph(;
+julia> model = MSUC.LinearPolicyGraph(;
            stages = 2,
            lower_bound = 0.0,
            optimizer = HiGHS.Optimizer,
        ) do sp, t
-           @variable(sp, x, SDDP.State, Int, initial_value = 0)
+           @variable(sp, x, MSUC.State, Int, initial_value = 0)
            @constraint(sp, x.out >= x.in + 0.5)
            @stageobjective(sp, x.out)
        end;
 
-julia> SDDP.train(model; duality_handler = duality_handler, print_level = 0)
+julia> MSUC.train(model; duality_handler = duality_handler, print_level = 0)
 ```
 
 ## Theory
@@ -636,26 +636,26 @@ adjusted by evaluating the Lagrangian objective value.
 ## Example
 
 Train a model using `FixedDiscreteDuality` by passing it to the
-`duality_handler` keyword argument of [`SDDP.train`](@ref):
+`duality_handler` keyword argument of [`MSUC.train`](@ref):
 
 ```jldoctest
-julia> using SDDP
+julia> using MSUC
 
 julia> import HiGHS, Ipopt
 
-julia> model = SDDP.LinearPolicyGraph(;
+julia> model = MSUC.LinearPolicyGraph(;
            stages = 2,
            lower_bound = 0.0,
            optimizer = HiGHS.Optimizer,
        ) do sp, t
-           @variable(sp, x, SDDP.State, Int, initial_value = 0)
+           @variable(sp, x, MSUC.State, Int, initial_value = 0)
            @constraint(sp, x.out >= x.in + 0.5)
            @stageobjective(sp, x.out)
        end;
 
-julia> SDDP.train(
+julia> MSUC.train(
            model;
-           duality_handler = SDDP.FixedDiscreteDuality(),
+           duality_handler = MSUC.FixedDiscreteDuality(),
            print_level = 0,
        )
 ```

@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
@@ -11,7 +11,7 @@
 The abstract type for the risk measure interface.
 
 You need to define the following methods:
- - [`SDDP.adjust_probability`](@ref)
+ - [`MSUC.adjust_probability`](@ref)
 """
 abstract type AbstractRiskMeasure end
 
@@ -35,7 +35,7 @@ function adjust_probability end
 The abstract type for the sampling-scheme interface.
 
 You need to define the following methods:
- - [`SDDP.sample_scenario`](@ref)
+ - [`MSUC.sample_scenario`](@ref)
 """
 abstract type AbstractSamplingScheme end
 
@@ -62,8 +62,8 @@ function sample_scenario end
 The abstract type for the stopping-rule interface.
 
 You need to define the following methods:
- - [`SDDP.stopping_rule_status`](@ref)
- - [`SDDP.convergence_test`](@ref)
+ - [`MSUC.stopping_rule_status`](@ref)
+ - [`MSUC.convergence_test`](@ref)
 """
 abstract type AbstractStoppingRule end
 
@@ -104,7 +104,7 @@ end
 The abstract type for backward sampling scheme interface.
 
 You need to define the following methods:
- - [`SDDP.sample_backward_noise_terms`](@ref)
+ - [`MSUC.sample_backward_noise_terms`](@ref)
 """
 abstract type AbstractBackwardSamplingScheme end
 
@@ -190,7 +190,7 @@ abstract type AbstractParallelScheme end
         options::Options,
     )::Symbol where {T}
 
-The solve loop of the SDDP algorithm. Returns a symbol corresponding to the
+The solve loop of the MSUC algorithm. Returns a symbol corresponding to the
 termination status.
 """
 function master_loop end

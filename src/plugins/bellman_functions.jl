@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
@@ -229,7 +229,7 @@ end
 """
     BellmanFunction
 
-A representation of the value function. SDDP.jl uses the following unique
+A representation of the value function. MSUC.jl uses the following unique
 representation of the value function that is undocumented in the literature.
 
 It supports three types of state variables:
@@ -632,7 +632,7 @@ Write the cuts that form the policy in `model` to `filename` in JSON format.
  - `write_only_selected_cuts` write only the selected cuts to the json file.
     Defaults to false.
 
-See also [`SDDP.read_cuts_from_file`](@ref).
+See also [`MSUC.read_cuts_from_file`](@ref).
 """
 function write_cuts_to_file(
     model::PolicyGraph{T},
@@ -729,7 +729,7 @@ end
         kwargs...,
     ) where {T}
 
-Read cuts (saved using [`SDDP.write_cuts_to_file`](@ref)) from `filename` into
+Read cuts (saved using [`MSUC.write_cuts_to_file`](@ref)) from `filename` into
 `model`.
 
 Since `T` can be an arbitrary Julia type, the conversion to JSON is lossy. When
@@ -746,7 +746,7 @@ type `T`, provide a function `node_name_parser` with the signature
  - `cut_selection::Bool` run or not the cut selection algorithm when adding the
     cuts to the model.
 
-See also [`SDDP.write_cuts_to_file`](@ref).
+See also [`MSUC.write_cuts_to_file`](@ref).
 """
 function read_cuts_from_file(
     model::PolicyGraph{T},
@@ -835,7 +835,7 @@ Add all cuts that may have been deleted back into the model.
 
 ## Explanation
 
-During the solve, SDDP.jl may decide to remove cuts for a variety of reasons.
+During the solve, MSUC.jl may decide to remove cuts for a variety of reasons.
 
 These can include cuts that define the optimal value function, particularly
 around the extremes of the state-space (e.g., reservoirs empty).

@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -22,7 +22,7 @@ Create an empty graph struture with the root node `root_node`.
 ## Example
 
 ```jldoctest
-julia> graph = SDDP.Graph(0)
+julia> graph = MSUC.Graph(0)
 Root
  0
 Nodes
@@ -30,7 +30,7 @@ Nodes
 Arcs
  {}
 
-julia> graph = SDDP.Graph(:root)
+julia> graph = MSUC.Graph(:root)
 Root
  root
 Nodes
@@ -38,7 +38,7 @@ Nodes
 Arcs
  {}
 
-julia> graph = SDDP.Graph((0, 0))
+julia> graph = MSUC.Graph((0, 0))
 Root
  (0, 0)
 Nodes
@@ -142,9 +142,9 @@ Add a node to the graph `graph`.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.Graph(:root);
+julia> graph = MSUC.Graph(:root);
 
-julia> SDDP.add_node(graph, :A)
+julia> MSUC.add_node(graph, :A)
 
 julia> graph
 Root
@@ -156,9 +156,9 @@ Arcs
 ```
 
 ```jldoctest
-julia> graph = SDDP.Graph(0);
+julia> graph = MSUC.Graph(0);
 
-julia> SDDP.add_node(graph, 2)
+julia> MSUC.add_node(graph, 2)
 
 julia> graph
 Root
@@ -196,11 +196,11 @@ Add an edge to the graph `graph`.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.Graph(0);
+julia> graph = MSUC.Graph(0);
 
-julia> SDDP.add_node(graph, 1)
+julia> MSUC.add_node(graph, 1)
 
-julia> SDDP.add_edge(graph, 0 => 1, 0.9)
+julia> MSUC.add_edge(graph, 0 => 1, 0.9)
 
 julia> graph
 Root
@@ -212,11 +212,11 @@ Arcs
 ```
 
 ```jldoctest
-julia> graph = SDDP.Graph(:root);
+julia> graph = MSUC.Graph(:root);
 
-julia> SDDP.add_node(graph, :A)
+julia> MSUC.add_node(graph, :A)
 
-julia> SDDP.add_edge(graph, :root => :A, 1.0)
+julia> MSUC.add_edge(graph, :root => :A, 1.0)
 
 julia> graph
 Root
@@ -276,7 +276,7 @@ state-space.
 ## Examples
 
 ```julia
-julia> graph = SDDP.LinearGraph(3)
+julia> graph = MSUC.LinearGraph(3)
 Root
  0
 Nodes
@@ -288,9 +288,9 @@ Arcs
  1 => 2 w.p. 1.0
  2 => 3 w.p. 1.0
 
-julia> SDDP.add_ambiguity_set(graph, [1, 2], [1e3, 1e2])
+julia> MSUC.add_ambiguity_set(graph, [1, 2], [1e3, 1e2])
 
-julia> SDDP.add_ambiguity_set(graph, [3], [1e5])
+julia> MSUC.add_ambiguity_set(graph, [3], [1e5])
 
 julia> graph
 Root
@@ -338,11 +338,11 @@ belief state associated with each node at any point in the state-space.
 ## Examples
 
 ```julia
-julia> graph = SDDP.LinearGraph(3);
+julia> graph = MSUC.LinearGraph(3);
 
-julia> SDDP.add_ambiguity_set(graph, [1, 2], 1e3)
+julia> MSUC.add_ambiguity_set(graph, [1, 2], 1e3)
 
-julia> SDDP.add_ambiguity_set(graph, [3], 1e5)
+julia> MSUC.add_ambiguity_set(graph, [3], 1e5)
 
 julia> graph
 Root
@@ -392,7 +392,7 @@ Create a linear graph with `stages` number of nodes.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.LinearGraph(3)
+julia> graph = MSUC.LinearGraph(3)
 Root
  0
 Nodes
@@ -428,7 +428,7 @@ node to the Markov state `i`.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.MarkovianGraph([ones(1, 1), [0.5 0.5], [0.8 0.2; 0.2 0.8]])
+julia> graph = MSUC.MarkovianGraph([ones(1, 1), [0.5 0.5], [0.8 0.2; 0.2 0.8]])
 Root
  (0, 1)
 Nodes
@@ -506,7 +506,7 @@ to Markov state `i` in the first stage.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.MarkovianGraph(;
+julia> graph = MSUC.MarkovianGraph(;
            stages = 3,
            transition_matrix = [0.8 0.2; 0.2 0.8],
            root_node_transition = [0.5, 0.5],
@@ -563,7 +563,7 @@ probability of `discount_factor` of continuing the cycle.
 ## Examples
 
 ```jldoctest
-julia> graph = SDDP.UnicyclicGraph(0.9; num_nodes = 2)
+julia> graph = MSUC.UnicyclicGraph(0.9; num_nodes = 2)
 Root
  0
 Nodes
@@ -651,7 +651,7 @@ mutable struct Node{T}
     # The user's optimizer. We use this in asynchronous mode.
     optimizer::Any
     # An extension dictionary. This is a useful place for packages that extend
-    # SDDP.jl to stash things.
+    # MSUC.jl to stash things.
     ext::Dict{Symbol,Any}
     # Lock for threading
     lock::ReentrantLock
@@ -709,7 +709,7 @@ mutable struct PolicyGraph{T}
     # Storage for the most recent training results.
     most_recent_training_results::Union{Nothing,TrainingResults}
     # An extension dictionary. This is a useful place for packages that extend
-    # SDDP.jl to stash things.
+    # MSUC.jl to stash things.
     ext::Dict{Symbol,Any}
     timer_output::TimerOutputs.TimerOutput
     lock::ReentrantLock
@@ -784,12 +784,12 @@ Create a linear policy graph with `stages` number of stages.
 
  - `stages`: the number of stages in the graph
 
- - `kwargs`: other keyword arguments are passed to [`SDDP.PolicyGraph`](@ref).
+ - `kwargs`: other keyword arguments are passed to [`MSUC.PolicyGraph`](@ref).
 
 ## Examples
 
 ```jldoctest
-julia> SDDP.LinearPolicyGraph(; stages = 2, lower_bound = 0.0) do sp, t
+julia> MSUC.LinearPolicyGraph(; stages = 2, lower_bound = 0.0) do sp, t
     # ... build model ...
 end
 A policy graph with 2 nodes.
@@ -797,9 +797,9 @@ Node indices: 1, 2
 ```
 is equivalent to
 ```jldoctest
-julia> graph = SDDP.LinearGraph(2);
+julia> graph = MSUC.LinearGraph(2);
 
-julia> SDDP.PolicyGraph(graph; lower_bound = 0.0) do sp, t
+julia> MSUC.PolicyGraph(graph; lower_bound = 0.0) do sp, t
     # ... build model ...
 end
 A policy graph with 2 nodes.
@@ -831,19 +831,19 @@ Create a Markovian policy graph based on the transition matrices given in
    `transition_matrics[1][1, i]` is the probability of transitioning from the
    root node to the Markov state `i`.
 
- - `kwargs`: other keyword arguments are passed to [`SDDP.PolicyGraph`](@ref).
+ - `kwargs`: other keyword arguments are passed to [`MSUC.PolicyGraph`](@ref).
 
 ## See also
 
-See [`SDDP.MarkovianGraph`](@ref) for other ways of specifying a Markovian
+See [`MSUC.MarkovianGraph`](@ref) for other ways of specifying a Markovian
 policy graph.
 
-See [`SDDP.PolicyGraph`](@ref) for the other keyword arguments.
+See [`MSUC.PolicyGraph`](@ref) for the other keyword arguments.
 
 ## Examples
 
 ```jldoctest
-julia> SDDP.MarkovianPolicyGraph(;
+julia> MSUC.MarkovianPolicyGraph(;
            transition_matrices = [ones(1, 1), [0.5 0.5], [0.8 0.2; 0.2 0.8]],
            lower_bound = 0.0,
        ) do sp, node
@@ -854,9 +854,9 @@ A policy graph with 5 nodes.
 ```
 is equivalent to
 ```jldoctest
-julia> graph = SDDP.MarkovianGraph([ones(1, 1), [0.5 0.5], [0.8 0.2; 0.2 0.8]]);
+julia> graph = MSUC.MarkovianGraph([ones(1, 1), [0.5 0.5], [0.8 0.2; 0.2 0.8]]);
 
-julia> SDDP.PolicyGraph(graph; lower_bound = 0.0) do sp, t
+julia> MSUC.PolicyGraph(graph; lower_bound = 0.0) do sp, t
     # ... build model ...
 end
 A policy graph with 5 nodes.
@@ -882,7 +882,7 @@ end
     ) where {T}
 
 Construct a policy graph based on the graph structure of `graph`. (See
-[`SDDP.Graph`](@ref) for details.)
+[`MSUC.Graph`](@ref) for details.)
 
 ## Keyword arguments
 
@@ -991,8 +991,8 @@ function PolicyGraph(
             ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
         )
-        subproblem.ext[:sddp_policy_graph] = policy_graph
-        policy_graph.nodes[node_index] = subproblem.ext[:sddp_node] = node
+        subproblem.ext[:MSUC_policy_graph] = policy_graph
+        policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node
         JuMP.set_objective_sense(subproblem, policy_graph.objective_sense)
         builder(subproblem, node_index)
         # Add a dummy noise here so that all nodes have at least one noise term.
@@ -1180,12 +1180,12 @@ end
 
 # Internal function: helper to get the node given a subproblem.
 function get_node(subproblem::JuMP.Model)
-    return subproblem.ext[:sddp_node]::Node
+    return subproblem.ext[:MSUC_node]::Node
 end
 
 # Internal function: helper to get the policy graph given a subproblem.
 function get_policy_graph(subproblem::JuMP.Model)
-    return subproblem.ext[:sddp_policy_graph]::PolicyGraph
+    return subproblem.ext[:MSUC_policy_graph]::PolicyGraph
 end
 
 """
@@ -1207,7 +1207,7 @@ arguments that are not in realizations (but still of type T).
 ## Examples
 
 ```julia
-SDDP.parameterize(subproblem, [1, 2, 3], [0.4, 0.3, 0.3]) do ω
+MSUC.parameterize(subproblem, [1, 2, 3], [0.4, 0.3, 0.3]) do ω
     JuMP.set_upper_bound(x, ω)
 end
 ```
@@ -1223,7 +1223,7 @@ function parameterize(
 ) where {T}
     node = get_node(subproblem)
     if length(node.noise_terms) != 0
-        error("Duplicate calls to SDDP.parameterize detected.")
+        error("Duplicate calls to MSUC.parameterize detected.")
     end
     for (realization, prob) in zip(realizations, probability)
         push!(node.noise_terms, Noise(realization, prob))
@@ -1243,7 +1243,7 @@ Set the stage-objective of `subproblem` to `stage_objective`.
 ## Examples
 
 ```julia
-SDDP.set_stage_objective(subproblem, 2x + 1)
+MSUC.set_stage_objective(subproblem, 2x + 1)
 ```
 """
 function set_stage_objective(
@@ -1277,7 +1277,7 @@ Set the stage-objective of `subproblem` to `expr`.
 macro stageobjective(subproblem, expr)
     code = MutableArithmetics.rewrite_and_return(expr)
     return quote
-        SDDP.set_stage_objective($(esc(subproblem)), $code)
+        MSUC.set_stage_objective($(esc(subproblem)), $code)
     end
 end
 
@@ -1375,7 +1375,7 @@ end
 
 Return the current objective state of the problem.
 
-Can only be called from [`SDDP.parameterize`](@ref).
+Can only be called from [`MSUC.parameterize`](@ref).
 """
 function objective_state(subproblem::JuMP.Model)
     objective_state = get_node(subproblem).objective_state
@@ -1433,7 +1433,7 @@ the probability of being in node i given the observation of ω. In addition
  - P(Y) = ∑ᵢ P(Xᵢ′) × P(ω ∈ Ωᵢ)
 """
 function construct_belief_update(
-    graph::SDDP.PolicyGraph{T},
+    graph::MSUC.PolicyGraph{T},
     partition::Vector{Set{T}},
 ) where {T}
     # TODO: check that partition is proper.

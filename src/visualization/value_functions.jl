@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -6,7 +6,7 @@
 """
     ValueFunction
 
-A representation of the value function. SDDP.jl uses the following unique representation of
+A representation of the value function. MSUC.jl uses the following unique representation of
 the value function that is undocumented in the literature.
 
 It supports three types of state variables:
@@ -203,7 +203,7 @@ evaluate(V, Dict(:volume => 1.0))
 ```
 
 If the state variable is constructed like
-`@variable(sp, volume[1:4] >= 0, SDDP.State, initial_value = 0.0)`, use `[i]` to
+`@variable(sp, volume[1:4] >= 0, MSUC.State, initial_value = 0.0)`, use `[i]` to
 index the state variable:
 ```julia
 evaluate(V, Dict(Symbol("volume[1]") => 1.0))

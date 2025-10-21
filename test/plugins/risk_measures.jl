@@ -1,11 +1,11 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestRiskMeasures
 
-using SDDP
+using MSUC
 using Test
 import HiGHS
 
@@ -21,10 +21,10 @@ function runtests()
 end
 
 function test_Expectation()
-    @test sprint(show, SDDP.Expectation()) == "SDDP.Expectation()"
+    @test sprint(show, MSUC.Expectation()) == "MSUC.Expectation()"
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.Expectation(),
+    MSUC.adjust_probability(
+        MSUC.Expectation(),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4, 0.5],
         [:a, :b, :c, :d, :e],
@@ -34,8 +34,8 @@ function test_Expectation()
     @test risk_adjusted_probability == [0.1, 0.2, 0.3, 0.4, 0.5]
 
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.Expectation(),
+    MSUC.adjust_probability(
+        MSUC.Expectation(),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.3, 0.1],
         [:a, :b, :c, :d, :e],
@@ -48,8 +48,8 @@ end
 
 function test_WorstCase()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.WorstCase(),
+    MSUC.adjust_probability(
+        MSUC.WorstCase(),
         risk_adjusted_probability,
         [0.1, 0.2, 0.0, 0.4, 0.5],
         [:a, :b, :c, :d, :e],
@@ -59,8 +59,8 @@ function test_WorstCase()
     @test risk_adjusted_probability == [1.0, 0.0, 0.0, 0.0, 0.0]
 
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.WorstCase(),
+    MSUC.adjust_probability(
+        MSUC.WorstCase(),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4, 0.5],
         [:a, :b, :c, :d, :e],
@@ -72,29 +72,29 @@ function test_WorstCase()
 end
 
 function test_Constructors()
-    a = SDDP.Expectation()
-    b = SDDP.AVaR(0.5)
-    c = SDDP.WorstCase()
+    a = MSUC.Expectation()
+    b = MSUC.AVaR(0.5)
+    c = MSUC.WorstCase()
     d = 0.5a + 0.3b + 0.2c
     @test d.measures[1] == (0.5, a)
     @test d.measures[2] == (0.3, b)
     @test d.measures[3] == (0.2, c)
 
-    aa = SDDP.EAVaR(; lambda = 0.5, beta = 0.25)
-    @test aa.measures[1] == (0.5, SDDP.Expectation())
-    @test aa.measures[2] == (0.5, SDDP.AVaR(0.25))
+    aa = MSUC.EAVaR(; lambda = 0.5, beta = 0.25)
+    @test aa.measures[1] == (0.5, MSUC.Expectation())
+    @test aa.measures[2] == (0.5, MSUC.AVaR(0.25))
     return
 end
 
 function test_AVaR()
-    @test_throws Exception SDDP.AVaR(-0.1)
-    @test_throws Exception SDDP.AVaR(1.1)
+    @test_throws Exception MSUC.AVaR(-0.1)
+    @test_throws Exception MSUC.AVaR(1.1)
 end
 
 function test_AVaR_02()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.AVaR(0.2),
+    MSUC.adjust_probability(
+        MSUC.AVaR(0.2),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
         [:a, :b, :c, :d],
@@ -107,8 +107,8 @@ end
 
 function test_AVaR_0()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.AVaR(0.0),
+    MSUC.adjust_probability(
+        MSUC.AVaR(0.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
         [:a, :b, :c, :d],
@@ -121,8 +121,8 @@ end
 
 function test_AVaR_1()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.AVaR(1.0),
+    MSUC.adjust_probability(
+        MSUC.AVaR(1.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
         [:a, :b, :c, :d],
@@ -134,20 +134,20 @@ function test_AVaR_1()
 end
 
 function test_EAVaR()
-    @test sprint(show, SDDP.EAVaR(; lambda = 0.2, beta = 0.3)) ==
-          "A convex combination of 0.2 * SDDP.Expectation() + 0.8 * SDDP.AVaR(0.3)"
-    @test_throws Exception SDDP.EAVaR(lambda = 1.1)
-    @test_throws Exception SDDP.EAVaR(lambda = -0.1)
-    @test_throws Exception SDDP.EAVaR(beta = 1.1)
-    @test_throws Exception SDDP.EAVaR(beta = -0.1)
+    @test sprint(show, MSUC.EAVaR(; lambda = 0.2, beta = 0.3)) ==
+          "A convex combination of 0.2 * MSUC.Expectation() + 0.8 * MSUC.AVaR(0.3)"
+    @test_throws Exception MSUC.EAVaR(lambda = 1.1)
+    @test_throws Exception MSUC.EAVaR(lambda = -0.1)
+    @test_throws Exception MSUC.EAVaR(beta = 1.1)
+    @test_throws Exception MSUC.EAVaR(beta = -0.1)
     return
 end
 
 function test_EAVaR_max_25_2()
     nominal_probability = [0.1, 0.2, 0.3, 0.4]
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.EAVaR(; lambda = 0.25, beta = 0.2),
+    MSUC.adjust_probability(
+        MSUC.EAVaR(; lambda = 0.25, beta = 0.2),
         risk_adjusted_probability,
         nominal_probability,
         [:a, :b, :c, :d],
@@ -162,8 +162,8 @@ end
 function test_EAVaR_min_25_2()
     nominal_probability = [0.1, 0.2, 0.3, 0.4]
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.EAVaR(; lambda = 0.25, beta = 0.2),
+    MSUC.adjust_probability(
+        MSUC.EAVaR(; lambda = 0.25, beta = 0.2),
         risk_adjusted_probability,
         nominal_probability,
         [:a, :b, :c, :d],
@@ -178,8 +178,8 @@ end
 function test_EAVaR_max_50_0()
     nominal_probability = [0.1, 0.2, 0.3, 0.4]
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.EAVaR(; lambda = 0.5, beta = 0.0),
+    MSUC.adjust_probability(
+        MSUC.EAVaR(; lambda = 0.5, beta = 0.0),
         risk_adjusted_probability,
         nominal_probability,
         [:a, :b, :c, :d],
@@ -194,8 +194,8 @@ end
 function test_EAVaR_max_50_0_ii()
     nominal_probability = [0.0, 0.2, 0.4, 0.4]
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
-        SDDP.EAVaR(; lambda = 0.5, beta = 0.0),
+    MSUC.adjust_probability(
+        MSUC.EAVaR(; lambda = 0.5, beta = 0.0),
         risk_adjusted_probability,
         nominal_probability,
         [:a, :b, :c, :d],
@@ -208,15 +208,15 @@ function test_EAVaR_max_50_0_ii()
 end
 
 function test_ModifiedChiSquared()
-    @test sprint(show, SDDP.ModifiedChiSquared(0.1)) ==
+    @test sprint(show, MSUC.ModifiedChiSquared(0.1)) ==
           "ModifiedChiSquared with radius=0.1"
     return
 end
 
 function test_ModifiedChiSquared_min_0()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.0),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.0),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -229,8 +229,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform_Expectation()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.0),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.2, 0.2],
         [:a, :b, :c, :d, :e],
@@ -243,8 +243,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform_Expectation_Max()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.0),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.2, 0.2],
         [:a, :b, :c, :d, :e],
@@ -257,8 +257,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform_WorstCase()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(6.0),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(6.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.3, 0.1],
         [:a, :b, :c, :d, :e],
@@ -271,8 +271,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform_WorstCase_Max()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(6.0),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(6.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.3, 0.1],
         [:a, :b, :c, :d, :e],
@@ -285,8 +285,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.45),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.45),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.3, 0.1],
         [:a, :b, :c, :d, :e],
@@ -300,8 +300,8 @@ end
 
 function test_ModifiedChiSquared_Nonuniform_max()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.45),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.45),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.3, 0.1],
         [:a, :b, :c, :d, :e],
@@ -315,8 +315,8 @@ end
 
 function test_ModifiedChiSquared_Min_025()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.25),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.25),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -330,8 +330,8 @@ end
 
 function test_ModifiedChiSquared_Max_025()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.25),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.25),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -345,8 +345,8 @@ end
 
 function test_ModifiedChiSquared_Min_04()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.4),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.4),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -360,8 +360,8 @@ end
 
 function test_ModifiedChiSquared_Max_04()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(0.4),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(0.4),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -375,8 +375,8 @@ end
 
 function test_ModifiedChiSquared_Min_sqrt08()
     risk_adjusted_probability = Vector{Float64}(undef, 5)
-    SDDP.adjust_probability(
-        SDDP.ModifiedChiSquared(sqrt(0.8)),
+    MSUC.adjust_probability(
+        MSUC.ModifiedChiSquared(sqrt(0.8)),
         risk_adjusted_probability,
         fill(0.2, 5),
         [:a, :b, :c, :d, :e],
@@ -389,8 +389,8 @@ end
 
 function test_ModifiedChiSquared_default()
     P, Q = [0.4, 0.6], zeros(2)
-    F = SDDP.ModifiedChiSquared(0.1)
-    a = SDDP.adjust_probability(F, Q, P, [:a, :b], [1.0, 1.0], true)
+    F = MSUC.ModifiedChiSquared(0.1)
+    a = MSUC.adjust_probability(F, Q, P, [:a, :b], [1.0, 1.0], true)
     @test iszero(a)
     @test P == Q
     return
@@ -398,33 +398,33 @@ end
 
 function test_ModifiedChiSquared_zero_prob()
     P, Q = [1.0, 0.0], zeros(2)
-    F = SDDP.ModifiedChiSquared(0.1)
-    a = SDDP.adjust_probability(F, Q, P, [:a, :b], [1.0, 2.0], true)
+    F = MSUC.ModifiedChiSquared(0.1)
+    a = MSUC.adjust_probability(F, Q, P, [:a, :b], [1.0, 2.0], true)
     @test iszero(a)
     @test P == Q
     P, Q = [0.5, 0.0, 0.5], zeros(3)
-    F = SDDP.ModifiedChiSquared(0.1)
-    a = SDDP.adjust_probability(F, Q, P, [:a, :b, :c], [1.0, 1.0, 2.0], true)
+    F = MSUC.ModifiedChiSquared(0.1)
+    a = MSUC.adjust_probability(F, Q, P, [:a, :b, :c], [1.0, 1.0, 2.0], true)
     @test iszero(a)
     @test isapprox(Q, [0.4292893218813453, 0.0, 0.5707106781186547])
     return
 end
 
 function _default_wasserstein(alpha)
-    return SDDP.Wasserstein(HiGHS.Optimizer; alpha = alpha) do x, y
+    return MSUC.Wasserstein(HiGHS.Optimizer; alpha = alpha) do x, y
         return abs(x - y)
     end
 end
 
 function test_Wasserstein()
-    @test sprint(show, _default_wasserstein(0.1)) == "SDDP.Wasserstein"
+    @test sprint(show, _default_wasserstein(0.1)) == "MSUC.Wasserstein"
     @test_throws Exception _default_wasserstein(-1.0)
     return
 end
 
 function test_Wasserstein_Max_WorstCase()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(10.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -438,7 +438,7 @@ end
 
 function test_Wasserstein_Min_WorstCase()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(10.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -452,7 +452,7 @@ end
 
 function test_Wasserstein_Max_Expectation()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(0.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -466,7 +466,7 @@ end
 
 function test_Wasserstein_Min_Expectation()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(0.0),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -480,7 +480,7 @@ end
 
 function test_Wasserstein_Max_Intermediate()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(0.1),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -494,7 +494,7 @@ end
 
 function test_Wasserstein_Min_Intermediate()
     risk_adjusted_probability = Vector{Float64}(undef, 4)
-    SDDP.adjust_probability(
+    MSUC.adjust_probability(
         _default_wasserstein(0.1),
         risk_adjusted_probability,
         [0.1, 0.2, 0.3, 0.4],
@@ -507,7 +507,7 @@ function test_Wasserstein_Min_Intermediate()
 end
 
 function test_Entropic()
-    @test sprint(show, SDDP.Entropic(0.1)) ==
+    @test sprint(show, MSUC.Entropic(0.1)) ==
           "Entropic risk measure with γ = 0.1"
     return
 end
@@ -517,7 +517,7 @@ function test_Entropic_zero()
     X = [1.0, 2.0, 3.0]
     P = [0.5, 0.5, 0.0]
     Q = [NaN, NaN, NaN]
-    α = SDDP.adjust_probability(SDDP.Entropic(0.0), Q, P, [], X, true)
+    α = MSUC.adjust_probability(MSUC.Entropic(0.0), Q, P, [], X, true)
     @test iszero(α)
     @test Q == P
     return
@@ -531,7 +531,7 @@ function test_Entropic_Min()
     last, last_q2 = -Inf, 0.0
     for i in -4:4
         θ = 10.0^i
-        α = SDDP.adjust_probability(SDDP.Entropic(θ), Q, P, [], X, true)
+        α = MSUC.adjust_probability(MSUC.Entropic(θ), Q, P, [], X, true)
         current = Q' * X + α
         @test current >= last
         @test Q[2] >= last_q2
@@ -548,7 +548,7 @@ function test_Entropic_Max()
     last, last_q1 = Inf, 0.0
     for i in -4:4
         θ = 10.0^i
-        α = SDDP.adjust_probability(SDDP.Entropic(θ), Q, P, [], X, false)
+        α = MSUC.adjust_probability(MSUC.Entropic(θ), Q, P, [], X, false)
         current = Q' * X + α
         if Q[1] < 1 - 1e-6
             # If Q[1] ≈ 1, this test can fail due to numerical error.
@@ -563,17 +563,17 @@ end
 function test_ConvexCombination_with_intercept()
     X = [1.0, 2.0, 3.0]
     P = [0.5, 0.2, 0.3]
-    F_ent = SDDP.Entropic(1.0)
+    F_ent = MSUC.Entropic(1.0)
     Q_ent = [NaN, NaN, NaN]
-    α_ent = SDDP.adjust_probability(F_ent, Q_ent, P, [], X, false)
+    α_ent = MSUC.adjust_probability(F_ent, Q_ent, P, [], X, false)
     @test α_ent > 0
-    F_wc = SDDP.WorstCase()
+    F_wc = MSUC.WorstCase()
     Q_wc = [NaN, NaN, NaN]
-    α_wc = SDDP.adjust_probability(F_wc, Q_wc, P, [], X, false)
+    α_wc = MSUC.adjust_probability(F_wc, Q_wc, P, [], X, false)
     @test α_wc == 0.0
     F = 0.3 * F_ent + 0.7 * F_wc
     Q = [NaN, NaN, NaN]
-    α = SDDP.adjust_probability(F, Q, P, [], X, false)
+    α = MSUC.adjust_probability(F, Q, P, [], X, false)
     @test isapprox(α, 0.3 * α_ent + 0.7 * α_wc)
     @test isapprox(Q, 0.3 * Q_ent + 0.7 * Q_wc)
     return

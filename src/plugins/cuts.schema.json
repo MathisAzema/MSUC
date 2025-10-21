@@ -1,7 +1,7 @@
 {
     "$schema": "https://json-schema.org/schema#",
-    "$id": "https://github.com/odow/SDDP.jl/tree/master/src/plugins/cuts.schema.json",
-    "title": "The schema for SDDP.jl cuts",
+    "$id": "https://github.com/odow/MSUC.jl/tree/master/src/plugins/cuts.schema.json",
+    "title": "The schema for MSUC.jl cuts",
     "type": "array",
     "items": {
         "type": "object",

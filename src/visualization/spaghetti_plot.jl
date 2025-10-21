@@ -1,10 +1,10 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
 
 """
-	SDDP.SpaghettiPlot(; stages, scenarios)
+	MSUC.SpaghettiPlot(; stages, scenarios)
 
 Initialize a new `SpaghettiPlot` with `stages` stages and `scenarios` number of
 replications.
@@ -32,7 +32,7 @@ function Base.show(io::IO, plt::SpaghettiPlot)
 end
 
 """
-	SDDP.add_spaghetti(data_function::Function, plt::SpaghettiPlot; kwargs...)
+	MSUC.add_spaghetti(data_function::Function, plt::SpaghettiPlot; kwargs...)
 
 # Description
 
@@ -56,8 +56,8 @@ Add a new figure to the SpaghettiPlot `plt`, where the y-value of the
 
 ```julia
 simulations = simulate(model, 10)
-plt = SDDP.spaghetti_plot(simulations)
-SDDP.add_spaghetti(plt; title = "Stage objective") do data
+plt = MSUC.spaghetti_plot(simulations)
+MSUC.add_spaghetti(plt; title = "Stage objective") do data
     return data[:stage_objective]
 end
 ```
@@ -148,7 +148,7 @@ function plot(
 end
 
 function save(p::SpaghettiPlot, args...; kwargs...)
-    Base.depwarn("`SDDP.save` is deprecated. Use `SDDP.plot` instead.", :save)
+    Base.depwarn("`MSUC.save` is deprecated. Use `MSUC.plot` instead.", :save)
     return plot(p, args...; kwargs...)
 end
 

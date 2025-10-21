@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public License,
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
@@ -18,11 +18,11 @@ nominal distribution.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.Expectation(),
+julia> MSUC.adjust_probability(
+           MSUC.Expectation(),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -64,11 +64,11 @@ This risk measure places all of the probability weight on the worst outcome.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.WorstCase(),
+julia> MSUC.adjust_probability(
+           MSUC.WorstCase(),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -130,11 +130,11 @@ shortfall.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.AVaR(0.5),
+julia> MSUC.adjust_probability(
+           MSUC.AVaR(0.5),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -147,11 +147,11 @@ julia> risk_adjusted_probability
  0.6
  0.0
 
-julia> SDDP.adjust_probability(
-           SDDP.AVaR(1.0),
+julia> MSUC.adjust_probability(
+           MSUC.AVaR(1.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -164,11 +164,11 @@ julia> risk_adjusted_probability
  0.3
  0.4
 
-julia> SDDP.adjust_probability(
-           SDDP.AVaR(0.0),
+julia> MSUC.adjust_probability(
+           MSUC.AVaR(0.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -211,11 +211,11 @@ CV@R is also known as the average value at risk (AV@R) or expected shortfall.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.CVaR(0.5),
+julia> MSUC.adjust_probability(
+           MSUC.CVaR(0.5),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -228,11 +228,11 @@ julia> risk_adjusted_probability
  0.6
  0.0
 
-julia> SDDP.adjust_probability(
-           SDDP.CVaR(1.0),
+julia> MSUC.adjust_probability(
+           MSUC.CVaR(1.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -245,11 +245,11 @@ julia> risk_adjusted_probability
  0.3
  0.4
 
-julia> SDDP.adjust_probability(
-           SDDP.CVaR(0.0),
+julia> MSUC.adjust_probability(
+           MSUC.CVaR(0.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -317,19 +317,19 @@ Create a weighted combination of risk measures.
 ## Examples
 
 ```jldoctest
-julia> SDDP.ConvexCombination(
-           (0.5, SDDP.Expectation()),
-           (0.5, SDDP.AVaR(0.25))
+julia> MSUC.ConvexCombination(
+           (0.5, MSUC.Expectation()),
+           (0.5, MSUC.AVaR(0.25))
        )
-A convex combination of 0.5 * SDDP.Expectation() + 0.5 * SDDP.AVaR(0.25)
+A convex combination of 0.5 * MSUC.Expectation() + 0.5 * MSUC.AVaR(0.25)
 ```
 
 Convex combinations can also be constructed by adding weighted risk measures
 together as follows:
 
 ```jldoctest
-julia> 0.5 * SDDP.Expectation() + 0.5 * SDDP.AVaR(0.5)
-A convex combination of 0.5 * SDDP.Expectation() + 0.5 * SDDP.AVaR(0.5)
+julia> 0.5 * MSUC.Expectation() + 0.5 * MSUC.AVaR(0.5)
+A convex combination of 0.5 * MSUC.Expectation() + 0.5 * MSUC.AVaR(0.5)
 ```
 """
 struct ConvexCombination{T<:Tuple} <: AbstractRiskMeasure
@@ -409,14 +409,14 @@ Risk (also called Conditional Value @ Risk).
 ## Example
 
 ```jldoctest
-julia> SDDP.EAVaR(; lambda = 1.0, beta = 1.0)
-A convex combination of 1.0 * SDDP.Expectation() + 0.0 * SDDP.AVaR(1.0)
+julia> MSUC.EAVaR(; lambda = 1.0, beta = 1.0)
+A convex combination of 1.0 * MSUC.Expectation() + 0.0 * MSUC.AVaR(1.0)
 
-julia> SDDP.EAVaR(; lambda = 0.0, beta = 1.0)
-A convex combination of 0.0 * SDDP.Expectation() + 1.0 * SDDP.AVaR(1.0)
+julia> MSUC.EAVaR(; lambda = 0.0, beta = 1.0)
+A convex combination of 0.0 * MSUC.Expectation() + 1.0 * MSUC.AVaR(1.0)
 
-julia> SDDP.EAVaR(; lambda = 0.5, beta = 0.5)
-A convex combination of 0.5 * SDDP.Expectation() + 0.5 * SDDP.AVaR(0.5)
+julia> MSUC.EAVaR(; lambda = 0.5, beta = 0.5)
+A convex combination of 0.5 * MSUC.Expectation() + 0.5 * MSUC.AVaR(0.5)
 ```
 """
 function EAVaR(; lambda::Float64 = 1.0, beta::Float64 = 1.0)
@@ -442,8 +442,8 @@ end
 """
     ModifiedChiSquared(radius::Float64; minimum_std=1e-5)
 
-The distributionally robust SDDP risk measure of
-Philpott, A., de Matos, V., Kapelevich, L. Distributionally robust SDDP.
+The distributionally robust MSUC risk measure of
+Philpott, A., de Matos, V., Kapelevich, L. Distributionally robust MSUC.
 Computational Management Science (2018) 165:431-454.
 
 ## Explanation
@@ -485,11 +485,11 @@ This code was contributed by Lea Kapelevich.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.ModifiedChiSquared(0.5),
+julia> MSUC.adjust_probability(
+           MSUC.ModifiedChiSquared(0.5),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -502,11 +502,11 @@ julia> risk_adjusted_probability
  0.5958039891549808
  0.019680585372167547
 
-julia> SDDP.adjust_probability(
-           SDDP.ModifiedChiSquared(0.5),
+julia> MSUC.adjust_probability(
+           MSUC.ModifiedChiSquared(0.5),
            risk_adjusted_probability,
            [0.25, 0.25, 0.25, 0.25],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.25, 0.25, 0.25, 0.25]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.25, 0.25, 0.25, 0.25]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -527,7 +527,7 @@ struct ModifiedChiSquared <: AbstractRiskMeasure
         if abs(radius) < 1e-9
             @warn(
                 "Radius is very small. You should probably use " *
-                "`SDDP.Expectation()` instead."
+                "`MSUC.Expectation()` instead."
             )
         end
         return new(radius, minimum_std)
@@ -751,7 +751,7 @@ measure approaches the Worst-case risk measure.
 The `norm` argument is a fuction that computes the distance between two supports
 of your distribution. It must have the signature:
 ```julia
-wasserstein_norm(x::SDDP.Noise, y::SDDP.Noise)::Float64
+wasserstein_norm(x::MSUC.Noise, y::MSUC.Noise)::Float64
 ```
 
 The input arguments are of type [`Noise`](@ref). The `.term` values will depend
@@ -764,13 +764,13 @@ julia> import HiGHS
 
 julia> risk_adjusted_probability = zeros(4);
 
-julia> wasserstein_norm(x::SDDP.Noise, y::SDDP.Noise) = abs(x.term - y.term);
+julia> wasserstein_norm(x::MSUC.Noise, y::MSUC.Noise) = abs(x.term - y.term);
 
-julia> SDDP.adjust_probability(
-           SDDP.Wasserstein(wasserstein_norm, HiGHS.Optimizer; alpha = 0.5),
+julia> MSUC.adjust_probability(
+           MSUC.Wasserstein(wasserstein_norm, HiGHS.Optimizer; alpha = 0.5),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1.0, 2.0, 3.0, 4.0], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1.0, 2.0, 3.0, 4.0], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -799,7 +799,7 @@ struct Wasserstein{T,F} <: AbstractRiskMeasure
         )
     end
 end
-Base.show(io::IO, measure::Wasserstein) = print(io, "SDDP.Wasserstein")
+Base.show(io::IO, measure::Wasserstein) = print(io, "MSUC.Wasserstein")
 
 function adjust_probability(
     measure::Wasserstein,
@@ -855,11 +855,11 @@ As γ increases, the measure becomes more risk-averse.
 ```jldoctest
 julia> risk_adjusted_probability = zeros(4);
 
-julia> SDDP.adjust_probability(
-           SDDP.Entropic(0.1),
+julia> MSUC.adjust_probability(
+           MSUC.Entropic(0.1),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -872,11 +872,11 @@ julia> risk_adjusted_probability
  0.3648046623591841
  0.3260478374221655
 
-julia> SDDP.adjust_probability(
-           SDDP.Entropic(1.0),
+julia> MSUC.adjust_probability(
+           MSUC.Entropic(1.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )
@@ -889,11 +889,11 @@ julia> risk_adjusted_probability
  0.8082304666305623
  0.019737676487571337
 
-julia> SDDP.adjust_probability(
-           SDDP.Entropic(10.0),
+julia> MSUC.adjust_probability(
+           MSUC.Entropic(10.0),
            risk_adjusted_probability,
            [0.1, 0.2, 0.3, 0.4],  # nominal_probability,
-           SDDP.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
+           MSUC.Noise.([1, 2, 3, 4], [0.1, 0.2, 0.3, 0.4]),  # noise_supports,
            [5.0, 4.0, 6.0, 2.0],  # cost_realizations,
            true,                  # is_minimization
        )

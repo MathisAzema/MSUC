@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -406,7 +406,7 @@ A forward pass that explores according to the risk adjusted sampling scheme
 proposed in:
 
 Dias Garcia, J., Leal, I., Chabar, R., and Pereira, M.V. (2023). A Multicut
-Approach to Compute Upper Bounds for Risk-Averse SDDP.
+Approach to Compute Upper Bounds for Risk-Averse MSUC.
 https://arxiv.org/abs/2307.13190
 """
 struct ImportanceSamplingForwardPass <: AbstractForwardPass end
@@ -442,10 +442,10 @@ function forward_pass(
             push!(sampled_states, incoming_state_value)
             if isempty(node.bellman_function.local_thetas)
                 # First iteration with no multi-cuts, or a node with no children
-                node_index = SDDP.sample_noise(node.children)
+                node_index = MSUC.sample_noise(node.children)
                 if node_index !== nothing
                     new_node = model[node_index]
-                    noise = SDDP.sample_noise(new_node.noise_terms)
+                    noise = MSUC.sample_noise(new_node.noise_terms)
                 end
             else
                 objectives = map(node.bellman_function.local_thetas) do t
@@ -464,7 +464,7 @@ function forward_pass(
                     end
                 end
                 @assert length(nominal_probability) == length(objectives)
-                _ = SDDP.adjust_probability(
+                _ = MSUC.adjust_probability(
                     options.risk_measures[node_index],
                     adjusted_probability,
                     nominal_probability,
@@ -472,8 +472,8 @@ function forward_pass(
                     objectives,
                     model.objective_sense == MOI.MIN_SENSE,
                 )
-                terms = SDDP.Noise.(support, adjusted_probability)
-                node_index, noise = SDDP.sample_noise(terms)
+                terms = MSUC.Noise.(support, adjusted_probability)
+                node_index, noise = MSUC.sample_noise(terms)
             end
         finally
             unlock(node.lock)

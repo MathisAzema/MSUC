@@ -1,9 +1,9 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-module SDDP
+module MSUC
 
 import Reexport
 Reexport.@reexport using JuMP
@@ -28,7 +28,7 @@ export @stageobjective
 include("user_interface.jl")
 include("modeling_aids.jl")
 
-# Default definitions for SDDP related modular utilities.
+# Default definitions for MSUC related modular utilities.
 include("plugins/headers.jl")
 
 # Tools for overloading JuMP functions
@@ -39,7 +39,7 @@ include("JuMP.jl")
 include("cyclic.jl")
 include("print.jl")
 
-# The core SDDP code.
+# The core MSUC code.
 include("algorithm.jl")
 
 # Specific plugins.

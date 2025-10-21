@@ -1,11 +1,11 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 module TestForwardPasses
 
-using SDDP
+using MSUC
 using Test
 import HiGHS
 import Random
@@ -22,22 +22,22 @@ function runtests()
 end
 
 function test_DefaultForwardPass()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 2,
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
+        MSUC.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    forward_trajectory = SDDP.forward_pass(
+    forward_trajectory = MSUC.forward_pass(
         model,
-        SDDP.Options(model, Dict(:x => 1.0)),
-        SDDP.DefaultForwardPass(),
+        MSUC.Options(model, Dict(:x => 1.0)),
+        MSUC.DefaultForwardPass(),
     )
     simulated_value = 0.0
     for ((node_index, noise), state) in
@@ -50,24 +50,24 @@ function test_DefaultForwardPass()
 end
 
 function test_RevisitingForwardPass()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 2,
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
+        MSUC.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    fp = SDDP.RevisitingForwardPass(2; sub_pass = SDDP.DefaultForwardPass())
+    fp = MSUC.RevisitingForwardPass(2; sub_pass = MSUC.DefaultForwardPass())
     @test length(fp.archive) == 0
     for i in 1:5
-        pass = SDDP.forward_pass(
+        pass = MSUC.forward_pass(
             model,
-            SDDP.Options(model, Dict(:x => 1.0); forward_pass = fp),
+            MSUC.Options(model, Dict(:x => 1.0); forward_pass = fp),
             fp,
         )
         if i <= 2
@@ -86,74 +86,74 @@ function test_RevisitingForwardPass()
 end
 
 function test_RiskAdjustedForwardPass()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 2,
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
+        MSUC.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    @test_throws ArgumentError SDDP.train(
+    @test_throws ArgumentError MSUC.train(
         model;
         iteration_limit = 5,
         forward_pass_resampling_probability = 0.0,
     )
-    @test_throws ArgumentError SDDP.train(
+    @test_throws ArgumentError MSUC.train(
         model;
         iteration_limit = 5,
         forward_pass_resampling_probability = 1.0,
     )
 
-    forward_pass = SDDP.RiskAdjustedForwardPass(;
-        forward_pass = SDDP.DefaultForwardPass(),
-        risk_measure = SDDP.WorstCase(),
+    forward_pass = MSUC.RiskAdjustedForwardPass(;
+        forward_pass = MSUC.DefaultForwardPass(),
+        risk_measure = MSUC.WorstCase(),
         resampling_probability = 0.9,
     )
-    SDDP.train(
+    MSUC.train(
         model;
         print_level = 0,
         iteration_limit = 20,
         forward_pass = forward_pass,
     )
     @test length(forward_pass.archive) < 10
-    SDDP.train(
+    MSUC.train(
         model;
         iteration_limit = 10,
         print_level = 0,
         forward_pass_resampling_probability = 0.9,
     )
-    @test SDDP.termination_status(model) == :iteration_limit
+    @test MSUC.termination_status(model) == :iteration_limit
     return
 end
 
 function test_DefaultForwardPass_cyclic()
-    graph = SDDP.LinearGraph(3)
-    SDDP.add_edge(graph, 3 => 1, 0.9)
-    model = SDDP.PolicyGraph(
+    graph = MSUC.LinearGraph(3)
+    MSUC.add_edge(graph, 3 => 1, 0.9)
+    model = MSUC.PolicyGraph(
         graph;
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1.5]) do ω
+        MSUC.parameterize(node, stage * [1.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    pass = SDDP.DefaultForwardPass()
-    options = SDDP.Options(
+    pass = MSUC.DefaultForwardPass()
+    options = MSUC.Options(
         model,
         Dict(:x => 1.0);
-        sampling_scheme = SDDP.InSampleMonteCarlo(; terminate_on_cycle = true),
+        sampling_scheme = MSUC.InSampleMonteCarlo(; terminate_on_cycle = true),
         forward_pass = pass,
     )
-    forward_trajectory = SDDP.forward_pass(model, options, pass)
+    forward_trajectory = MSUC.forward_pass(model, options, pass)
     @test length(forward_trajectory.scenario_path) == 4
     @test length(forward_trajectory.sampled_states) == 4
     @test options.starting_states[1] == [Dict(:x => 4.5)]
@@ -163,28 +163,28 @@ function test_DefaultForwardPass_cyclic()
 end
 
 function test_DefaultForwardPass_cyclic_include_last_node()
-    graph = SDDP.LinearGraph(3)
-    SDDP.add_edge(graph, 3 => 1, 0.9)
-    model = SDDP.PolicyGraph(
+    graph = MSUC.LinearGraph(3)
+    MSUC.add_edge(graph, 3 => 1, 0.9)
+    model = MSUC.PolicyGraph(
         graph;
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1.5]) do ω
+        MSUC.parameterize(node, stage * [1.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    pass = SDDP.DefaultForwardPass(; include_last_node = false)
-    options = SDDP.Options(
+    pass = MSUC.DefaultForwardPass(; include_last_node = false)
+    options = MSUC.Options(
         model,
         Dict(:x => 1.0);
-        sampling_scheme = SDDP.InSampleMonteCarlo(; terminate_on_cycle = true),
+        sampling_scheme = MSUC.InSampleMonteCarlo(; terminate_on_cycle = true),
         forward_pass = pass,
     )
-    forward_trajectory = SDDP.forward_pass(model, options, pass)
+    forward_trajectory = MSUC.forward_pass(model, options, pass)
     @test length(forward_trajectory.scenario_path) == 3
     @test length(forward_trajectory.sampled_states) == 3
     @test options.starting_states[1] == [Dict(:x => 4.5)]
@@ -194,27 +194,27 @@ function test_DefaultForwardPass_cyclic_include_last_node()
 end
 
 function test_DefaultForwardPass_acyclic_include_last_node()
-    graph = SDDP.LinearGraph(3)
-    model = SDDP.PolicyGraph(
+    graph = MSUC.LinearGraph(3)
+    model = MSUC.PolicyGraph(
         graph;
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1.5]) do ω
+        MSUC.parameterize(node, stage * [1.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    pass = SDDP.DefaultForwardPass(; include_last_node = false)
-    options = SDDP.Options(
+    pass = MSUC.DefaultForwardPass(; include_last_node = false)
+    options = MSUC.Options(
         model,
         Dict(:x => 1.0);
-        sampling_scheme = SDDP.InSampleMonteCarlo(; terminate_on_cycle = true),
+        sampling_scheme = MSUC.InSampleMonteCarlo(; terminate_on_cycle = true),
         forward_pass = pass,
     )
-    forward_trajectory = SDDP.forward_pass(model, options, pass)
+    forward_trajectory = MSUC.forward_pass(model, options, pass)
     @test length(forward_trajectory.scenario_path) == 3
     @test length(forward_trajectory.sampled_states) == 3
     @test isempty(options.starting_states[1])
@@ -226,16 +226,16 @@ end
 function test_RegularizedForwardPass()
     function main(capacity_cost, forward_pass, hint)
         Random.seed!(1245)
-        graph = SDDP.LinearGraph(2)
-        SDDP.add_edge(graph, 2 => 2, 0.95)
-        model = SDDP.PolicyGraph(
+        graph = MSUC.LinearGraph(2)
+        MSUC.add_edge(graph, 2 => 2, 0.95)
+        model = MSUC.PolicyGraph(
             graph;
             sense = :Min,
             lower_bound = 0.0,
             optimizer = HiGHS.Optimizer,
         ) do sp, node
-            @variable(sp, 0 <= x <= 400, SDDP.State, initial_value = hint)
-            @variable(sp, 0 <= y, SDDP.State, initial_value = 0)
+            @variable(sp, 0 <= x <= 400, MSUC.State, initial_value = hint)
+            @variable(sp, 0 <= y, MSUC.State, initial_value = 0)
             if node == 1
                 @stageobjective(sp, capacity_cost * x.out)
                 @constraint(sp, y.out == y.in)
@@ -246,53 +246,53 @@ function test_RegularizedForwardPass()
                 @constraint(sp, x.out == x.in)
                 @constraint(sp, y.out <= x.in)
                 @constraint(sp, c_bal, y.out == y.in + u_prod + u_overtime)
-                SDDP.parameterize(sp, [100, 300]) do ω
+                MSUC.parameterize(sp, [100, 300]) do ω
                     set_normalized_rhs(c_bal, -ω)
                     return
                 end
             end
             return
         end
-        SDDP.train(
+        MSUC.train(
             model;
             print_level = 0,
             forward_pass = forward_pass,
             iteration_limit = 10,
-            parallel_scheme = SDDP.Serial(),
+            parallel_scheme = MSUC.Serial(),
         )
-        return SDDP.calculate_bound(model)
+        return MSUC.calculate_bound(model)
     end
     for (cost, hint) in [(0, 400), (200, 100), (400, 0)]
-        fp = SDDP.RegularizedForwardPass()
+        fp = MSUC.RegularizedForwardPass()
         reg_bound = main(cost, fp, hint)
-        bound = main(cost, SDDP.DefaultForwardPass(), hint)
+        bound = main(cost, MSUC.DefaultForwardPass(), hint)
         @test reg_bound >= bound - 1.0
     end
     # Test that initializing with a bad guess performs poorly
-    fp = SDDP.RegularizedForwardPass()
+    fp = MSUC.RegularizedForwardPass()
     reg_bound = main(400, fp, 400)
-    bound = main(400, SDDP.DefaultForwardPass(), 0)
+    bound = main(400, MSUC.DefaultForwardPass(), 0)
     @test reg_bound < bound
     return
 end
 
 function test_ImportanceSamplingForwardPass()
-    model = SDDP.LinearPolicyGraph(;
+    model = MSUC.LinearPolicyGraph(;
         stages = 2,
         sense = :Max,
         upper_bound = 100.0,
         optimizer = HiGHS.Optimizer,
     ) do node, stage
-        @variable(node, x, SDDP.State, initial_value = 0.0)
+        @variable(node, x, MSUC.State, initial_value = 0.0)
         @stageobjective(node, x.out)
-        SDDP.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
+        MSUC.parameterize(node, stage * [1, 3], [0.5, 0.5]) do ω
             return JuMP.set_upper_bound(x.out, ω)
         end
     end
-    forward_trajectory = SDDP.forward_pass(
+    forward_trajectory = MSUC.forward_pass(
         model,
-        SDDP.Options(model, Dict(:x => 1.0)),
-        SDDP.ImportanceSamplingForwardPass(),
+        MSUC.Options(model, Dict(:x => 1.0)),
+        MSUC.ImportanceSamplingForwardPass(),
     )
     simulated_value = 0.0
     for ((node_index, noise), state) in
@@ -301,11 +301,11 @@ function test_ImportanceSamplingForwardPass()
         simulated_value += noise
     end
     @test simulated_value == forward_trajectory.cumulative_value
-    SDDP.train(model; cut_type = SDDP.MULTI_CUT, iteration_limit = 1)
-    forward_trajectory = SDDP.forward_pass(
+    MSUC.train(model; cut_type = MSUC.MULTI_CUT, iteration_limit = 1)
+    forward_trajectory = MSUC.forward_pass(
         model,
-        SDDP.Options(model, Dict(:x => 1.0)),
-        SDDP.ImportanceSamplingForwardPass(),
+        MSUC.Options(model, Dict(:x => 1.0)),
+        MSUC.ImportanceSamplingForwardPass(),
     )
     simulated_value = 0.0
     for ((node_index, noise), state) in

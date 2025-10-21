@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -8,7 +8,7 @@ module Inner
 
 import JuMP
 import JSON
-import ..SDDP
+import ..MSUC
 
 import JuMP: MOI
 
@@ -28,7 +28,7 @@ mutable struct InnerConvexApproximation
     belief_states::Union{Nothing,Dict{T,JuMP.VariableRef} where {T}}
     # Storage for cut selection
     vertices::Vector{Vertex}
-    sampled_states::Vector{SDDP.SampledState}
+    sampled_states::Vector{MSUC.SampledState}
     vertices_to_be_deleted::Vector{Vertex}
     deletion_minimum::Int
     Lipschitz_constant::Float64
@@ -47,7 +47,7 @@ mutable struct InnerConvexApproximation
             objective_states,
             belief_states,
             Vertex[],
-            SDDP.SampledState[],
+            MSUC.SampledState[],
             Vertex[],
             deletion_minimum,
             Lipschitz_constant,
@@ -193,7 +193,7 @@ V(x, b, y) =
 ```
 """
 mutable struct InnerBellmanFunction
-    cut_type::SDDP.CutType
+    cut_type::MSUC.CutType
     global_theta::InnerConvexApproximation
     local_thetas::Vector{InnerConvexApproximation}
     # Cuts defining the dual representation of the risk measure.
@@ -206,7 +206,7 @@ end
         lower_bound = -Inf,
         upper_bound = Inf,
         deletion_minimum::Int = 1,
-        vertex_type::SDDP.CutType = SDDP.MULTI_CUT,
+        vertex_type::MSUC.CutType = MSUC.MULTI_CUT,
     )
 """
 function InnerBellmanFunction(
@@ -214,9 +214,9 @@ function InnerBellmanFunction(
     lower_bound = -Inf,
     upper_bound = Inf,
     deletion_minimum::Int = 1,
-    vertex_type::SDDP.CutType = SDDP.MULTI_CUT,
+    vertex_type::MSUC.CutType = MSUC.MULTI_CUT,
 )
-    return SDDP.InstanceFactory{InnerBellmanFunction}(;
+    return MSUC.InstanceFactory{InnerBellmanFunction}(;
         Lipschitz_constant = Lipschitz_constant,
         lower_bound = lower_bound,
         upper_bound = upper_bound,
@@ -225,7 +225,7 @@ function InnerBellmanFunction(
     )
 end
 
-function SDDP.bellman_term(bellman_function::InnerBellmanFunction)
+function MSUC.bellman_term(bellman_function::InnerBellmanFunction)
     return bellman_function.global_theta.theta
 end
 
@@ -233,29 +233,29 @@ end
 #   Lipschitz_constant = 2000.0,
 #   Lipschitz_constant = Dict(1=>2000.0, 2=>1000.0)
 #   Lipschitz_constant = (node_index) -> 1000.0 * (nStages - node_index)
-# See [`to_nodal_form`] in SDDP.jl
-function to_node(node::SDDP.Node{T}, element) where {T}
+# See [`to_nodal_form`] in MSUC.jl
+function to_node(node::MSUC.Node{T}, element) where {T}
     return element
 end
 
-function to_node(node::SDDP.Node{T}, builder::Function) where {T}
+function to_node(node::MSUC.Node{T}, builder::Function) where {T}
     return builder(node.index)
 end
 
-function to_node(node::SDDP.Node{T}, dict::Dict{T,V}) where {T,V}
+function to_node(node::MSUC.Node{T}, dict::Dict{T,V}) where {T,V}
     return dict[node.index]
 end
 
-function SDDP.initialize_bellman_function(
-    factory::SDDP.InstanceFactory{InnerBellmanFunction},
-    model::SDDP.PolicyGraph{T},
-    node::SDDP.Node{T},
+function MSUC.initialize_bellman_function(
+    factory::MSUC.InstanceFactory{InnerBellmanFunction},
+    model::MSUC.PolicyGraph{T},
+    node::MSUC.Node{T},
 ) where {T}
     lower_bound,
     upper_bound,
     deletion_minimum,
     vertex_type,
-    Lipschitz_constant = -Inf, Inf, 0, SDDP.SINGLE_CUT, 0.0
+    Lipschitz_constant = -Inf, Inf, 0, MSUC.SINGLE_CUT, 0.0
     for (kw, value) in factory.kwargs
         value = to_node(node, value)
         if kw == :lower_bound
@@ -279,7 +279,7 @@ function SDDP.initialize_bellman_function(
     Θᴳ = JuMP.@variable(sp)
     # Initialize bounds for the objective states. If objective_state==nothing,
     # this check will be skipped by dispatch.
-    SDDP._add_initial_bounds(node.objective_state, Θᴳ)
+    MSUC._add_initial_bounds(node.objective_state, Θᴳ)
     x′ = Dict(key => var.out for (key, var) in node.states)
     obj_μ = node.objective_state !== nothing ? node.objective_state.μ : nothing
     belief_μ = node.belief_state !== nothing ? node.belief_state.μ : nothing
@@ -331,11 +331,11 @@ function SDDP.initialize_bellman_function(
     )
 end
 
-function SDDP.refine_bellman_function(
-    model::SDDP.PolicyGraph{T},
-    node::SDDP.Node{T},
+function MSUC.refine_bellman_function(
+    model::MSUC.PolicyGraph{T},
+    node::MSUC.Node{T},
     bellman_function::InnerBellmanFunction,
-    risk_measure::SDDP.AbstractRiskMeasure,
+    risk_measure::MSUC.AbstractRiskMeasure,
     outgoing_state::Dict{Symbol,Float64},
     dual_variables::Vector{Dict{Symbol,Float64}},
     noise_supports::Vector,
@@ -361,10 +361,10 @@ function SDDP.refine_bellman_function(
 end
 
 function _refine_inner_bellman_function_no_lock(
-    model::SDDP.PolicyGraph{T},
-    node::SDDP.Node{T},
+    model::MSUC.PolicyGraph{T},
+    node::MSUC.Node{T},
     bellman_function::InnerBellmanFunction,
-    risk_measure::SDDP.AbstractRiskMeasure,
+    risk_measure::MSUC.AbstractRiskMeasure,
     outgoing_state::Dict{Symbol,Float64},
     dual_variables::Vector{Dict{Symbol,Float64}},
     noise_supports::Vector,
@@ -378,7 +378,7 @@ function _refine_inner_bellman_function_no_lock(
             length(objective_realizations)
     # Preliminaries that are common to all cut types.
     risk_adjusted_probability = similar(nominal_probability)
-    offset = SDDP.adjust_probability(
+    offset = MSUC.adjust_probability(
         risk_measure,
         risk_adjusted_probability,
         nominal_probability,
@@ -387,7 +387,7 @@ function _refine_inner_bellman_function_no_lock(
         model.objective_sense == MOI.MIN_SENSE,
     )
     # The meat of the function.
-    if bellman_function.cut_type == SDDP.SINGLE_CUT
+    if bellman_function.cut_type == MSUC.SINGLE_CUT
         return _add_average_vertex(
             node,
             outgoing_state,
@@ -397,9 +397,9 @@ function _refine_inner_bellman_function_no_lock(
             offset,
         )
     else  # TODO(bfpc): Add a multi-cut
-        @assert bellman_function.cut_type == SDDP.MULTI_CUT
+        @assert bellman_function.cut_type == MSUC.MULTI_CUT
         error("Multi-vertices not yet implemented.")
-        # SDDP._add_locals_if_necessary(
+        # MSUC._add_locals_if_necessary(
         #     node,
         #     bellman_function,
         #     length(dual_variables),
@@ -416,7 +416,7 @@ function _refine_inner_bellman_function_no_lock(
 end
 
 function _add_average_vertex(
-    node::SDDP.Node,
+    node::MSUC.Node,
     outgoing_state::Dict{Symbol,Float64},
     risk_adjusted_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
@@ -449,20 +449,20 @@ function _add_average_vertex(
     return (theta = θᵏ, x = outgoing_state, obj_y = obj_y, belief_y = belief_y)
 end
 
-function model_type(model::SDDP.PolicyGraph{T}) where {T}
+function model_type(model::MSUC.PolicyGraph{T}) where {T}
     return T
 end
 
 """
-    _validate_linear_graph(graph::SDDP.Graph)
+    _validate_linear_graph(graph::MSUC.Graph)
 
 Validates a given graph to be linear by counting the number of children
 at each node. This function does not replace the graph validation step from
-the main SDDP module and is meant to be used in conjunction with it while
+the main MSUC module and is meant to be used in conjunction with it while
 the Inner module does not support other graphs.
 
 """
-function _validate_linear_graph(graph::SDDP.Graph)
+function _validate_linear_graph(graph::MSUC.Graph)
     node_count = length(graph.nodes)
     has_leaf = false
     for (node, children) in graph.nodes
@@ -488,7 +488,7 @@ end
 """
     InnerPolicyGraph(
         builder::Function,
-        graph::SDDP.Graph{T};
+        graph::MSUC.Graph{T};
         sense::Symbol = :Min,
         lower_bound = -Inf,
         upper_bound = Inf,
@@ -498,7 +498,7 @@ end
 
 Construct a policy graph for inner policy approximation based on the graph
 structure of `graph`, which use an InnerBellmanFunction in each node.
-(See [`SDDP.Graph`](@ref) for details.)
+(See [`MSUC.Graph`](@ref) for details.)
 
 ## Keyword arguments
 
@@ -543,7 +543,7 @@ end
 """
 function InnerPolicyGraph(
     builder::Function,
-    graph::SDDP.Graph{T};
+    graph::MSUC.Graph{T};
     sense::Symbol = :Min,
     lower_bound = -Inf,
     upper_bound = Inf,
@@ -561,14 +561,14 @@ function InnerPolicyGraph(
     # While only LinearGraphs are supported
     _validate_linear_graph(graph)
 
-    # Cannot call PolicyGraph from the SDDP default interface since the
+    # Cannot call PolicyGraph from the MSUC default interface since the
     # bellman_function named arg is marked as deprecated
 
     # Spend a one-off cost validating the graph.
-    SDDP._validate_graph(graph)
+    MSUC._validate_graph(graph)
     # Construct a basic policy graph. We will add to it in the remainder of this
     # function.
-    policy_graph = SDDP.PolicyGraph(sense, graph.root_node)
+    policy_graph = MSUC.PolicyGraph(sense, graph.root_node)
     if bellman_function === nothing
         if sense == :Min && lower_bound === -Inf
             error(
@@ -605,7 +605,7 @@ function InnerPolicyGraph(
                 lipschitz_constant;
                 lower_bound = lower_bound,
                 upper_bound = upper_bound,
-                vertex_type = SDDP.SINGLE_CUT,
+                vertex_type = MSUC.SINGLE_CUT,
             )
         end
     end
@@ -614,14 +614,14 @@ function InnerPolicyGraph(
         if node_index == graph.root_node
             continue
         end
-        subproblem = SDDP.construct_subproblem(optimizer, direct_mode)
-        node = SDDP.Node(
+        subproblem = MSUC.construct_subproblem(optimizer, direct_mode)
+        node = MSUC.Node(
             node_index,
             subproblem,
-            SDDP.Noise{T}[],
-            SDDP.Noise[],
+            MSUC.Noise{T}[],
+            MSUC.Noise[],
             (ω) -> nothing,
-            Dict{Symbol,SDDP.State{JuMP.VariableRef}}(),
+            Dict{Symbol,MSUC.State{JuMP.VariableRef}}(),
             0.0,
             false,
             # Delay initializing the bellman function until later so that it can
@@ -642,13 +642,13 @@ function InnerPolicyGraph(
             ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
         )
-        subproblem.ext[:sddp_policy_graph] = policy_graph
-        policy_graph.nodes[node_index] = subproblem.ext[:sddp_node] = node
+        subproblem.ext[:MSUC_policy_graph] = policy_graph
+        policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node
         JuMP.set_objective_sense(subproblem, policy_graph.objective_sense)
         builder(subproblem, node_index)
         # Add a dummy noise here so that all nodes have at least one noise term.
         if length(node.noise_terms) == 0
-            push!(node.noise_terms, SDDP.Noise(nothing, 1.0))
+            push!(node.noise_terms, MSUC.Noise(nothing, 1.0))
         end
         ctypes = JuMP.list_of_constraint_types(subproblem)
         node.has_integrality =
@@ -662,10 +662,10 @@ function InnerPolicyGraph(
         end
         node = policy_graph.nodes[node_index]
         for (child, probability) in children
-            push!(node.children, SDDP.Noise(child, probability))
+            push!(node.children, MSUC.Noise(child, probability))
         end
         # Intialize the bellman function. (See note in creation of Node above.)
-        node.bellman_function = SDDP.initialize_bellman_function(
+        node.bellman_function = MSUC.initialize_bellman_function(
             bellman_function,
             policy_graph,
             node,
@@ -673,7 +673,7 @@ function InnerPolicyGraph(
     end
     # Add root nodes
     for (child, probability) in graph.nodes[graph.root_node]
-        push!(policy_graph.root_children, SDDP.Noise(child, probability))
+        push!(policy_graph.root_children, MSUC.Noise(child, probability))
         # We check the feasibility of the initial point here. It is a really
         # tricky feasibility bug to diagnose otherwise. See #387 for details.
         for (k, v) in policy_graph.initial_root_state
@@ -687,7 +687,7 @@ function InnerPolicyGraph(
     end
     # Skip belief states since they are not supported
 
-    domain = SDDP._get_incoming_domain(policy_graph)
+    domain = MSUC._get_incoming_domain(policy_graph)
     for (node_name, node) in policy_graph.nodes
         for (k, v) in domain[node_name]
             node.incoming_state_bounds[k] = something(v, (-Inf, Inf, false))
@@ -698,10 +698,10 @@ end
 
 """
     dp_vertices_from_visited_states(
-        inner_model::SDDP.PolicyGraph
-        outer_model::SDDP.PolicyGraph;
+        inner_model::MSUC.PolicyGraph
+        outer_model::MSUC.PolicyGraph;
         optimizer = nothing,
-        risk_measures::SDDP.AbstractRiskMeasure = SDDP.Expectation(),
+        risk_measures::MSUC.AbstractRiskMeasure = MSUC.Expectation(),
         print_level::Int = 0,
     )
 
@@ -723,21 +723,21 @@ that does not require passing the builder or building externally the
 
  - `optimizer` optimizer to use in the vertex selection.
 
- - `risk_measures::SDDP.AbstractRiskMeasure` risk measures
+ - `risk_measures::MSUC.AbstractRiskMeasure` risk measures
     for the problem.
 
  - `print_level::Int` level of verbosity.
 """
 function dp_vertices_from_visited_states(
-    inner_model::SDDP.PolicyGraph,
-    outer_model::SDDP.PolicyGraph;
+    inner_model::MSUC.PolicyGraph,
+    outer_model::MSUC.PolicyGraph;
     optimizer = nothing,
-    risk_measures::SDDP.AbstractRiskMeasure = SDDP.Expectation(),
+    risk_measures::MSUC.AbstractRiskMeasure = MSUC.Expectation(),
     print_level::Int = 0,
     vertex_selection_tol::Float64 = 1e-6,
 )
     opts =
-        SDDP.Options(inner_model, outer_model.initial_root_state; risk_measures)
+        MSUC.Options(inner_model, outer_model.initial_root_state; risk_measures)
     T = model_type(inner_model)
     for node_index in sort(collect(keys(outer_model.nodes)); rev = true)[2:end]
         dt = @elapsed begin
@@ -746,8 +746,8 @@ function dp_vertices_from_visited_states(
                 outer_model[node_index].bellman_function.global_theta.sampled_states
             for sampled_state in fw_samples
                 outgoing_state = sampled_state.state
-                items = SDDP.BackwardPassItems(T, SDDP.Noise)
-                SDDP.solve_all_children(
+                items = MSUC.BackwardPassItems(T, MSUC.Noise)
+                MSUC.solve_all_children(
                     inner_model,
                     node,
                     items,
@@ -760,7 +760,7 @@ function dp_vertices_from_visited_states(
                     opts.duality_handler,
                     opts,
                 )
-                SDDP.refine_bellman_function(
+                MSUC.refine_bellman_function(
                     inner_model,
                     node,
                     node.bellman_function,
@@ -796,14 +796,14 @@ end
 """
     inner_dp(
         build::Function,
-        pb::SDDP.PolicyGraph;
+        pb::MSUC.PolicyGraph;
         stages::Int,
         sense::Symbol = :Min,
         optimizer,
         lower_bound::Float64 = -Inf,
         upper_bound::Float64 = Inf,
         bellman_function,
-        risk_measures::SDDP.AbstractRiskMeasure,
+        risk_measures::MSUC.AbstractRiskMeasure,
         print_level::Int = 1,
     )
 
@@ -830,24 +830,24 @@ Currently, only supports LinearPolicyGraphs.
  - `bellman_function` an InnerBellmanFunction object (including bounds
     and Lipschitz constant information).
 
- - `risk_measure::SDDP.AbstractRiskMeasure` risk measures for the problem.
+ - `risk_measure::MSUC.AbstractRiskMeasure` risk measures for the problem.
 
  - `print_level::Int` level of verbosity.
 """
 function inner_dp(
     build::Function,
-    pb::SDDP.PolicyGraph;
+    pb::MSUC.PolicyGraph;
     stages::Int,
     sense::Symbol = :Min,
     optimizer,
     lower_bound::Float64 = -Inf,
     upper_bound::Float64 = Inf,
     bellman_function,
-    risk_measure::SDDP.AbstractRiskMeasure,
+    risk_measure::MSUC.AbstractRiskMeasure,
     print_level::Int = 1,
     vertex_selection_tol::Float64 = 1e-6,
 )
-    pb_inner = SDDP.LinearPolicyGraph(
+    pb_inner = MSUC.LinearPolicyGraph(
         build;
         stages,
         sense,
@@ -858,10 +858,10 @@ function inner_dp(
     )
 
     for (k, node) in pb_inner.nodes
-        SDDP.set_objective(node)
+        MSUC.set_objective(node)
     end
 
-    opts = SDDP.Options(
+    opts = MSUC.Options(
         pb_inner,
         pb.initial_root_state;
         risk_measures = risk_measure,
@@ -875,8 +875,8 @@ function inner_dp(
                 pb[node_index].bellman_function.global_theta.sampled_states
             for sampled_state in fw_samples
                 outgoing_state = sampled_state.state
-                items = SDDP.BackwardPassItems(T, SDDP.Noise)
-                SDDP.solve_all_children(
+                items = MSUC.BackwardPassItems(T, MSUC.Noise)
+                MSUC.solve_all_children(
                     pb_inner,
                     node,
                     items,
@@ -889,7 +889,7 @@ function inner_dp(
                     opts.duality_handler,
                     opts,
                 )
-                SDDP.refine_bellman_function(
+                MSUC.refine_bellman_function(
                     pb_inner,
                     node,
                     node.bellman_function,
@@ -917,7 +917,7 @@ function inner_dp(
         total_dt += dt + dt_vs
     end
 
-    ub = SDDP.calculate_bound(pb_inner; risk_measure)
+    ub = MSUC.calculate_bound(pb_inner; risk_measure)
     if print_level > 0
         println("First-stage upper bound: ", ub)
         println("Total time for upper bound: ", total_dt)
@@ -942,10 +942,10 @@ Write the vertices that form the policy in `model` to `filename` in JSON format.
  - `write_only_selected_vertices` write only the selected vertices to the json file.
     Defaults to false.
 
-See also [`SDDP.read_vertices_from_file`](@ref) and [`SDDP.write_cuts_to_file`](@ref).
+See also [`MSUC.read_vertices_from_file`](@ref) and [`MSUC.write_cuts_to_file`](@ref).
 """
 function write_vertices_to_file(
-    model::SDDP.PolicyGraph{T},
+    model::MSUC.PolicyGraph{T},
     filename::String;
     node_name_parser::Function = string,
     write_only_selected_vertices::Bool = false,
@@ -1036,9 +1036,9 @@ a policy graph with a different node type `T`, provide a function
     adding vertices to the model; needs `optimizer` to be set.
 """
 function read_vertices_from_file(
-    model::SDDP.PolicyGraph{T},
+    model::MSUC.PolicyGraph{T},
     filename::String;
-    node_name_parser::Function = SDDP._node_name_parser,
+    node_name_parser::Function = MSUC._node_name_parser,
     vertex_name_parser::Function = _vertex_name_parser,
     vertex_selection::Bool = false,
     vertex_selection_tol::Float64 = 1e-6,

@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
@@ -17,7 +17,7 @@ macro _timeit_threadsafe(timer, label, block)
 end
 
 # to_nodal_form is an internal helper function so users can pass arguments like:
-# risk_measure = SDDP.Expectation(),
+# risk_measure = MSUC.Expectation(),
 # risk_measure = Dict(1=>Expectation(), 2=>WorstCase())
 # risk_measure = (node_index) -> node_index == 1 ? Expectation() : WorstCase()
 # It will return a dictionary with a key for each node_index in the policy
@@ -79,7 +79,7 @@ function get_same_children(model::PolicyGraph{T}) where {T}
     return same_children
 end
 
-# Internal struct: storage for SDDP options and cached data. Users shouldn't
+# Internal struct: storage for MSUC options and cached data. Users shouldn't
 # interact with this directly.
 struct Options{T}
     # The initial state to start from the root node.
@@ -255,13 +255,13 @@ end
 
 Write the subproblem contained in `node` to the file `filename`.
 
-The `throw_error` is an argument used internally by SDDP.jl. If set, an error
+The `throw_error` is an argument used internally by MSUC.jl. If set, an error
 will be thrown.
 
 ## Example
 
 ```julia
-SDDP.write_subproblem_to_file(model[1], "subproblem_1.lp")
+MSUC.write_subproblem_to_file(model[1], "subproblem_1.lp")
 ```
 """
 function write_subproblem_to_file(
@@ -283,7 +283,7 @@ function write_subproblem_to_file(
             "  1) you have a mistake in your formulation, or you violated\n",
             "     the assumption of relatively complete recourse\n",
             "  2) the solver encountered numerical issues\n\n",
-            "See https://odow.github.io/SDDP.jl/stable/tutorial/warnings/ for more information.",
+            "See https://odow.github.io/MSUC.jl/stable/tutorial/warnings/ for more information.",
         )
     end
     return
@@ -351,7 +351,7 @@ function callback(::PolicyGraph, node::Node; require_dual::Bool)
     end
     return
 end
-SDDP.set_numerical_difficulty_callback(model, callback)
+MSUC.set_numerical_difficulty_callback(model, callback)
 ```
 """
 function set_numerical_difficulty_callback(
@@ -601,7 +601,7 @@ function inf_norm(x::Dict{Symbol,Float64}, y::Dict{Symbol,Float64})
     return norm
 end
 
-# Internal function: perform a backward pass of the SDDP algorithm along the
+# Internal function: perform a backward pass of the MSUC algorithm along the
 # scenario_path, refining the bellman function at sampled_states. Assumes that
 # scenario_path does not end in a leaf node (i.e., the forward pass was solved
 # with include_last_node = false)
@@ -776,7 +776,7 @@ function solve_all_children(
         # If we have a belief state, then skip the node. I don't really know
         # why, but tests failed when I tried to remove this.
         #
-        # See SDDP.jl#796 and SDDP.jl#797 for more discussion.
+        # See MSUC.jl#796 and MSUC.jl#797 for more discussion.
         if belief_state !== nothing &&
            isapprox(child.probability, 0.0; atol = 1e-6)
             continue
@@ -867,7 +867,7 @@ function solve_all_children(
 end
 
 """
-    SDDP.calculate_bound(
+    MSUC.calculate_bound(
         model::PolicyGraph,
         state::Dict{Symbol,Float64} = model.initial_root_state;
         risk_measure::AbstractRiskMeasure = Expectation(),
@@ -891,7 +891,7 @@ function calculate_bound(
     for child in model.root_children
         # It's okay to skip nodes with zero probability.
         #
-        # See SDDP.jl#796 and SDDP.jl#797 for more discussion.
+        # See MSUC.jl#796 and MSUC.jl#797 for more discussion.
         if isapprox(child.probability, 0.0; atol = 1e-6)
             continue
         end
@@ -1025,7 +1025,7 @@ function termination_status(model::PolicyGraph)
 end
 
 """
-    SDDP.train(model::PolicyGraph; kwargs...)
+    MSUC.train(model::PolicyGraph; kwargs...)
 
 Train the policy for `model`.
 
@@ -1035,14 +1035,14 @@ Train the policy for `model`.
 
  - `time_limit::Float64`: number of seconds to train before termination.
 
- - `stoping_rules`: a vector of [`SDDP.AbstractStoppingRule`](@ref)s. Defaults
+ - `stoping_rules`: a vector of [`MSUC.AbstractStoppingRule`](@ref)s. Defaults
    to [`SimulationStoppingRule`](@ref).
 
  - `print_level::Int`: control the level of printing to the screen. Defaults to
     `1`. Set to `0` to disable all printing.
 
  - `log_file::String`: filepath at which to write a log of the training
-   progress. Defaults to `SDDP.log`.
+   progress. Defaults to `MSUC.log`.
 
  - `log_frequency::Int`: control the frequency with which the logging is
     outputted (iterations/log). It must be at least `1`. Defaults to `1`.
@@ -1056,7 +1056,7 @@ Train the policy for `model`.
  - `run_numerical_stability_report::Bool`: generate (and print) a numerical
    stability report prior to solve. Defaults to `true`.
 
- - `refine_at_similar_nodes::Bool`: if SDDP can detect that two nodes have the
+ - `refine_at_similar_nodes::Bool`: if MSUC can detect that two nodes have the
     same children, it can cheaply add a cut discovered at one to the other. In
     almost all cases this should be set to `true`.
 
@@ -1081,8 +1081,8 @@ Train the policy for `model`.
  - `backward_sampling_scheme`: a backward pass sampling scheme to use on the
     backward pass of the algorithm. Defaults to `CompleteSampler`.
 
- - `cut_type`: choose between `SDDP.SINGLE_CUT` and `SDDP.MULTI_CUT` versions of
-   SDDP.
+ - `cut_type`: choose between `MSUC.SINGLE_CUT` and `MSUC.MULTI_CUT` versions of
+   MSUC.
 
  - `dashboard::Bool`: open a visualization of the training over time. Defaults
     to `false`.
@@ -1118,7 +1118,7 @@ function train(
     iteration_limit::Union{Int,Nothing} = nothing,
     time_limit::Union{Real,Nothing} = nothing,
     print_level::Int = 1,
-    log_file::String = "SDDP.log",
+    log_file::String = "MSUC.log",
     log_frequency::Union{Nothing,Int} = nothing,
     log_every_seconds::Float64 = log_frequency === nothing ? -1.0 : 0.0,
     log_every_iteration::Bool = false,
@@ -1189,7 +1189,7 @@ function train(
 
         If you meant to refine a previously trained policy, turn off this
         warning by passing `add_to_existing_cuts = true` as a keyword argument
-        to `SDDP.train`.
+        to `MSUC.train`.
 
         In a future release, this warning may turn into an error.
         """)
@@ -1232,7 +1232,7 @@ function train(
         print_helper(print_iteration_header, log_file_handle)
     end
     # Convert the vector to an AbstractStoppingRule. Otherwise if the user gives
-    # something like stopping_rules = [SDDP.IterationLimit(100)], the vector
+    # something like stopping_rules = [MSUC.IterationLimit(100)], the vector
     # will be concretely typed and we can't add a TimeLimit.
     stopping_rules = convert(Vector{AbstractStoppingRule}, stopping_rules)
     # Add the limits as stopping rules. An IterationLimit or TimeLimit may
@@ -1330,7 +1330,7 @@ function train(
 end
 
 # Internal function: helper to conduct a single simulation. Users should use the
-# documented, user-facing function SDDP.simulate instead.
+# documented, user-facing function MSUC.simulate instead.
 function _simulate(
     model::PolicyGraph{T},
     variables::Vector{Symbol};
@@ -1501,7 +1501,7 @@ useful to obtain the primal value of the state and control variables.
 
  - `custom_recorders`: see `Custom recorders` section below.
 
- - `duality_handler`: the [`SDDP.AbstractDualityHandler`](@ref) used to compute
+ - `duality_handler`: the [`MSUC.AbstractDualityHandler`](@ref) used to compute
    dual variables. If you do not require dual variables (or if they are not
    available), pass `duality_handler = nothing`.
 
@@ -1525,7 +1525,7 @@ For example, to record the dual of a constraint named `my_constraint`, pass the
 following:
 
 ```julia
-simulation_results = SDDP.simulate(model, 2;
+simulation_results = MSUC.simulate(model, 2;
     custom_recorders = Dict{Symbol, Function}(
         :constraint_dual => sp -> JuMP.dual(sp[:my_constraint])
     )
@@ -1569,7 +1569,7 @@ Create a decision rule for node `node` in `model`.
 ## Example
 
 ```julia
-rule = SDDP.DecisionRule(model; node = 1)
+rule = MSUC.DecisionRule(model; node = 1)
 ```
 """
 struct DecisionRule{T}

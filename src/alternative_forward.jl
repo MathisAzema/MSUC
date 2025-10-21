@@ -1,10 +1,10 @@
-#  Copyright (c) 2017-25, Oscar Dowson and SDDP.jl contributors, Lea Kapelevich.
+#  Copyright (c) 2017-25, Oscar Dowson and MSUC.jl contributors, Lea Kapelevich.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
     AlternativeForwardPass(
-        forward_model::SDDP.PolicyGraph{T};
+        forward_model::MSUC.PolicyGraph{T};
         forward_pass::AbstractForwardPass = DefaultForwardPass(),
     )
 
@@ -12,8 +12,8 @@ A forward pass that simulates using `forward_model`, which may be different to
 the model used in the backwards pass.
 
 When using this forward pass, you should almost always pass
-[`SDDP.AlternativePostIterationCallback`](@ref) to the `post_iteration_callback`
-argument of [`SDDP.train`](@ref).
+[`MSUC.AlternativePostIterationCallback`](@ref) to the `post_iteration_callback`
+argument of [`MSUC.train`](@ref).
 
 This forward pass is most useful when the `forward_model` is non-convex and we
 use a convex approximation of the model in the backward pass.
@@ -53,7 +53,7 @@ end
     AlternativePostIterationCallback(forward_model::PolicyGraph)
 
 A post-iteration callback that should be used whenever
-[`SDDP.AlternativeForwardPass`](@ref) is used.
+[`MSUC.AlternativeForwardPass`](@ref) is used.
 """
 struct AlternativePostIterationCallback{T}
     model::PolicyGraph{T}
