@@ -52,6 +52,7 @@ function benders_callback(instance, options;silent=true, force=1, S::Int64, batc
             second_stage_cost_ub, thermal_cost_scenario = options.add_cut(cb_data, options, master_pb, oracle_pb, instance, Time_subproblem, solution_x, solution_gamma; force=force, S=S, batch=batch, gap=gap)
             if second_stage_cost_ub<= 0.999999*UB
                 UB=second_stage_cost_ub
+                println((callback_value.(cb_data, master_pb[:thermal_fixed_cost]), UB))
                 cstr=@build_constraint(master_pb[:thermal_cost] + master_pb[:thermal_fixed_cost] <= second_stage_cost_ub)
                 MOI.submit(master_pb, MOI.LazyConstraint(cb_data), cstr)
                 if k>=10 #Force to the new best solution after 10 iterations

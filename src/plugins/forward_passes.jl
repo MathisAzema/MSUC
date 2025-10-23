@@ -20,6 +20,51 @@ struct DefaultForwardPass <: AbstractForwardPass
     end
 end
 
+function solve_root_node(
+    model::PolicyGraph{T},
+    instance::Instance,
+    options::Options,
+) where {T}
+    println("Solving root node...")
+    root_node = model[model.root_node]
+    master_problem = root_node.subproblem
+    optimize!(master_problem)
+
+    println(objective_value(master_problem))
+
+    thermal_units=values(instance.Thermalunits)
+    N=instance.N
+    TimeHorizon=instance.TimeHorizon
+
+    values_d = Dict{Symbol,Float64}()
+
+    for i in 1:N
+        for t in 0:TimeHorizon
+            var_name = "is_on[$i,$t]"
+            var_symbol = Symbol(var_name)
+            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
+        end
+        for t in 1:TimeHorizon
+            var_name = "start_up[$i,$t]"
+            var_symbol = Symbol(var_name)
+            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
+        end
+        for t in 1:TimeHorizon
+            var_name = "start_down[$i,$t]"
+            var_symbol = Symbol(var_name)
+            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
+        end
+        var_name = "power[$i]"
+        var_symbol = Symbol(var_name)
+        values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
+        # println((var_name, values_d[var_symbol]))
+    end
+
+    model.initial_root_state = values_d
+
+    return values_d
+end
+
 function forward_pass(
     model::PolicyGraph{T},
     options::Options,
@@ -40,8 +85,7 @@ function forward_pass(
     # Storage for the belief states: partition index and the belief dictionary.
     belief_states = Tuple{Int,Dict{T,Float64}}[]
     current_belief = initialize_belief(model)
-    # Our initial incoming state.
-    incoming_state_value = copy(options.initial_state)
+
     # A cumulator for the stage-objectives.
     cumulative_value = 0.0
     # Objective state interpolation.
@@ -49,6 +93,13 @@ function forward_pass(
         initialize_objective_state(model[scenario_path[1][1]])
     objective_states = NTuple{N,Float64}[]
     # Iterate down the scenario.
+
+      # Our initial incoming state.
+    incoming_state_value = copy(options.initial_state)
+    # solve_root_node(model, model.instance, options)
+
+    # incoming_state_value = copy(model.initial_root_state)
+
     for (depth, (node_index, noise)) in enumerate(scenario_path)
         node = model[node_index]
         lock(node.lock)
@@ -114,6 +165,10 @@ function forward_pass(
             # Add the outgoing state variable to the list of states we have sampled
             # on this forward pass.
             push!(sampled_states, incoming_state_value)
+
+            if node_index == 1
+                println("Lower bound: ", objective_value(node.subproblem))
+            end
         finally
             unlock(node.lock)
         end

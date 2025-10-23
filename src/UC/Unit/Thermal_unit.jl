@@ -1,4 +1,4 @@
-function set_intervals(MinUpTime, InitUpDownTime, InitialPower, MaxPower, MinPower, DeltaRampDown)
+function set_intervals(MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown)
     """
     Define all the possible intervals [a,b] respecting the initial conditions and the the MinUp constraints
     """
@@ -14,6 +14,20 @@ function set_intervals(MinUpTime, InitUpDownTime, InitialPower, MaxPower, MinPow
     end
     return intervals
 end
+
+function set_intervals_t(t, MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown)
+    bmax=25
+    intervals=[[a,b] for a in 1:t for b in max(t+1,a+MinUpTime):bmax]
+    if InitUpDownTime!=nothing
+        if InitUpDownTime>=0
+            for b in max(t+1,-InitUpDownTime+1+MinUpTime, Int64(1+ceil((InitialPower-MinPower)/DeltaRampDown))):bmax
+                push!(intervals, [-InitUpDownTime+1,b])
+            end
+        end
+    end
+    return intervals
+end
+
 
 function thermal_unit_commit_constraints(model, instance)
     """
@@ -51,6 +65,31 @@ function thermal_unit_commit_constraints(model, instance)
             @constraint(model, is_on[unit.name, t]==1)
         end
     end
+end
+
+function thermal_unit_commit_constraints_SDDP(subproblem, instance)
+    """
+    Define first-stage constraints in the 3-bin formulation
+    """
+
+
+    T= instance.TimeHorizon
+    N=instance.N
+    thermal_units=instance.Thermalunits
+
+    is_on = subproblem[:is_on]
+    start_up = subproblem[:start_up]
+    start_down = subproblem[:start_down]
+
+    gamma = subproblem[:gamma]
+
+    @constraint(subproblem, [unit in thermal_units, t in 1:T], sum(gamma[unit.name, [a,b]] for (a,b) in unit.intervals if a<=t<b)==is_on[unit.name,t].out)
+    @constraint(subproblem, [unit in thermal_units, t in 1:T], sum(gamma[unit.name, [a,b]] for (a,b) in unit.intervals if a==t)==start_up[unit.name,t].out)
+    @constraint(subproblem, [unit in thermal_units, t in 1:T], sum(gamma[unit.name, [a,b]] for (a,b) in unit.intervals if b==t)==start_down[unit.name,t].out)
+
+    @constraint(subproblem,  [i in 1:N, t in 0:T], is_on[i, t].out == is_on[i, t].in)
+    @constraint(subproblem,  [i in 1:N, t in 1:T], start_up[i, t].out == start_up[i, t].in)
+    @constraint(subproblem,  [i in 1:N, t in 1:T], start_down[i, t].out == start_down[i, t].in)
 end
 
 function thermal_unit_commit_constraints_extended(model, instance)

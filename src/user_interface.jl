@@ -714,7 +714,9 @@ mutable struct PolicyGraph{T}
     timer_output::TimerOutputs.TimerOutput
     lock::ReentrantLock
 
-    function PolicyGraph(sense::Symbol, root_node::T) where {T}
+    instance::Instance
+
+    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance) where {T}
         if sense != :Min && sense != :Max
             error(
                 "The optimization sense must be `:Min` or `:Max`. It is $(sense).",
@@ -732,6 +734,7 @@ mutable struct PolicyGraph{T}
             Dict{Symbol,Any}(),
             TimerOutputs.TimerOutput(),
             ReentrantLock(),
+            instance,
         )
     end
 end
@@ -924,7 +927,10 @@ end
 ```
 """
 function PolicyGraph(
-    builder::Function,
+    subproblem_builder::Function,
+    # masterproblem_builder::Function,
+    instance::Instance,
+    force::Float64,
     graph::Graph{T};
     sense::Symbol = :Min,
     lower_bound = -Inf,
@@ -938,7 +944,7 @@ function PolicyGraph(
     _validate_graph(graph)
     # Construct a basic policy graph. We will add to it in the remainder of this
     # function.
-    policy_graph = PolicyGraph(sense, graph.root_node)
+    policy_graph = PolicyGraph(sense, graph.root_node, instance)
     # Create a Bellman function if one is not given.
     if bellman_function === nothing
         if sense == :Min && lower_bound === -Inf
@@ -960,9 +966,11 @@ function PolicyGraph(
     end
     # Initialize nodes.
     for (node_index, children) in graph.nodes
+
         if node_index == graph.root_node
             continue
         end
+
         subproblem = construct_subproblem(optimizer, direct_mode)
         node = Node(
             node_index,
@@ -994,7 +1002,14 @@ function PolicyGraph(
         subproblem.ext[:MSUC_policy_graph] = policy_graph
         policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node
         JuMP.set_objective_sense(subproblem, policy_graph.objective_sense)
-        builder(subproblem, node_index)
+
+        # if node_index == graph.root_node
+        #     masterproblem_builder(instance, subproblem)
+        # else
+        #     subproblem_builder(instance, force, subproblem, node_index)
+        # end
+        subproblem_builder(instance, force, subproblem, node_index)
+
         # Add a dummy noise here so that all nodes have at least one noise term.
         if length(node.noise_terms) == 0
             push!(node.noise_terms, Noise(nothing, 1.0))

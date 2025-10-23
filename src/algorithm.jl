@@ -171,6 +171,7 @@ end
 # contained in state.
 function set_incoming_state(node::Node, state::Dict{Symbol,Float64})
     for (state_name, value) in state
+        # println((state_name, value))
         JuMP.fix(node.states[state_name].in, value)
     end
     return
@@ -437,6 +438,9 @@ function _initialize_solver(node::Node; throw_error::Bool)
             )
         end
         set_optimizer(node.subproblem, node.optimizer)
+        if node.index != 1
+            set_silent(node.subproblem)
+        end
         set_silent(node.subproblem)
     end
     return
@@ -975,12 +979,13 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
             forward_trajectory.belief_states,
         )
     end
-    @_timeit_threadsafe model.timer_output "calculate_bound" begin
-        bound = calculate_bound(
-            model;
-            risk_measure = options.root_node_risk_measure,
-        )
-    end
+    # @_timeit_threadsafe model.timer_output "calculate_bound" begin
+    #     bound = calculate_bound(
+    #         model;
+    #         risk_measure = options.root_node_risk_measure,
+    #     )
+    # end
+    bound = 0.0
     lock(options.lock)
     try
         push!(
