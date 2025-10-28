@@ -143,7 +143,44 @@ function get_dual_solution(node::Node, ::ContinuousConicDuality)
         name => dual_sign * JuMP.dual(JuMP.FixRef(state.in)) for
         (name, state) in node.states
     )
+
+    println(node.index)
+
+    # if node.index==2
+    #     k=0
+    #     for cut in node.bellman_function.global_theta.cuts
+    #         k+=1
+    #         if cut.constraint_ref !== nothing
+    #             println((k, JuMP.dual(cut.constraint_ref)))
+    #         end
+    #     end
+    # end
     return objective_value(node.subproblem), λ
+end
+
+function get_dual_solution_extended(node::Node)
+    if !_has_dual_solution(node)
+        model = node.subproblem.ext[:MSUC_policy_graph]
+        attempt_numerical_recovery(model, node; require_dual = true)
+    end
+
+    # println("node ", node.index)
+    μ = [JuMP.dual(cut.constraint_ref) for cut in node.improved_cuts]
+    ν = JuMP.dual.(node.demand_constraint)
+
+    # println(μ)
+    # println(ν)
+
+    # if node.index==2
+    #     k=0
+    #     for cut in node.bellman_function.global_theta.cuts
+    #         k+=1
+    #         if cut.constraint_ref !== nothing
+    #             println((k, JuMP.dual(cut.constraint_ref)))
+    #         end
+    #     end
+    # end
+    return objective_value(node.subproblem), μ, ν
 end
 
 function _relax_integrality(node::Node, optimizer)

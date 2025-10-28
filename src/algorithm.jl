@@ -206,6 +206,42 @@ function get_outgoing_state(node::Node)
     return values
 end
 
+function get_outgoing_state_power(node::Node)
+    values = Dict{Symbol,Float64}()
+    for (name, state) in node.states_power
+        # To fix some cases of numerical infeasiblities, if the outgoing value
+        # is outside its bounds, project the value back onto the bounds. There
+        # is a pretty large (×5) penalty associated with this check because it
+        # typically requires a call to the solver. It is worth reducing
+        # infeasibilities though.
+        outgoing_value = JuMP.value(state.out)
+        if JuMP.has_upper_bound(state.out)
+            current_bound = JuMP.upper_bound(state.out)
+            if current_bound < outgoing_value
+                outgoing_value = current_bound
+            end
+        end
+        if JuMP.has_lower_bound(state.out)
+            current_bound = JuMP.lower_bound(state.out)
+            if current_bound > outgoing_value
+                outgoing_value = current_bound
+            end
+        end
+        values[name] = outgoing_value
+    end
+    return values
+end
+
+function get_outgoing_state_z(node::Node)
+    values = Dict{Tuple{Int, Int,Int},JuMP.VariableRef}()
+    for (key, state) in node.states_z
+        outgoing_value = JuMP.value(state)
+        values[key] = outgoing_value
+    end
+    return values
+end
+
+
 # Internal function: set the objective of node to the stage objective, plus the
 # cost/value-to-go term.
 function set_objective(node::Node{T}) where {T}
@@ -549,6 +585,69 @@ function solve_subproblem(
     )
 end
 
+function solve_subproblem_extended(
+    model::PolicyGraph{T},
+    node::Node{T},
+    state::Dict{Symbol,Float64},
+    noise,
+    scenario_path::Vector{Tuple{T,S}};
+    duality_handler::Union{Nothing,AbstractDualityHandler},
+) where {T,S}
+    _initialize_solver(node; throw_error = false)
+    # Parameterize the model. First, fix the value of the incoming state
+    # variables. Then parameterize the model depending on `noise`. Finally,
+    # set the objective.
+    set_incoming_state(node, state)
+    parameterize(node, noise)
+    pre_optimize_ret = if node.pre_optimize_hook !== nothing
+        node.pre_optimize_hook(
+            model,
+            node,
+            state,
+            noise,
+            scenario_path,
+            duality_handler,
+        )
+    else
+        nothing
+    end
+    # println(node.index)
+    # if node.index == 25
+    #     println(node.subproblem)
+    #     println(node.demand_constraint)
+    # end
+    JuMP.optimize!(node.subproblem)
+    lock(model.lock) do
+        model.ext[:total_solves] = get(model.ext, :total_solves, 0) + 1
+        return
+    end
+    if JuMP.primal_status(node.subproblem) == JuMP.MOI.INTERRUPTED
+        # If the solver was interrupted, the user probably hit CTRL+C but the
+        # solver gracefully exited. Since we're in the middle of training or
+        # simulation, we need to throw an interrupt exception to keep the
+        # interrupt percolating up to the user.
+        throw(InterruptException())
+    end
+    if !_has_primal_solution(node)
+        attempt_numerical_recovery(model, node)
+    end
+    state = get_outgoing_state(node)
+    stage_objective = stage_objective_value(node, node.stage_objective)
+    @_timeit_threadsafe model.timer_output "get_dual_solution" begin
+        objective, μ, ν = get_dual_solution_extended(node)
+    end
+    if node.post_optimize_hook !== nothing
+        node.post_optimize_hook(pre_optimize_ret)
+    end
+    return (
+        state = state,
+        μ = μ,
+        ν = ν,
+        objective = objective,
+        stage_objective = stage_objective,
+    )
+end
+
 # Internal function to get the objective state at the root node.
 function initialize_objective_state(first_node::Node)
     objective_state = first_node.objective_state
@@ -614,6 +713,9 @@ function backward_pass(
     options::Options,
     scenario_path::Vector{Tuple{T,NoiseType}},
     sampled_states::Vector{Dict{Symbol,Float64}},
+    sampled_states_power::Vector{Vector{Float64}},
+    sampled_states_z::Vector{Dict{Tuple{Int, Int,Int},Float64}},
+    sampled_states_gamma::Vector{Dict{Tuple{Int, Int,Int},Float64}},
     objective_states::Vector{NTuple{N,Float64}},
     belief_states::Vector{Tuple{Int,Dict{T,Float64}}},
 ) where {T,NoiseType,N}
@@ -621,61 +723,18 @@ function backward_pass(
     cuts = Dict{T,Vector{Any}}(index => Any[] for index in keys(model.nodes))
     for index in length(scenario_path):-1:1
         outgoing_state = sampled_states[index]
+        outgoing_state_power = sampled_states_power[index]
+        outgoing_state_z = sampled_states_z[index]
+        outgoing_state_gamma = sampled_states_gamma[index]
         objective_state = get(objective_states, index, nothing)
         partition_index, belief_state = get(belief_states, index, (0, nothing))
-        items = BackwardPassItems(T, Noise)
-        if belief_state !== nothing
-            # Update the cost-to-go function for partially observable model.
-            for (node_index, belief) in belief_state
-                if iszero(belief)
-                    continue
-                end
-                solve_all_children(
-                    model,
-                    model[node_index],
-                    items,
-                    belief,
-                    belief_state,
-                    objective_state,
-                    outgoing_state,
-                    options.backward_sampling_scheme,
-                    scenario_path[1:index],
-                    options.duality_handler,
-                    options,
-                )
-            end
-            # We need to refine our estimate at all nodes in the partition.
-            for node_index in model.belief_partition[partition_index]
-                node = model[node_index]
-                lock(node.lock)
-                try
-                    # Update belief state, etc.
-                    current_belief = node.belief_state::BeliefState{T}
-                    for (idx, belief) in belief_state
-                        current_belief.belief[idx] = belief
-                    end
-                    new_cuts = refine_bellman_function(
-                        model,
-                        node,
-                        node.bellman_function,
-                        options.risk_measures[node_index],
-                        outgoing_state,
-                        items.duals,
-                        items.supports,
-                        items.probability .* items.belief,
-                        items.objectives,
-                    )
-                    push!(cuts[node_index], new_cuts)
-                finally
-                    unlock(node.lock)
-                end
-            end
-        else
-            node_index, _ = scenario_path[index]
-            node = model[node_index]
-            if length(node.children) == 0
-                continue
-            end
+        node_index, _ = scenario_path[index]
+        node = model[node_index]
+        if length(node.children) == 0
+            continue
+        end
+        if model.method == SDDPFormulation
+            items = BackwardPassItems(T, Noise)
             solve_all_children(
                 model,
                 node,
@@ -701,36 +760,37 @@ function backward_pass(
                 items.objectives,
             )
             push!(cuts[node_index], new_cuts)
-            if options.refine_at_similar_nodes
-                # Refine the bellman function at other nodes with the same
-                # children, e.g., in the same stage of a Markovian policy graph.
-                for other_index in options.similar_children[node_index]
-                    copied_probability = similar(items.probability)
-                    other_node = model[other_index]
-                    # Need to check that every child of other_node is in this
-                    # list
-                    other_children = Set(c.term for c in other_node.children)
-                    # The order of setdiff(A, B) matters.
-                    @assert isempty(setdiff(other_children, Set(items.nodes)))
-                    for (idx, child_index) in enumerate(items.nodes)
-                        copied_probability[idx] =
-                            get(options.Φ, (other_index, child_index), 0.0) *
-                            items.supports[idx].probability
-                    end
-                    new_cuts = refine_bellman_function(
-                        model,
-                        other_node,
-                        other_node.bellman_function,
-                        options.risk_measures[other_index],
-                        outgoing_state,
-                        items.duals,
-                        items.supports,
-                        copied_probability,
-                        items.objectives,
-                    )
-                    push!(cuts[other_index], new_cuts)
-                end
-            end
+        elseif model.method == ExtendedFormulation
+            items = BackwardPassItems_extended(T, Noise)
+            solve_all_children_extended(
+                model,
+                node,
+                items,
+                1.0,
+                belief_state,
+                outgoing_state,
+                options.backward_sampling_scheme,
+                scenario_path[1:index],
+                options.duality_handler,
+                options,
+            )
+
+            new_cuts = refine_bellman_function_extended(
+                model,
+                node,
+                outgoing_state,
+                outgoing_state_power,
+                outgoing_state_z,
+                outgoing_state_gamma,
+                items.μ,
+                items.ν,
+                items.supports,
+                items.probability,
+                items.objectives,
+            )
+
+        else
+            error("Unknown method: $(model.method).")
         end
     end
     return cuts
@@ -758,6 +818,30 @@ struct BackwardPassItems{T,U}
     end
 end
 
+struct BackwardPassItems_extended{T,U}
+    "Given a (node, noise) tuple, index the element in the array."
+    cached_solutions::Dict{Tuple{T,Any},Int}
+    μ::Vector{Vector{Float64}}
+    ν::Vector{Vector{Float64}}
+    supports::Vector{U}
+    nodes::Vector{T}
+    probability::Vector{Float64}
+    objectives::Vector{Float64}
+    belief::Vector{Float64}
+    function BackwardPassItems_extended(T, U)
+        return new{T,U}(
+            Dict{Tuple{T,Any},Int}(),
+            Vector{Float64}[],
+            Vector{Float64}[],
+            U[],
+            T[],
+            Float64[],
+            Float64[],
+            Float64[],
+        )
+    end
+end
+
 function solve_all_children(
     model::PolicyGraph{T},
     node::Node{T},
@@ -773,6 +857,7 @@ function solve_all_children(
 ) where {T}
     length_scenario_path = length(scenario_path)
     for child in node.children
+        # println((node.index, child.term, child.probability))
         # We _do_ want to solve zero probability nodes, because they might allow
         # us to cut share between similar nodes of a Markovian policy graph. If
         # the user put them in, assume that they're there for a reason.
@@ -815,22 +900,6 @@ function solve_all_children(
                     push!(items.belief, belief)
                 else
                     # Update belief state, etc.
-                    if belief_state !== nothing
-                        current_belief = child_node.belief_state::BeliefState{T}
-                        current_belief.updater(
-                            current_belief.belief,
-                            belief_state,
-                            current_belief.partition_index,
-                            noise.term,
-                        )
-                    end
-                    if objective_state !== nothing
-                        update_objective_state(
-                            child_node.objective_state,
-                            objective_state,
-                            noise.term,
-                        )
-                    end
                     @_timeit_threadsafe model.timer_output "solve_subproblem" begin
                         subproblem_results = solve_subproblem(
                             model,
@@ -852,6 +921,98 @@ function solve_all_children(
                     push!(items.belief, belief)
                     items.cached_solutions[(child.term, noise.term)] =
                         length(items.duals)
+                end
+            end
+            @_timeit_threadsafe model.timer_output "prepare_backward_pass" begin
+                restore_duality()
+            end
+        finally
+            unlock(child_node.lock)
+        end
+    end
+    if length(scenario_path) == length_scenario_path
+        # No-op. There weren't any children to solve.
+    else
+        # Drop the last element (i.e., the one we added).
+        pop!(scenario_path)
+    end
+    return
+end
+
+function solve_all_children_extended(
+    model::PolicyGraph{T},
+    node::Node{T},
+    items::BackwardPassItems_extended,
+    belief::Float64,
+    belief_state,
+    outgoing_state::Dict{Symbol,Float64},
+    backward_sampling_scheme::AbstractBackwardSamplingScheme,
+    scenario_path,
+    duality_handler::Union{Nothing,AbstractDualityHandler},
+    options,
+) where {T}
+    length_scenario_path = length(scenario_path)
+    for child in node.children
+        # println((node.index, child.term, child.probability))
+        if belief_state !== nothing &&
+           isapprox(child.probability, 0.0; atol = 1e-6)
+            continue
+        end
+        child_node = model[child.term]
+        lock(child_node.lock)
+        try
+            @_timeit_threadsafe model.timer_output "prepare_backward_pass" begin
+                restore_duality = prepare_backward_pass(
+                    child_node,
+                    options.duality_handler,
+                    options,
+                )
+            end
+            for noise in sample_backward_noise_terms_with_state(
+                backward_sampling_scheme,
+                child_node,
+                outgoing_state,
+            )
+                if length(scenario_path) == length_scenario_path
+                    push!(scenario_path, (child.term, noise.term))
+                else
+                    scenario_path[end] = (child.term, noise.term)
+                end
+                if haskey(items.cached_solutions, (child.term, noise.term))
+                    sol_index = items.cached_solutions[(child.term, noise.term)]
+                    push!(items.μ, items.μ[sol_index])
+                    push!(items.ν, items.ν[sol_index])
+                    push!(items.supports, items.supports[sol_index])
+                    push!(items.nodes, child_node.index)
+                    push!(items.probability, items.probability[sol_index])
+                    push!(items.objectives, items.objectives[sol_index])
+                    push!(items.belief, belief)
+                else
+                    # Update belief state, etc.
+                    @_timeit_threadsafe model.timer_output "solve_subproblem" begin
+                        subproblem_results = solve_subproblem_extended(
+                            model,
+                            child_node,
+                            outgoing_state,
+                            noise.term,
+                            scenario_path;
+                            duality_handler = duality_handler,
+                        )
+                    end
+
+                    # push!(items.duals, subproblem_results.duals)
+                    push!(items.supports, noise)
+                    push!(items.nodes, child_node.index)
+                    push!(items.μ, subproblem_results.μ)
+                    push!(items.ν, subproblem_results.ν)
+                    push!(
+                        items.probability,
+                        child.probability * noise.probability,
+                    )
+                    push!(items.objectives, subproblem_results.objective)
+                    push!(items.belief, belief)
+                    items.cached_solutions[(child.term, noise.term)] =
+                        length(items.μ)
                 end
             end
             @_timeit_threadsafe model.timer_output "prepare_backward_pass" begin
@@ -953,13 +1114,12 @@ function calculate_bound(
     ) + offset
 end
 
-struct IterationResult{T}
-    pid::Int
+struct IterationResult
+    pid::Int64
     bound::Float64
     cumulative_value::Float64
     has_converged::Bool
     status::Symbol
-    cuts::Dict{T,Vector{Any}}
     numerical_issue::Bool
 end
 
@@ -969,16 +1129,22 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
         forward_trajectory = forward_pass(model, options, options.forward_pass)
         options.forward_pass_callback(forward_trajectory)
     end
+    # println(forward_trajectory.sampled_states_power)
+    println("Forward pass done")
     @_timeit_threadsafe model.timer_output "backward_pass" begin
-        cuts = backward_pass(
+        backward_pass(
             model,
             options,
             forward_trajectory.scenario_path,
             forward_trajectory.sampled_states,
+            forward_trajectory.sampled_states_power,
+            forward_trajectory.sampled_states_z,
+            forward_trajectory.sampled_states_gamma,
             forward_trajectory.objective_states,
             forward_trajectory.belief_states,
         )
     end
+    println("Backward pass done")
     # @_timeit_threadsafe model.timer_output "calculate_bound" begin
     #     bound = calculate_bound(
     #         model;
@@ -1009,7 +1175,6 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
             forward_trajectory.cumulative_value,
             has_converged,
             status,
-            cuts,
             lock(() -> model.ext[:numerical_issue], model.lock),
         )
     finally

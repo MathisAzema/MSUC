@@ -82,6 +82,9 @@ function forward_pass(
     end
     # Storage for the list of outgoing states that we visit on the forward pass.
     sampled_states = Dict{Symbol,Float64}[]
+    sampled_states_power = Vector{Float64}[]
+    sampled_states_z = Dict{Tuple{Int, Int,Int},Float64}[]
+    sampled_states_gamma = Dict{Tuple{Int, Int,Int},Float64}[]
     # Storage for the belief states: partition index and the belief dictionary.
     belief_states = Tuple{Int,Dict{T,Float64}}[]
     current_belief = initialize_belief(model)
@@ -164,7 +167,27 @@ function forward_pass(
             incoming_state_value = copy(subproblem_results.state)
             # Add the outgoing state variable to the list of states we have sampled
             # on this forward pass.
+            incoming_state_z = Dict{Tuple{Int, Int,Int},Float64}()
+            for (k, var) in node.states_z
+                incoming_state_z[k] = value(var)
+            end
+
+            incoming_state_gamma = Dict{Tuple{Int, Int,Int},Float64}()
+            for (k, var) in node.states_gamma
+                incoming_state_gamma[k] = value(var)
+            end
+
+            incoming_state_power = Float64[]
+            for unit in model.instance.Thermalunits
+                var_name = "power[$(unit.name)]"
+                var_symbol = Symbol(var_name)
+                push!(incoming_state_power, JuMP.value(JuMP.value(node.states_power[var_symbol].out)))
+            end
+
             push!(sampled_states, incoming_state_value)
+            push!(sampled_states_power, incoming_state_power)
+            push!(sampled_states_z, incoming_state_z)
+            push!(sampled_states_gamma, incoming_state_gamma)
 
             if node_index == 1
                 println("Lower bound: ", objective_value(node.subproblem))
@@ -195,6 +218,9 @@ function forward_pass(
     return (
         scenario_path = scenario_path,
         sampled_states = sampled_states,
+        sampled_states_power = sampled_states_power,
+        sampled_states_z = sampled_states_z,
+        sampled_states_gamma = sampled_states_gamma,
         objective_states = objective_states,
         belief_states = belief_states,
         cumulative_value = cumulative_value,

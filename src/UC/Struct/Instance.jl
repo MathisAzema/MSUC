@@ -16,6 +16,7 @@ struct ThermalUnit
     MinDownTime::Int64
     intervals::Vector{Vector{Int64}}
     intervals_t::Vector{Vector{Vector{Int64}}}
+    intervals_t_extended::Vector{Vector{Vector{Int64}}}
     Tup::Int64
     Tdown::Int64
 end

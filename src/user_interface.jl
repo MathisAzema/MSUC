@@ -620,6 +620,13 @@ struct BeliefState{T}
     updater::Function
 end
 
+mutable struct Cut2
+    intercept::Float64
+    intercept_gamma::Dict{Tuple{Int64, Int64, Int64}, Float64}
+    coefficients_gamma::Dict{Tuple{Int64, Int64, Int64}, Float64}
+    constraint_ref::JuMP.ConstraintRef
+end
+
 mutable struct Node{T}
     # The index of the node in the policy graph.
     index::T
@@ -634,6 +641,9 @@ mutable struct Node{T}
     parameterize::Function  # TODO(odow): make this a concrete type?
     # A list of the state variables in the model.
     states::Dict{Symbol,State{JuMP.VariableRef}}
+    states_power::Dict{Symbol,State{JuMP.VariableRef}}
+    states_z::Dict{Tuple{Int, Int,Int},JuMP.VariableRef}
+    states_gamma::Dict{Tuple{Int, Int,Int},JuMP.VariableRef}
     # Stage objective
     stage_objective::Any  # TODO(odow): make this a concrete type?
     stage_objective_set::Bool
@@ -657,6 +667,8 @@ mutable struct Node{T}
     lock::ReentrantLock
     # (lower, upper, is_integer)
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
+    improved_cuts::Vector{Cut2}
+    demand_constraint::Vector{JuMP.ConstraintRef}
 end
 
 function Base.show(io::IO, node::Node)
@@ -693,6 +705,13 @@ struct TrainingResults
     log::Vector{Log}
 end
 
+struct Method
+    string::String
+end
+
+ExtendedFormulation = Method("ExtendedFormulation")
+SDDPFormulation = Method("SDDP")
+
 mutable struct PolicyGraph{T}
     # Must be MOI.MIN_SENSE or MOI.MAX_SENSE
     objective_sense::MOI.OptimizationSense
@@ -715,8 +734,9 @@ mutable struct PolicyGraph{T}
     lock::ReentrantLock
 
     instance::Instance
+    method::Method
 
-    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance) where {T}
+    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance, method::Method) where {T}
         if sense != :Min && sense != :Max
             error(
                 "The optimization sense must be `:Min` or `:Max`. It is $(sense).",
@@ -735,6 +755,7 @@ mutable struct PolicyGraph{T}
             TimerOutputs.TimerOutput(),
             ReentrantLock(),
             instance,
+            method,
         )
     end
 end
@@ -931,7 +952,8 @@ function PolicyGraph(
     # masterproblem_builder::Function,
     instance::Instance,
     force::Float64,
-    graph::Graph{T};
+    graph::Graph{T},
+    method::Method;
     sense::Symbol = :Min,
     lower_bound = -Inf,
     upper_bound = Inf,
@@ -944,7 +966,7 @@ function PolicyGraph(
     _validate_graph(graph)
     # Construct a basic policy graph. We will add to it in the remainder of this
     # function.
-    policy_graph = PolicyGraph(sense, graph.root_node, instance)
+    policy_graph = PolicyGraph(sense, graph.root_node, instance, method)
     # Create a Bellman function if one is not given.
     if bellman_function === nothing
         if sense == :Min && lower_bound === -Inf
@@ -979,6 +1001,9 @@ function PolicyGraph(
             Noise[],
             (ω) -> nothing,
             Dict{Symbol,State{JuMP.VariableRef}}(),
+            Dict{Symbol,State{JuMP.VariableRef}}(),
+            Dict{Tuple{Int, Int,Int},JuMP.VariableRef}(),
+            Dict{Tuple{Int, Int,Int},JuMP.VariableRef}(),
             0.0,
             false,
             # Delay initializing the bellman function until later so that it can
@@ -998,17 +1023,31 @@ function PolicyGraph(
             Dict{Symbol,Any}(),
             ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
+            Cut2[],
+            JuMP.ConstraintRef[],  # demand_constraint
         )
         subproblem.ext[:MSUC_policy_graph] = policy_graph
         policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node
         JuMP.set_objective_sense(subproblem, policy_graph.objective_sense)
+
 
         # if node_index == graph.root_node
         #     masterproblem_builder(instance, subproblem)
         # else
         #     subproblem_builder(instance, force, subproblem, node_index)
         # end
-        subproblem_builder(instance, force, subproblem, node_index)
+        constraint, z_var, gamma_var = subproblem_builder(instance, force, subproblem, node_index)
+
+        node.demand_constraint = constraint
+        node.states_z = z_var
+        node.states_gamma = gamma_var
+
+        for (state_sym, state_var) in node.states
+            if occursin("power", String(state_sym))
+                node.states_power[state_sym] = state_var
+            end
+        end
+
 
         # Add a dummy noise here so that all nodes have at least one noise term.
         if length(node.noise_terms) == 0

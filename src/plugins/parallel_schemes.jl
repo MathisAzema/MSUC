@@ -170,12 +170,12 @@ function slave_loop(
     async::Asynchronous,
     model::PolicyGraph{T},
     options::Options,
-    updates::Distributed.RemoteChannel{Channel{IterationResult{T}}},
-    results::Distributed.RemoteChannel{Channel{IterationResult{T}}},
+    updates::Distributed.RemoteChannel{Channel{IterationResult}},
+    results::Distributed.RemoteChannel{Channel{IterationResult}},
 ) where {T}
     try
         async.init_callback(model)
-        results_to_add = IterationResult{T}[]
+        results_to_add = IterationResult[]
         while true
             result = iteration(model, options)
             options.post_iteration_callback(result)
@@ -223,10 +223,10 @@ function master_loop(
     #       to feed the master new results.
     updates = Dict(
         pid => Distributed.RemoteChannel(
-            () -> Channel{IterationResult{T}}(Inf),
+            () -> Channel{IterationResult}(Inf),
         ) for pid in async.slave_ids
     )
-    results = Distributed.RemoteChannel(() -> Channel{IterationResult{T}}(Inf))
+    results = Distributed.RemoteChannel(() -> Channel{IterationResult}(Inf))
     futures = Distributed.Future[]
     _uninitialize_solver(model; throw_error = true)
     for pid in async.slave_ids

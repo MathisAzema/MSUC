@@ -28,6 +28,79 @@ function set_intervals_t(t, MinUpTime, InitUpDownTime, InitialPower, MinPower, D
     return intervals
 end
 
+function set_intervals_t_extended(t, MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown)
+    bmax=25
+    intervals=[[a,b] for a in 1:24 for b in max(t,a+MinUpTime):bmax]
+    if InitUpDownTime!=nothing
+        if InitUpDownTime>=0
+            for b in max(t,-InitUpDownTime+1+MinUpTime, Int64(1+ceil((InitialPower-MinPower)/DeltaRampDown))):bmax
+                push!(intervals, [-InitUpDownTime+1,b])
+            end
+        end
+    end
+    return intervals
+end
+
+function compute_Pmax_j_a_b(unit, a, b, t)
+    """
+    Compute the maximum power producible at time t in interval [a,b]
+    """
+    if a >= 1
+        if t<a || t>=b
+            return 0.0
+        else
+            return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+        end
+    else
+        if t<a || t>=b
+            return 0.0
+        else
+            return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+        end
+    end
+end
+
+function compute_Pmin_j_a_b(unit, a, b, t)
+    """
+    Compute the minimum power producible at time t in interval [a,b]
+    """
+    if t<a || t>=b
+        return 0.0
+    else
+        return unit.MinPower
+    end
+end
+
+function compute_delta_up_j_a_b(unit, a, b, t)
+    """
+    Compute the minimum power producible at time t in interval [a,b]
+    """
+    if t==a
+        return unit.MinPower
+    elseif t<a || t>=b+1
+        return 0.0
+    elseif t == b
+        return -unit.MinPower
+    else
+        return unit.DeltaRampUp
+    end
+end
+
+function compute_delta_down_j_a_b(unit, a, b, t)
+    """
+    Compute the minimum power producible at time t in interval [a,b]
+    """
+    if t==b
+        return unit.MinPower
+    elseif t<a || t>=b+1
+        return 0.0
+    elseif t == a
+        return -unit.MinPower
+    else
+        return unit.DeltaRampUp
+    end
+end
+
 
 function thermal_unit_commit_constraints(model, instance)
     """

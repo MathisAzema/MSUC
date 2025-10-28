@@ -32,10 +32,11 @@ function parse_nc4(name_instance, optimizer, T=24)
                 MinDownTime=last(unit)["MinDownTime"].var[1]
                 intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown)
                 intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown) for t in 1:T]
+                intervals_t_extended=[set_intervals_t_extended(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown) for t in 1:T]
                 Tup=Int64(1+floor((MaxPower-MinPower)/DeltaRampUp))
                 Tdown=Int64(1+floor((MaxPower-MinPower)/DeltaRampDown))
 
-                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, Tup, Tdown)
+                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, intervals_t_extended, Tup, Tdown)
                 Thermal_units[unit_name]=unit
             end
             if type == "HydroUnitBlock"
