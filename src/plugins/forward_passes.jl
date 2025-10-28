@@ -189,8 +189,10 @@ function forward_pass(
             push!(sampled_states_z, incoming_state_z)
             push!(sampled_states_gamma, incoming_state_gamma)
 
+            # println((node.index, value(node.bellman_function.global_theta.theta), stage_objective_value(node, node.stage_objective), objective_value(node.subproblem)))
+
             if node_index == 1
-                println("Lower bound: ", objective_value(node.subproblem))
+                println("Lower bound: ", objective_value(node.subproblem), ", ", stage_objective_value(node, node.stage_objective))
             end
         finally
             unlock(node.lock)

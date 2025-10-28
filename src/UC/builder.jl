@@ -141,6 +141,18 @@ function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64,
     @constraint(subproblem, [unit in thermal_units, t in 1:T], sum(gamma_var[unit.name, a,b] for (a,b) in unit.intervals if a==t)==start_up[unit.name,t].out)
     @constraint(subproblem, [unit in thermal_units, t in 1:T], sum(gamma_var[unit.name, a,b] for (a,b) in unit.intervals if b==t)==start_down[unit.name,t].out)
 
+    # @constraint(subproblem, gamma_var[(1, 6, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(2, -3, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(3, 1, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(4, 8, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(4, -1, 4)] == 1.0)
+    # @constraint(subproblem, gamma_var[(5, 1, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(6, 0, 15)] == 1.0)
+    # @constraint(subproblem, gamma_var[(7, 0, 24)] == 1.0)
+    # @constraint(subproblem, gamma_var[(8, -5, 3)] == 1.0)
+    # @constraint(subproblem, gamma_var[(9, 8, 25)] == 1.0)
+    # @constraint(subproblem, gamma_var[(10, -8, 25)] == 1.0)
+
     if node == 1
         for i in 1:N
             JuMP.set_binary.(is_on[i, 0].out)

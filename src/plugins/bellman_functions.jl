@@ -467,7 +467,7 @@ end
 
 function compute_Q_jab_MSUC(
     node::Node{T},
-    incoming_state::Vector{Float64},
+    incoming_state::Float64,
     μ::Vector{Float64},
     ν::Vector{Float64},
     unit::ThermalUnit,
@@ -481,22 +481,22 @@ function compute_Q_jab_MSUC(
     delta_down = compute_delta_down_j_a_b(unit, a, b, t)
     cost = unit.LinearTerm - ν[unit.Bus]+sum(μ[k]*cut.coefficients_gamma[unit.name, a, b] for (k,cut) in enumerate(node.improved_cuts))
     if cost >0
-        if Pmin > incoming_state[unit.name] - delta_down
+        if Pmin > incoming_state - delta_down
             Q_jab = cost * Pmin
             π = 0.0
             return Q_jab, π
         else
-            Q_jab = cost * (incoming_state[unit.name] - delta_down)
+            Q_jab = cost * (incoming_state - delta_down)
             π = cost
             return Q_jab, π
         end
     else
-        if Pmax < incoming_state[unit.name] + delta_up
+        if Pmax < incoming_state + delta_up
             Q_jab = cost * Pmax
             π = 0.0
             return Q_jab, π
         else
-            Q_jab = cost * (incoming_state[unit.name] + delta_up)
+            Q_jab = cost * (incoming_state + delta_up)
             π = cost
             return Q_jab, π
         end
@@ -524,6 +524,8 @@ function refine_bellman_function_extended(
         instance = model.instance
         thermal_units = instance.Thermalunits
         t = node.index - 1
+        # println("Refining bellman function at node ", node.index)
+        # println(t)
         next_node = model[node.index + 1]
         intercept_gamma = Dict{Tuple{Int64, Int64, Int64}, Float64}()
         coefficients_gamma = Dict{Tuple{Int64, Int64, Int64}, Float64}()
@@ -537,28 +539,25 @@ function refine_bellman_function_extended(
                 if t+1 <= b-1
                     for i in 1:length(objective_realizations)
                         p = nominal_probability[i]
+                        yk =0.0
+                        if outgoing_state_gamma[unit.name, a, b] >= 0.1
+                            yk = outgoing_state_power[unit.name]
+                        else
+                            yk = incoming_state_j_a_b(unit, a, b, t)
+                        end
 
                         Qjab, π = compute_Q_jab_MSUC(
                             next_node,
-                            outgoing_state_power,
+                            yk,
                             μ[i],
                             ν[i],
                             unit,
                             a,
                             b,
                         )
-
-                        # if unit.name == 1 && a == 1 && b == 23
-                        #     println("here")
-                        # end
-
-                        # if node.index<=5 && outgoing_state_gamma[unit.name, a, b] >= 0.9
-                        #     println((i, unit.name, a, b, Qjab, π))
-                        # end
-
                         improved_cuts = next_node.improved_cuts
 
-                        intercept_gamma[unit.name, a, b] += p * (Qjab + sum(μ[i][k]*cut.intercept_gamma[unit.name, a, b] for (k, cut) in enumerate(improved_cuts)) - π*outgoing_state_power[unit.name])
+                        intercept_gamma[unit.name, a, b] += p * (Qjab + sum(μ[i][k]*cut.intercept_gamma[unit.name, a, b] for (k, cut) in enumerate(improved_cuts)) - π*yk)
                         coefficients_gamma[unit.name, a, b] += p * π
                     end
                 end
@@ -574,8 +573,12 @@ function refine_bellman_function_extended(
         # println(intercept-sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
 
         # println("true ", 700*model.instance.Demandbus[1][t+1]+sum(nominal_probability[i]*μ[i][k]*cut.intercept for (k, cut) in enumerate(next_node.improved_cuts) for i in 1:length(objective_realizations)))
-        println((node.index, ν))
+        # println((node.index, ν))
         # println(μ)
+
+        # if node.index >= 0
+        #     println(value(node.bellman_function.global_theta.theta))
+        # end
 
         cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + node.states_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
 
@@ -584,25 +587,52 @@ function refine_bellman_function_extended(
         cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
 
         push!(node.improved_cuts, cut)
-        if node.index == 1
-            println((intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
-        end
+        # if node.index >= 0
+        #     println(("current", node.index, intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
+        # end
 
         previous_cut = node.improved_cuts[end-1]
 
+        # if node.index >= 0
+        #     println(("previous", previous_cut.intercept+sum(outgoing_state_z[unit.name, a, b]*previous_cut.coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*previous_cut.intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
+        # end
+
         if node.index == 1
-            println((previous_cut.intercept+sum(outgoing_state_z[unit.name, a, b]*previous_cut.coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*previous_cut.intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
+            for unit in thermal_units
+                # println((unit.name, outgoing_state_power[unit.name], unit.InitialPower))
+        #         for (a,b) in unit.intervals_t_extended[t+1]
+        #             if outgoing_state_gamma[unit.name, a, b] >= 0.1
+        #                 println((unit.name, a, b, outgoing_state_gamma[unit.name, a, b], outgoing_state_z[unit.name, a, b], outgoing_state_power[unit.name]))
+        #             end
+        #         end
+            end
+        #     println("-----")
+        #     for unit in thermal_units
+        #         for (a,b) in unit.intervals_t_extended[t+1]
+        #             if outgoing_state_gamma[unit.name, a, b] >= 0.1
+        #                 println((unit.name, a, b, cut.coefficients_gamma[unit.name, a, b], previous_cut.coefficients_gamma[unit.name, a, b], cut.intercept_gamma[unit.name, a, b], previous_cut.intercept_gamma[unit.name, a, b]))
+        #             end
+        #         end
+        #     end
         end
 
-        if node.index>=23
-            println((node.index, intercept_cstr))
-            for unit in thermal_units
-                for (a,b) in unit.intervals_t_extended[t+1]
-                    if outgoing_state_gamma[unit.name, a, b] >= 0.1
-                        println((unit.name, a, b, outgoing_state_gamma[unit.name, a, b]))
-                    end
-                end
-            end
+        if node.index >= 10
+            # println("-----", node.index)
+            # for unit in thermal_units
+            #     for (a,b) in unit.intervals_t_extended[t+1]
+            #         if outgoing_state_gamma[unit.name, a, b] >= 0.1 && a==0 && b == 25 && unit.name == 7
+            #             println((unit.name, a, b, outgoing_state_gamma[unit.name, a, b], outgoing_state_z[unit.name, a, b], outgoing_state_power[unit.name]))
+            #         end
+            #     end
+            # end
+            # println("-----")
+            # for unit in thermal_units
+            #     for (a,b) in unit.intervals_t_extended[t+1]
+            #         if a==0 && b == 25 && unit.name == 7
+            #             println((node.index, unit.name, a, b, outgoing_state_power[unit.name], compute_Pmax_j_a_b(unit, a, b, t), cut.coefficients_gamma[unit.name, a, b], previous_cut.coefficients_gamma[unit.name, a, b], cut.intercept_gamma[unit.name, a, b], previous_cut.intercept_gamma[unit.name, a, b]))
+            #         end
+            #     end
+            # end
         end
     finally
         unlock(node.lock)

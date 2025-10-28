@@ -45,19 +45,75 @@ function compute_Pmax_j_a_b(unit, a, b, t)
     """
     Compute the maximum power producible at time t in interval [a,b]
     """
-    if a >= 1
-        if t<a || t>=b
-            return 0.0
+    if b <= 24
+        if a >= 1
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            end
         else
-            return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            end
         end
     else
-        if t<a || t>=b
-            return 0.0
+        if a >= 1
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower)
+            end
         else
-            return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower)
+            end
         end
     end
+
+end
+
+function incoming_state_j_a_b(unit, a, b, t)
+    """
+    Compute the maximum power producible at time t in interval [a,b]
+    """
+    if t == 0
+        return unit.InitialPower
+    end
+    if b <= 24
+        if a >= 1
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            end
+        else
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
+            end
+        end
+    else
+        if a >= 1
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower)
+            end
+        else
+            if t<a || t>=b
+                return 0.0
+            else
+                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower)
+            end
+        end
+    end
+
 end
 
 function compute_Pmin_j_a_b(unit, a, b, t)

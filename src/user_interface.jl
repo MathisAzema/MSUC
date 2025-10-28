@@ -669,6 +669,7 @@ mutable struct Node{T}
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
     improved_cuts::Vector{Cut2}
     demand_constraint::Vector{JuMP.ConstraintRef}
+    computation_time::Vector{Float64}
 end
 
 function Base.show(io::IO, node::Node)
@@ -1025,6 +1026,7 @@ function PolicyGraph(
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
             Cut2[],
             JuMP.ConstraintRef[],  # demand_constraint
+            Float64[],  # computation_time
         )
         subproblem.ext[:MSUC_policy_graph] = policy_graph
         policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node

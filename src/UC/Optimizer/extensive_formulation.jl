@@ -1,4 +1,4 @@
-function bin_extensive_neutral(instance; silent=true,  force::Float64=1.0, S::Int64=5, batch=1, gap=gap, timelimit=10)
+function bin_extensive_neutral(instance; silent=true,  force::Float64=1.0, S::Int64=5, batch=1, gap=gap, timelimit=10, res_gamma=nothing)
     """
     Solve the two stage SUC with 3-bin extensive formulation
     """
@@ -24,6 +24,12 @@ function bin_extensive_neutral(instance; silent=true,  force::Float64=1.0, S::In
     @variable(model, is_on[unit in thermal_units_name, t in 0:T], Bin)
     @variable(model, start_up[unit in thermal_units_name, t in 1:T], Bin)
     @variable(model, start_down[unit in thermal_units_name, t in 1:T], Bin)
+
+    if res_gamma != nothing
+        @constraint(model, [unit in thermal_units, t in 1:T], sum(res_gamma[unit.name, a,b] for (a,b) in unit.intervals if a<=t<b)==is_on[unit.name,t])
+        @constraint(model, [unit in thermal_units, t in 1:T], sum(res_gamma[unit.name, a,b] for (a,b) in unit.intervals if a==t)==start_up[unit.name,t])
+        @constraint(model, [unit in thermal_units, t in 1:T], sum(res_gamma[unit.name, a,b] for (a,b) in unit.intervals if b==t)==start_down[unit.name,t])
+    end
 
     @variable(model, thermal_fuel_cost[s in 1:S]>=0)
     @variable(model, thermal_fixed_cost>=0)
@@ -64,6 +70,8 @@ function bin_extensive_neutral(instance; silent=true,  force::Float64=1.0, S::In
         solution_start_down=JuMP.value.(start_down)
 
         solution_thermal=[solution_is_on, solution_start_up, solution_start_down]
+
+        println(value(model[:thermal_fixed_cost]), ", ", objective_value(model))
 
         return instance.name, computation_time, objective_value(model), objective_bound(model), solution_thermal, S, batch,  gap, force, value.(power)
 

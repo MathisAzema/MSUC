@@ -474,10 +474,10 @@ function _initialize_solver(node::Node; throw_error::Bool)
             )
         end
         set_optimizer(node.subproblem, node.optimizer)
-        if node.index != 1
+        if node.index > 2
             set_silent(node.subproblem)
         end
-        set_silent(node.subproblem)
+        # set_silent(node.subproblem)
     end
     return
 end
@@ -554,7 +554,9 @@ function solve_subproblem(
     else
         nothing
     end
+    start = time()
     JuMP.optimize!(node.subproblem)
+    push!(node.computation_time, time() - start)
     lock(model.lock) do
         model.ext[:total_solves] = get(model.ext, :total_solves, 0) + 1
         return
@@ -616,7 +618,9 @@ function solve_subproblem_extended(
     #     println(node.subproblem)
     #     println(node.demand_constraint)
     # end
+    start = time()
     JuMP.optimize!(node.subproblem)
+    push!(node.computation_time, time() - start)
     lock(model.lock) do
         model.ext[:total_solves] = get(model.ext, :total_solves, 0) + 1
         return

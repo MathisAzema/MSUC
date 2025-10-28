@@ -96,6 +96,14 @@ function benders_callback(instance, options;silent=true, force=1, S::Int64, batc
         solution_x = [solution_is_on, solution_start_up, solution_start_down]
 
         current_solution = [solution_x, solution_gamma]
+        println(value(master_pb[:thermal_fixed_cost]), ", ", objective_value(master_pb))
+        for unit in thermal_units
+            for (a,b) in unit.intervals
+                if solution_gamma[unit.name,a,b]>1e-6
+                    println((unit.name, a, b, solution_gamma[unit.name,a,b]))
+                end
+            end
+        end
 
         return instance.name, computation_time, objective_value(master_pb), objective_bound(master_pb), current_solution, S,batch, Time_subproblem, gap, force
     else
