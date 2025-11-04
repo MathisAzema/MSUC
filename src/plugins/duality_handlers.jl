@@ -143,18 +143,6 @@ function get_dual_solution(node::Node, ::ContinuousConicDuality)
         name => dual_sign * JuMP.dual(JuMP.FixRef(state.in)) for
         (name, state) in node.states
     )
-
-    println(node.index)
-
-    # if node.index==2
-    #     k=0
-    #     for cut in node.bellman_function.global_theta.cuts
-    #         k+=1
-    #         if cut.constraint_ref !== nothing
-    #             println((k, JuMP.dual(cut.constraint_ref)))
-    #         end
-    #     end
-    # end
     return objective_value(node.subproblem), λ
 end
 

@@ -477,7 +477,7 @@ function _initialize_solver(node::Node; throw_error::Bool)
         if node.index > 2
             set_silent(node.subproblem)
         end
-        # set_silent(node.subproblem)
+        set_silent(node.subproblem)
     end
     return
 end
@@ -782,13 +782,10 @@ function backward_pass(
             new_cuts = refine_bellman_function_extended(
                 model,
                 node,
-                outgoing_state,
                 outgoing_state_power,
-                outgoing_state_z,
                 outgoing_state_gamma,
                 items.μ,
                 items.ν,
-                items.supports,
                 items.probability,
                 items.objectives,
             )

@@ -85,6 +85,7 @@ function forward_pass(
     sampled_states_power = Vector{Float64}[]
     sampled_states_z = Dict{Tuple{Int, Int,Int},Float64}[]
     sampled_states_gamma = Dict{Tuple{Int, Int,Int},Float64}[]
+    selected_intervals = Tuple{Int, Int, Int}[]
     # Storage for the belief states: partition index and the belief dictionary.
     belief_states = Tuple{Int,Dict{T,Float64}}[]
     current_belief = initialize_belief(model)
@@ -175,6 +176,13 @@ function forward_pass(
             incoming_state_gamma = Dict{Tuple{Int, Int,Int},Float64}()
             for (k, var) in node.states_gamma
                 incoming_state_gamma[k] = value(var)
+                if value(var)>0.5 && node.index == 1
+                    println("Gamma > 0.5 detected at node ", node.index, " for state ", k)
+                    push!(selected_intervals, k)
+                end
+            end
+            if node.index == 1
+                println("Selected Intervals at node 1: ", selected_intervals)
             end
 
             incoming_state_power = Float64[]

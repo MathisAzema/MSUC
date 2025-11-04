@@ -506,13 +506,10 @@ end
 function refine_bellman_function_extended(
     model::PolicyGraph{T},
     node::Node{T},
-    outgoing_state::Dict{Symbol,Float64},
     outgoing_state_power::Vector{Float64},
-    outgoing_state_z::Dict{Tuple{Int, Int,Int},Float64},
     outgoing_state_gamma::Dict{Tuple{Int, Int,Int},Float64},
     μ::Vector{Vector{Float64}},
     ν::Vector{Vector{Float64}},
-    noise_supports::Vector,
     nominal_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
 ) where {T}
