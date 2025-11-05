@@ -232,15 +232,6 @@ function get_outgoing_state_power(node::Node)
     return values
 end
 
-function get_outgoing_state_z(node::Node)
-    values = Dict{Tuple{Int, Int,Int},JuMP.VariableRef}()
-    for (key, state) in node.states_z
-        outgoing_value = JuMP.value(state)
-        values[key] = outgoing_value
-    end
-    return values
-end
-
 
 # Internal function: set the objective of node to the stage objective, plus the
 # cost/value-to-go term.
@@ -717,6 +708,7 @@ function backward_pass(
     options::Options,
     scenario_path::Vector{Tuple{T,NoiseType}},
     sampled_states::Vector{Dict{Symbol,Float64}},
+    selected_intervals::Vector{Tuple{Int, Int, Int}},
     sampled_states_power::Vector{Vector{Float64}},
     sampled_states_z::Vector{Dict{Tuple{Int, Int,Int},Float64}},
     sampled_states_gamma::Vector{Dict{Tuple{Int, Int,Int},Float64}},
@@ -725,6 +717,7 @@ function backward_pass(
 ) where {T,NoiseType,N}
     # TODO(odow): improve storage type.
     cuts = Dict{T,Vector{Any}}(index => Any[] for index in keys(model.nodes))
+    println("Backward ", selected_intervals)
     for index in length(scenario_path):-1:1
         outgoing_state = sampled_states[index]
         outgoing_state_power = sampled_states_power[index]
@@ -782,6 +775,7 @@ function backward_pass(
             new_cuts = refine_bellman_function_extended(
                 model,
                 node,
+                selected_intervals,
                 outgoing_state_power,
                 outgoing_state_gamma,
                 items.μ,
@@ -1132,12 +1126,14 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
     end
     # println(forward_trajectory.sampled_states_power)
     println("Forward pass done")
+    println(forward_trajectory.selected_intervals)
     @_timeit_threadsafe model.timer_output "backward_pass" begin
         backward_pass(
             model,
             options,
             forward_trajectory.scenario_path,
             forward_trajectory.sampled_states,
+            forward_trajectory.selected_intervals,
             forward_trajectory.sampled_states_power,
             forward_trajectory.sampled_states_z,
             forward_trajectory.sampled_states_gamma,

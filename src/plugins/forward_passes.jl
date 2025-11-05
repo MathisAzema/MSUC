@@ -72,6 +72,7 @@ function forward_pass(
 ) where {T}
     # First up, sample a scenario. Note that if a cycle is detected, this will
     # return the cycle node as well.
+    instance = model.instance
     @_timeit_threadsafe model.timer_output "sample_scenario" begin
         scenario_path, terminated_due_to_cycle =
             sample_scenario(model, options.sampling_scheme)
@@ -177,12 +178,28 @@ function forward_pass(
             for (k, var) in node.states_gamma
                 incoming_state_gamma[k] = value(var)
                 if value(var)>0.5 && node.index == 1
-                    println("Gamma > 0.5 detected at node ", node.index, " for state ", k)
+                    # println("Gamma > 0.5 detected at node ", node.index, " for state ", k)
                     push!(selected_intervals, k)
                 end
             end
             if node.index == 1
-                println("Selected Intervals at node 1: ", selected_intervals)
+                for (node_name, node) in model.nodes
+                    # println(node_name)
+                    # println("Selected Intervals at node 1: ", selected_intervals)
+                    if node_name == 1
+                        continue
+                    end
+                    t = node_name - 1
+                    # println(t)
+                    for cut in node.improved_cuts
+                        cstr = cut.constraint_ref
+                        # println([(j,a,b) for (j,a,b) in selected_intervals])
+                        new_intercept = cut.intercept + sum(cut.intercept_gamma[j,a,b] for (j,a,b) in selected_intervals if t+1<=b; init=0.0)
+                        # println((cut.intercept, new_intercept))
+                        set_normalized_rhs(cstr, new_intercept)
+                        set_normalized_coefficient.(cstr, [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N], [-sum(cut.coefficients_gamma[j,a,b] for (j,a,b) in selected_intervals if t+1<=b && j == i; init=0.0) for i in 1:instance.N])
+                    end
+                end
             end
 
             incoming_state_power = Float64[]
@@ -231,6 +248,7 @@ function forward_pass(
         sampled_states_power = sampled_states_power,
         sampled_states_z = sampled_states_z,
         sampled_states_gamma = sampled_states_gamma,
+        selected_intervals = selected_intervals,
         objective_states = objective_states,
         belief_states = belief_states,
         cumulative_value = cumulative_value,

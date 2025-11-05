@@ -506,6 +506,7 @@ end
 function refine_bellman_function_extended(
     model::PolicyGraph{T},
     node::Node{T},
+    selected_intervals::Vector{Tuple{Int, Int, Int}},
     outgoing_state_power::Vector{Float64},
     outgoing_state_gamma::Dict{Tuple{Int, Int,Int},Float64},
     μ::Vector{Vector{Float64}},
@@ -576,19 +577,29 @@ function refine_bellman_function_extended(
         # if node.index >= 0
         #     println(value(node.bellman_function.global_theta.theta))
         # end
+        # cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + node.states_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
 
-        cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + node.states_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
+        if node.index == 1
+            cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_gamma[unit.name, a, b]*(unit.InitialPower*coefficients_gamma[unit.name, a, b] + intercept_gamma[unit.name, a, b]) for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
+
+            cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
+
+            push!(node.improved_cuts, cut)
+        else
+            cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr + sum((node.states_power[Symbol("power[$j]")].out * coefficients_gamma[j, a, b] + intercept_gamma[j, a, b]) for (j, a, b) in selected_intervals if t+1 <= b))
+
+            cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
+
+            push!(node.improved_cuts, cut)
+        end
 
         # println((intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
 
-        cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
-
-        push!(node.improved_cuts, cut)
         # if node.index >= 0
         #     println(("current", node.index, intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
         # end
 
-        previous_cut = node.improved_cuts[end-1]
+        # previous_cut = node.improved_cuts[end-1]
 
         # if node.index >= 0
         #     println(("previous", previous_cut.intercept+sum(outgoing_state_z[unit.name, a, b]*previous_cut.coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*previous_cut.intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))

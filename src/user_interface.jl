@@ -1039,10 +1039,9 @@ function PolicyGraph(
         #     subproblem_builder(instance, force, subproblem, node_index)
         # end
         if method == ExtendedFormulation
-            constraint, z_var, gamma_var = subproblem_builder(instance, force, subproblem, node_index)
+            constraint, gamma_var = subproblem_builder(instance, force, subproblem, node_index)
 
             node.demand_constraint = constraint
-            node.states_z = z_var
             node.states_gamma = gamma_var
         else
             subproblem_builder(instance, force, subproblem, node_index)
