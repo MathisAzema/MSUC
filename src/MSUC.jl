@@ -9,7 +9,6 @@ import Reexport
 Reexport.@reexport using JuMP
 
 import Distributed
-import HTTP
 import JSON
 import MutableArithmetics
 import Printf
@@ -83,7 +82,6 @@ include("plugins/forward_passes.jl")
 # Visualization related code.
 include("visualization/publication_plot.jl")
 include("visualization/spaghetti_plot.jl")
-include("visualization/dashboard.jl")
 include("visualization/value_functions.jl")
 
 # Other solvers.

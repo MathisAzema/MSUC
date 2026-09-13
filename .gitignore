@@ -1,0 +1,10 @@
+# Journaux et artefacts produits par les runs
+MSUC.log
+*.mof.json
+*.cuts.json
+
+# Julia
+/docs/build/
+*.jl.cov
+*.jl.*.cov
+*.jl.mem

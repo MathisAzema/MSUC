@@ -620,10 +620,26 @@ struct BeliefState{T}
     updater::Function
 end
 
-mutable struct Cut2
-    intercept::Float64
-    intercept_gamma::Dict{Tuple{Int64, Int64, Int64}, Float64}
-    coefficients_gamma::Dict{Tuple{Int64, Int64, Int64}, Float64}
+"""
+    IntervalCut
+
+Une coupe intervalle (39) :
+
+    cut(gamma, ytilde) = alpha + sum_{j,[a:b]} gamma_{j,a,b} ( tau_{j,a,b} + beta_{j,a,b} ytilde_{j,a,b} )
+
+Les champs portent les coefficients moyennes sur les aleas de (40) :
+`alpha` = alpha~_t (40a), `tau` = tau~_{j,a,b,t} (40c), `beta` = beta~_{j,a,b,t} (40d),
+indexes par (j, a, b). `constraint_ref` est la ligne d'epigraphe correspondante dans
+le sous-probleme ; elle est reecrite au planning courant a chaque passe avant, ce qui
+evite de porter les produits gamma * ytilde comme variables (cf. (41g)).
+
+Le coefficient d'etat d'incertitude delta~_t (40b) n'est pas stocke : le code n'implemente
+pas le processus ARMA du papier, les aleas sont independants par etape.
+"""
+mutable struct IntervalCut
+    alpha::Float64
+    tau::Dict{Tuple{Int64,Int64,Int64},Float64}
+    beta::Dict{Tuple{Int64,Int64,Int64},Float64}
     constraint_ref::JuMP.ConstraintRef
 end
 
@@ -641,9 +657,10 @@ mutable struct Node{T}
     parameterize::Function  # TODO(odow): make this a concrete type?
     # A list of the state variables in the model.
     states::Dict{Symbol,State{JuMP.VariableRef}}
+    # y_{j,t} : production physique, sous-ensemble de `states`
     states_power::Dict{Symbol,State{JuMP.VariableRef}}
-    states_z::Dict{Tuple{Int, Int,Int},JuMP.VariableRef}
-    states_gamma::Dict{Tuple{Int, Int,Int},JuMP.VariableRef}
+    # gamma_{j,a,b} : variables d'intervalle (Def. 1), indexees par (j, a, b)
+    states_gamma::Dict{Tuple{Int,Int,Int},JuMP.VariableRef}
     # Stage objective
     stage_objective::Any  # TODO(odow): make this a concrete type?
     stage_objective_set::Bool
@@ -667,7 +684,8 @@ mutable struct Node{T}
     lock::ReentrantLock
     # (lower, upper, is_integer)
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
-    improved_cuts::Vector{Cut2}
+    # Approximation polyedrale (27) de la valeur future, une entree par coupe
+    interval_cuts::Vector{IntervalCut}
     demand_constraint::Vector{JuMP.ConstraintRef}
     computation_time::Vector{Float64}
 end
@@ -1003,8 +1021,7 @@ function PolicyGraph(
             (ω) -> nothing,
             Dict{Symbol,State{JuMP.VariableRef}}(),
             Dict{Symbol,State{JuMP.VariableRef}}(),
-            Dict{Tuple{Int, Int,Int},JuMP.VariableRef}(),
-            Dict{Tuple{Int, Int,Int},JuMP.VariableRef}(),
+            Dict{Tuple{Int,Int,Int},JuMP.VariableRef}(),
             0.0,
             false,
             # Delay initializing the bellman function until later so that it can
@@ -1024,7 +1041,7 @@ function PolicyGraph(
             Dict{Symbol,Any}(),
             ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
-            Cut2[],
+            IntervalCut[],
             JuMP.ConstraintRef[],  # demand_constraint
             Float64[],  # computation_time
         )

@@ -30,13 +30,12 @@ function parse_nc4(name_instance, optimizer, T=24)
                 InitUpDownTime =last(unit)["InitUpDownTime"].var[1] 
                 MinUpTime=last(unit)["MinUpTime"].var[1]  
                 MinDownTime=last(unit)["MinDownTime"].var[1]
-                intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown)
-                intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown) for t in 1:T]
-                intervals_t_extended=[set_intervals_t_extended(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown) for t in 1:T]
+                intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
+                intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T) for t in 1:T]
                 Tup=Int64(1+floor((MaxPower-MinPower)/DeltaRampUp))
                 Tdown=Int64(1+floor((MaxPower-MinPower)/DeltaRampDown))
 
-                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, intervals_t_extended, Tup, Tdown)
+                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, Tup, Tdown)
                 Thermal_units[unit_name]=unit
             end
             if type == "HydroUnitBlock"
@@ -122,11 +121,11 @@ function parse_IEEE(folder, optimizer)
         QuadTerm =0.0        
         InitialPower=generators[i,12]
         InitUpDownTime =generators[i,15] *(InitialPower>=1e-3)-generators[i,15]*(InitialPower<=1e-3)
-        intervals=set_intervals(MinUpTime, InitUpDownTime, InitialPower, MaxPower, MinPower, DeltaRampDown)
-        intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown) for t in 1:T]
+        intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, TimeHorizon)
+        intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, TimeHorizon) for t in 1:TimeHorizon]
         Tup=Int64(1+floor((MaxPower-MinPower)/DeltaRampUp))
         Tdown=Int64(1+floor((MaxPower-MinPower)/DeltaRampDown))
-        unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, MinUpTime, MinDownTime, intervals, intervals_t, Tup, Tdown)
+        unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, Int64(InitUpDownTime), Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, Tup, Tdown)
         Thermal_units[unit_name]=unit
     end
 

@@ -12,27 +12,30 @@ Convention : quand un point change de statut, ajouter une ligne dans le [Journal
 
 ## Tableau de bord
 
-| ID | Gravité | Sujet | Statut |
-|----|---------|-------|--------|
-| [B1](#b1--compute_delta_down_j_a_b-renvoyait-le-ramp-up) | 🟠 | `compute_delta_down_j_a_b` renvoyait `DeltaRampUp` | **FAIT** |
-| [N1](#n1--point-de-linéarisation-ŷ--non-bug) | — | Point de linéarisation `incoming_state_j_a_b` | **NON-BUG** |
-| [N2](#n2--domaine-local-vide-non-bug) | — | Domaine local vide | **NON-BUG** |
-| [B2b](#b2b--état-initial-par-intervalle-dans-la-coupe-racine) | 🟠 | État $\tilde y_{j,a,b,0}$ dans la coupe racine, éq. (17) | **FAIT** |
-| [A1](#a1--alignement-sur-la-nouvelle-section-4) | 🟠 | Alignement sur la nouvelle §4 (p̄, q, intervalles actifs) | **FAIT** |
-| [A2](#a2--propagation-tau-pour-les-intervalles-inactifs) | 🔴 | Propagation $\tilde\tau^\sigma$ des intervalles inactifs | **FAIT** |
-| [B4](#b4--bloc-gamma-dupliqué-au-nœud-1) | 🟠 P1 | Bloc `gamma` dupliqué au nœud 1 | TODO |
-| [B5](#b5--parse_ieee-ne-sexécute-pas) | 🟠 P1 | `parse_IEEE` ne s'exécute pas | TODO |
-| [B6](#b6--calculate_bound-désactivée-bound--00) | 🟠 P1 | `calculate_bound` désactivée (`bound = 0.0`) | TODO |
-| [B7](#b7--incompatibilité-julia-112-mbedtls--http) | 🟠 P1 | Incompatibilité Julia 1.12 (MbedTLS ← HTTP) | TODO |
-| [P1](#p1--coût-en-ok-par-passe-arrière) | 🔴 P0 | Coût en $O(k)$ par appel → entraînement en $O(k^2)$ | TODO |
-| [R1](#r1--refonte-du-calcul-de-hat-q_jabt) | 🟠 P1 | Refonte du calcul de $\hat Q_{j,a,b,t}$ | À ARBITRER |
-| [E1](#e1--le-processus-arma-ζ-nest-pas-implémenté) | 🟡 P2 | Processus ARMA ζ absent | TODO |
-| [E2](#e2--lignes-de-shutdown-feasibility-4446) | 🟡 P2 | Lignes shutdown-feasibility (44)–(46) | TODO |
-| [E3](#e3--bruit-non-aligné-entre-les-deux-builders) | 🟠 P1 | Bruit non aligné entre les 2 builders | TODO |
-| [S1](#s1--aucun-test) | 🟠 P1 | Aucun test | TODO |
-| [S4](#s4--runs-stochastiques-non-reproductibles) | 🟠 P1 | Runs stochastiques non reproductibles (pas de graine) | TODO |
-| [S2](#s2--horizon-t24-codé-en-dur) | 🟡 P2 | Horizon `T=24` codé en dur | TODO |
-| [S3](#s3--nettoyage-du-dépôt) | 🟢 P3 | Nettoyage du dépôt | TODO |
+| ID | Sujet | Statut |
+|----|-------|--------|
+| B1 | `compute_delta_down_j_a_b` renvoyait le ramp up | **FAIT** |
+| N1 | Point de linéarisation `incoming_state_j_a_b` | NON-BUG |
+| N2 | Domaine local vide | NON-BUG |
+| B2b | État $\tilde y_{j,a,b,0}$ dans la coupe racine, éq. (17) | **FAIT** |
+| A1 | Alignement sur la §4 réécrite ($\bar p$, $q$, intervalles actifs) | **FAIT** |
+| A2 | Propagation $\tilde\tau^\sigma$ des intervalles inactifs | **FAIT** |
+| B4 | Bloc `gamma` dupliqué au nœud 1 | **FAIT** |
+| B5 | `parse_IEEE` ne s'exécutait pas | **FAIT** (non validé de bout en bout) |
+| B6 | `calculate_bound` désactivée (`bound = 0.0`) | **FAIT** |
+| B7 | Incompatibilité Julia 1.12 (MbedTLS ← HTTP) | **FAIT** |
+| E2 | Lignes de shutdown-feasibility (44) côté 3-bin | **FAIT** |
+| E3 | Bruit non aligné entre les deux builders | **FAIT** |
+| R1 | Refonte du calcul de $\hat Q_{j,a,b,t}$ | **FAIT** |
+| NOT | Alignement de la notation sur l'article | **FAIT** |
+| E1 | Processus ARMA $\zeta$ absent | À ARBITRER |
+| S1 | Aucun test automatisé | TODO |
+| S4 | Runs stochastiques non reproductibles (pas de graine) | TODO |
+| P1 | Coût en $O(k)$ sur $\hat z$ → entraînement en $O(k^2)$ | PARTIEL |
+| S3 | Nettoyage du dépôt | **FAIT** (hors artefacts versionnés) |
+
+Détail des points historiques (B1, N1, N2, A1, A2) plus bas ; le README porte désormais la
+table de correspondance article ↔ code.
 
 ---
 
@@ -553,3 +556,8 @@ La vraie borne inférieure est le **premier** nombre de `Lower bound: <LB>, <co�
 | 2026-09-13 | A1 | Alignement sur la §4 réécrite : $\bar p$ (46), $q$ (49), (17), intervalles actifs, tous les intervalles participent |
 | 2026-09-13 | A2 | Propagation $\tilde\tau^\sigma$ conservée pour les intervalles inactifs — sans quoi la borne dépasse l'optimum (1 905 374 > 1 850 053) |
 | 2026-09-13 | — | `refine_bellman_function_extended` nettoyée : 150 → 108 lignes, code mort supprimé, `mubar` hoisté (parcours des coupes divisé par `nscen`). Bornes inchangées |
+| 2026-09-13 | NOT | **Refactor notation** : `μ`→`σ` (c'était le σ de l'article, pas le μ), `Cut2`→`IntervalCut(alpha, tau, beta)`, `improved_cuts`→`interval_cuts`, helpers §4 renommés (`p_lower`, `p_upper`, `ramp_up`, `ramp_down`, `reference_output`, `initial_interval_output`, `local_support`) |
+| 2026-09-13 | R1 | `local_support` remplace `compute_Q_jab_MSUC` : renvoie $(\hat h,\hat\beta)$ directement. Supprime la soustraction catastrophique $z(y-R^D)-zy$ → coefficients exacts, borne it.10 : 1 817 736 → **1 820 387** |
+| 2026-09-13 | B4,B5,B6,B7 | γ dupliqué supprimé ; `parse_IEEE` réparé ; borne réelle dans le journal ; HTTP+dashboard retirés → **Julia 1.12 fonctionne** |
+| 2026-09-13 | E2,E3 | Lignes (44) implémentées côté 3-bin (plus de variables γ dans le builder 3-bin) ; bruit partagé via `forecast_error_support` |
+| 2026-09-13 | S3 | `states_z`, `intervals_t_extended`, builder commenté (~130 l.), blocs de debug supprimés ; `builder.jl` factorisé ; **README.md** écrit |

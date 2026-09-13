@@ -84,9 +84,9 @@ function forward_pass(
     # Storage for the list of outgoing states that we visit on the forward pass.
     sampled_states = Dict{Symbol,Float64}[]
     sampled_states_power = Vector{Float64}[]
-    sampled_states_z = Dict{Tuple{Int, Int,Int},Float64}[]
-    sampled_states_gamma = Dict{Tuple{Int, Int,Int},Float64}[]
-    selected_intervals = Tuple{Int, Int, Int}[]
+    sampled_states_gamma = Dict{Tuple{Int,Int,Int},Float64}[]
+    selected_intervals = Tuple{Int,Int,Int}[]
+    lower_bound = 0.0
     # Storage for the belief states: partition index and the belief dictionary.
     belief_states = Tuple{Int,Dict{T,Float64}}[]
     current_belief = initialize_belief(model)
@@ -169,12 +169,7 @@ function forward_pass(
             incoming_state_value = copy(subproblem_results.state)
             # Add the outgoing state variable to the list of states we have sampled
             # on this forward pass.
-            incoming_state_z = Dict{Tuple{Int, Int,Int},Float64}()
-            for (k, var) in node.states_z
-                incoming_state_z[k] = value(var)
-            end
-
-            incoming_state_gamma = Dict{Tuple{Int, Int,Int},Float64}()
+            incoming_state_gamma = Dict{Tuple{Int,Int,Int},Float64}()
             for (k, var) in node.states_gamma
                 incoming_state_gamma[k] = value(var)
                 if value(var)>0.5 && node.index == 1
@@ -191,13 +186,18 @@ function forward_pass(
                     end
                     t = node_name - 1
                     # println(t)
-                    for cut in node.improved_cuts
+                    # Reinstanciation de chaque coupe (39) au planning gamma courant.
+                    # C'est ce qui donne la ligne d'epigraphe (41g) sans porter les
+                    # produits gamma * ytilde comme variables.
+                    for cut in node.interval_cuts
                         cstr = cut.constraint_ref
-                        # println([(j,a,b) for (j,a,b) in selected_intervals])
-                        new_intercept = cut.intercept + sum(cut.intercept_gamma[j,a,b] for (j,a,b) in selected_intervals; init=0.0)
-                        # println((cut.intercept, new_intercept))
-                        set_normalized_rhs(cstr, new_intercept)
-                        set_normalized_coefficient.(cstr, [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N], [-sum(cut.coefficients_gamma[j,a,b] for (j,a,b) in selected_intervals if j == i; init=0.0) for i in 1:instance.N])
+                        rhs = cut.alpha + sum(cut.tau[j,a,b] for (j,a,b) in selected_intervals; init=0.0)
+                        set_normalized_rhs(cstr, rhs)
+                        set_normalized_coefficient.(
+                            cstr,
+                            [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N],
+                            [-sum(cut.beta[j,a,b] for (j,a,b) in selected_intervals if j == i; init=0.0) for i in 1:instance.N],
+                        )
                     end
                 end
             end
@@ -211,13 +211,14 @@ function forward_pass(
 
             push!(sampled_states, incoming_state_value)
             push!(sampled_states_power, incoming_state_power)
-            push!(sampled_states_z, incoming_state_z)
             push!(sampled_states_gamma, incoming_state_gamma)
 
             # println((node.index, value(node.bellman_function.global_theta.theta), stage_objective_value(node, node.stage_objective), objective_value(node.subproblem)))
 
             if node_index == 1
-                println("Lower bound: ", objective_value(node.subproblem), ", ", stage_objective_value(node, node.stage_objective))
+                # Borne inferieure de l'iteration : valeur optimale du probleme racine
+                # (26) avec l'approximation courante V^{ext,k-1} (Alg. 2, ligne 5).
+                lower_bound = objective_value(node.subproblem)
             end
         finally
             unlock(node.lock)
@@ -246,12 +247,12 @@ function forward_pass(
         scenario_path = scenario_path,
         sampled_states = sampled_states,
         sampled_states_power = sampled_states_power,
-        sampled_states_z = sampled_states_z,
         sampled_states_gamma = sampled_states_gamma,
         selected_intervals = selected_intervals,
         objective_states = objective_states,
         belief_states = belief_states,
         cumulative_value = cumulative_value,
+        lower_bound = lower_bound,
     )
 end
 

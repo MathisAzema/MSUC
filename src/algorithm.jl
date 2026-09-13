@@ -629,14 +629,14 @@ function solve_subproblem_extended(
     state = get_outgoing_state(node)
     stage_objective = stage_objective_value(node, node.stage_objective)
     @_timeit_threadsafe model.timer_output "get_dual_solution" begin
-        objective, μ, ν = get_dual_solution_extended(node)
+        objective, σ, ν = get_dual_solution_extended(node)
     end
     if node.post_optimize_hook !== nothing
         node.post_optimize_hook(pre_optimize_ret)
     end
     return (
         state = state,
-        μ = μ,
+        σ = σ,
         ν = ν,
         objective = objective,
         stage_objective = stage_objective,
@@ -710,18 +710,15 @@ function backward_pass(
     sampled_states::Vector{Dict{Symbol,Float64}},
     selected_intervals::Vector{Tuple{Int, Int, Int}},
     sampled_states_power::Vector{Vector{Float64}},
-    sampled_states_z::Vector{Dict{Tuple{Int, Int,Int},Float64}},
     sampled_states_gamma::Vector{Dict{Tuple{Int, Int,Int},Float64}},
     objective_states::Vector{NTuple{N,Float64}},
     belief_states::Vector{Tuple{Int,Dict{T,Float64}}},
 ) where {T,NoiseType,N}
     # TODO(odow): improve storage type.
     cuts = Dict{T,Vector{Any}}(index => Any[] for index in keys(model.nodes))
-    println("Backward ", selected_intervals)
     for index in length(scenario_path):-1:1
         outgoing_state = sampled_states[index]
         outgoing_state_power = sampled_states_power[index]
-        outgoing_state_z = sampled_states_z[index]
         outgoing_state_gamma = sampled_states_gamma[index]
         objective_state = get(objective_states, index, nothing)
         partition_index, belief_state = get(belief_states, index, (0, nothing))
@@ -778,7 +775,7 @@ function backward_pass(
                 selected_intervals,
                 outgoing_state_power,
                 outgoing_state_gamma,
-                items.μ,
+                items.σ,
                 items.ν,
                 items.probability,
                 items.objectives,
@@ -816,7 +813,9 @@ end
 struct BackwardPassItems_extended{T,U}
     "Given a (node, noise) tuple, index the element in the array."
     cached_solutions::Dict{Tuple{T,Any},Int}
-    μ::Vector{Vector{Float64}}
+    # sigma : multiplicateurs des lignes d'epigraphe (41g), un vecteur par alea
+    σ::Vector{Vector{Float64}}
+    # nu : multiplicateurs du bilan par noeud (41f), un vecteur par alea
     ν::Vector{Vector{Float64}}
     supports::Vector{U}
     nodes::Vector{T}
@@ -975,7 +974,7 @@ function solve_all_children_extended(
                 end
                 if haskey(items.cached_solutions, (child.term, noise.term))
                     sol_index = items.cached_solutions[(child.term, noise.term)]
-                    push!(items.μ, items.μ[sol_index])
+                    push!(items.σ, items.σ[sol_index])
                     push!(items.ν, items.ν[sol_index])
                     push!(items.supports, items.supports[sol_index])
                     push!(items.nodes, child_node.index)
@@ -998,7 +997,7 @@ function solve_all_children_extended(
                     # push!(items.duals, subproblem_results.duals)
                     push!(items.supports, noise)
                     push!(items.nodes, child_node.index)
-                    push!(items.μ, subproblem_results.μ)
+                    push!(items.σ, subproblem_results.σ)
                     push!(items.ν, subproblem_results.ν)
                     push!(
                         items.probability,
@@ -1007,7 +1006,7 @@ function solve_all_children_extended(
                     push!(items.objectives, subproblem_results.objective)
                     push!(items.belief, belief)
                     items.cached_solutions[(child.term, noise.term)] =
-                        length(items.μ)
+                        length(items.σ)
                 end
             end
             @_timeit_threadsafe model.timer_output "prepare_backward_pass" begin
@@ -1124,9 +1123,6 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
         forward_trajectory = forward_pass(model, options, options.forward_pass)
         options.forward_pass_callback(forward_trajectory)
     end
-    # println(forward_trajectory.sampled_states_power)
-    println("Forward pass done")
-    println(forward_trajectory.selected_intervals)
     @_timeit_threadsafe model.timer_output "backward_pass" begin
         backward_pass(
             model,
@@ -1135,20 +1131,15 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
             forward_trajectory.sampled_states,
             forward_trajectory.selected_intervals,
             forward_trajectory.sampled_states_power,
-            forward_trajectory.sampled_states_z,
             forward_trajectory.sampled_states_gamma,
             forward_trajectory.objective_states,
             forward_trajectory.belief_states,
         )
     end
-    println("Backward pass done")
-    # @_timeit_threadsafe model.timer_output "calculate_bound" begin
-    #     bound = calculate_bound(
-    #         model;
-    #         risk_measure = options.root_node_risk_measure,
-    #     )
-    # end
-    bound = 0.0
+    # Pour cette formulation a engagement fixe, la borne inferieure de l'iteration est
+    # la valeur optimale du probleme racine (26) resolu en debut de passe avant
+    # (Alg. 2, ligne 5) : pas besoin de recalculer un esperance sur les enfants.
+    bound = forward_trajectory.lower_bound
     lock(options.lock)
     try
         push!(
