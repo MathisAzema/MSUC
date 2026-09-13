@@ -43,77 +43,45 @@ end
 
 function compute_Pmax_j_a_b(unit, a, b, t)
     """
-    Compute the maximum power producible at time t in interval [a,b]
+    Borne haute locale p̄_{j,a,b,t}, éq. (46) :
+        p̄ = min{Pmax, S^D + R^D (b-1-t)}   si b <= T
+        p̄ = Pmax                            si b = T+1
+    Nulle hors de l'intervalle d'exploitation (Hypothèse 2).
+    Ici S^D_j = MinPower (cf. (45c) telle qu'écrite dans le builder).
+    NB : le cône de démarrage appartient à la trajectoire de référence q (49),
+    PAS à p̄ ; voir incoming_state_j_a_b.
     """
-    if b <= 24
-        if a >= 1
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
-            end
-        else
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
-            end
-        end
+    T = 24
+    if t < a || t >= b
+        return 0.0
+    elseif b <= T
+        return min(unit.MaxPower, unit.MinPower + (b - t - 1) * unit.DeltaRampDown)
     else
-        if a >= 1
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower)
-            end
-        else
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower)
-            end
-        end
+        return unit.MaxPower
     end
-
 end
 
 function incoming_state_j_a_b(unit, a, b, t)
     """
-    Compute the maximum power producible at time t in interval [a,b]
+    Trajectoire de référence q_{j,a,b,t}, éq. (49) : point où l'on choisit le
+    multiplicateur local d'un intervalle NON sélectionné (Sect. 4.3).
+    Sortie nulle hors de [a : b-1] ; en t = 0, état initial de l'intervalle (17).
+    Ici S^U_j = S^D_j = MinPower.
     """
+    T = 24
     if t == 0
-        return unit.InitialPower
+        return a <= 0 ? unit.InitialPower : 0.0          # éq. (17)
     end
-    if b <= 24
-        if a >= 1
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
-            end
-        else
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower, unit.MinPower+(b-t-1)*unit.DeltaRampDown)
-            end
-        end
+    if t < a || t >= b
+        return 0.0
+    end
+    startup = a >= 1 ? unit.MinPower + (t - a) * unit.DeltaRampUp :
+                       unit.InitialPower + t * unit.DeltaRampUp
+    if b <= T
+        return min(startup, unit.MaxPower, unit.MinPower + (b - t - 1) * unit.DeltaRampDown)
     else
-        if a >= 1
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.MinPower+(t-a)*unit.DeltaRampUp, unit.MaxPower)
-            end
-        else
-            if t<a || t>=b
-                return 0.0
-            else
-                return min(unit.InitialPower+t*unit.DeltaRampUp, unit.MaxPower)
-            end
-        end
+        return min(startup, unit.MaxPower)
     end
-
 end
 
 function compute_Pmin_j_a_b(unit, a, b, t)
@@ -153,7 +121,7 @@ function compute_delta_down_j_a_b(unit, a, b, t)
     elseif t == a
         return -unit.MinPower
     else
-        return unit.DeltaRampUp
+        return unit.DeltaRampDown
     end
 end
 

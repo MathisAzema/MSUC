@@ -14721,3 +14721,835 @@ simulation ci  :  1.977795e+06 ±          NaN
 numeric issues : 0
 -------------------------------------------------------------------
 
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.756666e+07  0.000000e+00  5.162607e+00       289   1
+         2   2.703766e+06  0.000000e+00  6.210337e+00       578   1
+         3   2.395313e+06  0.000000e+00  7.492432e+00       867   1
+         5   1.968270e+06  0.000000e+00  9.016291e+00      1445   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 9.016291e+00
+total solves   : 1445
+best bound     :  0.000000e+00
+simulation ci  :  5.355562e+06 ± 5.988356e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3449, 3453]
+  AffExpr in MOI.EqualTo{Float64}         : [995, 1451]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2708, 2710]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.763319e+07  0.000000e+00  6.236002e+00       289   1
+         3   1.716237e+07  0.000000e+00  7.574548e+00       867   1
+         5   1.726090e+07  0.000000e+00  9.003339e+00      1445   1
+        13   1.344551e+07  0.000000e+00  1.432807e+01      3757   1
+        18   6.746257e+06  0.000000e+00  1.955510e+01      5202   1
+        22   4.363505e+06  0.000000e+00  2.527768e+01      6358   1
+        26   5.374203e+06  0.000000e+00  3.239166e+01      7514   1
+        30   3.369616e+06  0.000000e+00  3.897383e+01      8670   1
+        33   2.453417e+06  0.000000e+00  4.935485e+01      9537   1
+        34   3.175242e+06  0.000000e+00  5.450196e+01      9826   1
+        37   3.069472e+06  0.000000e+00  6.388681e+01     10693   1
+        38   2.850999e+06  0.000000e+00  7.264831e+01     10982   1
+        40   2.849095e+06  0.000000e+00  8.678180e+01     11560   1
+        41   3.237214e+06  0.000000e+00  1.040895e+02     11849   1
+        42   2.984211e+06  0.000000e+00  1.190772e+02     12138   1
+        45   3.026124e+06  0.000000e+00  1.627837e+02     13005   1
+        47   2.628182e+06  0.000000e+00  1.976946e+02     13583   1
+        50   3.161058e+06  0.000000e+00  2.366589e+02     14450   1
+        52   2.558946e+06  0.000000e+00  2.773376e+02     15028   1
+        54   2.291415e+06  0.000000e+00  3.105346e+02     15606   1
+        58   2.489227e+06  0.000000e+00  3.495412e+02     16762   1
+        60   2.453840e+06  0.000000e+00  3.904797e+02     17340   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 3.904797e+02
+total solves   : 17340
+best bound     :  0.000000e+00
+simulation ci  :  6.664389e+06 ± 1.403879e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.752078e+07  0.000000e+00  4.798756e+00       289   1
+         2   2.553661e+06  0.000000e+00  5.826248e+00       578   1
+         3   2.346227e+06  0.000000e+00  7.181550e+00       867   1
+         4   2.281523e+06  0.000000e+00  8.192937e+00      1156   1
+         5   1.982739e+06  0.000000e+00  8.953714e+00      1445   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 8.953714e+00
+total solves   : 1445
+best bound     :  0.000000e+00
+simulation ci  :  5.336985e+06 ± 5.972746e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.751339e+07  0.000000e+00  4.903030e+00       289   1
+         2   2.660585e+06  0.000000e+00  5.914236e+00       578   1
+         3   2.432955e+06  0.000000e+00  7.676913e+00       867   1
+         5   2.035927e+06  0.000000e+00  9.200949e+00      1445   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 9.200949e+00
+total solves   : 1445
+best bound     :  0.000000e+00
+simulation ci  :  5.347950e+06 ± 5.965228e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  5.339839e+00       289   1
+         2   2.446741e+06  0.000000e+00  6.488509e+00       578   1
+         3   2.194066e+06  0.000000e+00  7.792425e+00       867   1
+         4   2.067713e+06  0.000000e+00  9.189361e+00      1156   1
+        10   1.997136e+06  0.000000e+00  1.470447e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.470447e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.886759e+00       289   1
+         2   2.446741e+06  0.000000e+00  6.159907e+00       578   1
+         4   2.067713e+06  0.000000e+00  8.333855e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.816402e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.401151e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.401151e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.799499e+00       289   1
+         3   2.194076e+06  0.000000e+00  6.925891e+00       867   1
+         4   2.062456e+06  0.000000e+00  8.124829e+00      1156   1
+         6   2.041504e+06  0.000000e+00  9.571851e+00      1734   1
+        10   1.922645e+06  0.000000e+00  1.360535e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.360535e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.682942e+06 ± 3.024139e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.681626e+00       289   1
+         3   2.185483e+06  0.000000e+00  6.238624e+00       867   1
+         5   2.135744e+06  0.000000e+00  7.387414e+00      1445   1
+         7   2.121666e+06  0.000000e+00  8.541495e+00      2023   1
+         9   2.279008e+06  0.000000e+00  9.749274e+00      2601   1
+        10   2.101273e+06  0.000000e+00  1.056451e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.056451e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.752236e+06 ± 3.006069e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.707069e+00       289   1
+         3   2.185483e+06  0.000000e+00  6.285002e+00       867   1
+         5   2.135744e+06  0.000000e+00  7.451390e+00      1445   1
+         7   2.121666e+06  0.000000e+00  8.617670e+00      2023   1
+         9   2.279008e+06  0.000000e+00  9.835486e+00      2601   1
+        10   2.101273e+06  0.000000e+00  1.068059e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.068059e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.752236e+06 ± 3.006069e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.726213e+00       289   1
+         3   2.185483e+06  0.000000e+00  6.309070e+00       867   1
+         5   2.135744e+06  0.000000e+00  7.494613e+00      1445   1
+         7   2.121666e+06  0.000000e+00  8.713328e+00      2023   1
+         9   2.279008e+06  0.000000e+00  9.964683e+00      2601   1
+        10   2.101273e+06  0.000000e+00  1.081843e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.081843e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.752236e+06 ± 3.006069e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.833528e+00       289   1
+         3   7.757136e+06  0.000000e+00  6.586147e+00       867   1
+         5   6.459780e+06  0.000000e+00  8.286294e+00      1445   1
+         6   6.352333e+06  0.000000e+00  9.417989e+00      1734   1
+        10   5.950037e+06  0.000000e+00  1.502031e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.502031e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  7.808628e+06 ± 2.201708e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.668808e+00       289   1
+         3   2.185483e+06  0.000000e+00  6.255230e+00       867   1
+         5   2.135744e+06  0.000000e+00  7.448913e+00      1445   1
+         7   2.121666e+06  0.000000e+00  8.673770e+00      2023   1
+        10   2.101273e+06  0.000000e+00  1.079160e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.079160e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.752236e+06 ± 3.006069e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.779720e+00       289   1
+         3   2.194066e+06  0.000000e+00  7.007196e+00       867   1
+         4   2.067713e+06  0.000000e+00  8.144319e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.508079e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.322938e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.322938e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.854131e+00       289   1
+         2   2.446741e+06  0.000000e+00  5.949533e+00       578   1
+         3   2.194066e+06  0.000000e+00  7.241422e+00       867   1
+         4   2.067713e+06  0.000000e+00  8.386359e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.866162e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.361742e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.361742e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.746558e+07  0.000000e+00  4.660304e+00       289   1
+         3   2.691594e+06  0.000000e+00  6.718730e+00       867   1
+         5   2.076247e+06  0.000000e+00  8.262398e+00      1445   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 8.262398e+00
+total solves   : 1445
+best bound     :  0.000000e+00
+simulation ci  :  5.543619e+06 ± 5.849639e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.714067e+00       289   1
+         3   2.194066e+06  0.000000e+00  6.742132e+00       867   1
+         4   2.067713e+06  0.000000e+00  8.104298e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.463835e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.316179e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.316179e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 1e+03]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.760975e+07  0.000000e+00  4.673269e+00       289   1
+         3   2.546311e+06  0.000000e+00  6.700580e+00       867   1
+         5   2.056168e+06  0.000000e+00  8.084641e+00      1445   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 8.084641e+00
+total solves   : 1445
+best bound     :  0.000000e+00
+simulation ci  :  5.407760e+06 ± 5.983201e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.708511e+00       289   1
+         3   2.194066e+06  0.000000e+00  6.810378e+00       867   1
+         4   2.067713e+06  0.000000e+00  8.228251e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.570207e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.308689e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.308689e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+         MSUC.jl (c) Oscar Dowson and contributors, 2017-25
+-------------------------------------------------------------------
+problem
+  nodes           : 25
+  state variables : 740
+  scenarios       : 9.84973e+24
+  existing cuts   : false
+options
+  solver          : serial mode
+  risk measure    : MSUC.Expectation()
+  sampling scheme : MSUC.InSampleMonteCarlo
+subproblem structure
+  VariableRef                             : [3453, 5417]
+  AffExpr in MOI.EqualTo{Float64}         : [1451, 1715]
+  AffExpr in MOI.GreaterThan{Float64}     : [1, 11]
+  AffExpr in MOI.LessThan{Float64}        : [40, 960]
+  VariableRef in MOI.EqualTo{Float64}     : [1, 1]
+  VariableRef in MOI.GreaterThan{Float64} : [2710, 4676]
+  VariableRef in MOI.LessThan{Float64}    : [740, 740]
+  VariableRef in MOI.ZeroOne              : [730, 730]
+numerical stability report
+  matrix range     [1e+00, 3e+02]
+  objective range  [1e+00, 3e+03]
+  bounds range     [1e+00, 3e+02]
+  rhs range        [1e+00, 1e+03]
+-------------------------------------------------------------------
+ iteration    simulation      bound        time (s)     solves  pid
+-------------------------------------------------------------------
+         1   1.754363e+07  0.000000e+00  4.929127e+00       289   1
+         3   2.194066e+06  0.000000e+00  7.135031e+00       867   1
+         4   2.067713e+06  0.000000e+00  8.491749e+00      1156   1
+         6   2.226237e+06  0.000000e+00  9.799393e+00      1734   1
+        10   1.997136e+06  0.000000e+00  1.323988e+01      2890   1
+-------------------------------------------------------------------
+status         : iteration_limit
+total time (s) : 1.323988e+01
+total solves   : 2890
+best bound     :  0.000000e+00
+simulation ci  :  3.653718e+06 ± 3.026422e+06
+numeric issues : 0
+-------------------------------------------------------------------
+

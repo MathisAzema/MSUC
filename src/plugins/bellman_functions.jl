@@ -343,7 +343,7 @@ function initialize_bellman_function(
         coefficients_gamma = Dict{Tuple{Int64, Int64, Int64}, Float64}()
 
         for unit in thermal_units
-            for (a,b) in unit.intervals_t_extended[t]
+            for (a,b) in unit.intervals
                 intercept_gamma[unit.name, a, b] = 0.0
                 coefficients_gamma[unit.name, a, b] = 0.0
             end
@@ -503,148 +503,131 @@ function compute_Q_jab_MSUC(
     end
 end
 
+# Internal function: construit la coupe intervalle (39)-(40) au point d'essai et
+# l'ajoute au sous-probleme du noeud.
+#
+# Pour chaque unite j et chaque intervalle [a:b] de T_j :
+#   - le support local (h_hat, beta_hat) vient de la forme close de la Prop. 6, et
+#     n'est calcule que si l'intervalle est ACTIF au stade t+1, i.e. t+1 in [a : b-1] ;
+#   - la propagation tau~^sigma des coupes futures (36) a lieu dans TOUS les cas : un
+#     intervalle qui demarre plus tard est inactif ici mais porte une valeur future.
+#
+# La coupe est ensuite ecrite dans l'etat du noeud : gamma (variable) a la racine,
+# puissance physique via l'identite ytilde_{j,a,b,t} = u_{a,b,t} y_{j,t} ailleurs (41g).
 function refine_bellman_function_extended(
     model::PolicyGraph{T},
     node::Node{T},
-    selected_intervals::Vector{Tuple{Int, Int, Int}},
+    selected_intervals::Vector{Tuple{Int,Int,Int}},
     outgoing_state_power::Vector{Float64},
-    outgoing_state_gamma::Dict{Tuple{Int, Int,Int},Float64},
+    outgoing_state_gamma::Dict{Tuple{Int,Int,Int},Float64},
     μ::Vector{Vector{Float64}},
     ν::Vector{Vector{Float64}},
     nominal_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
 ) where {T}
     lock(node.lock)
-
     try
-        # println((node.index, μ))
-        # println(outgoing_state_power)
-        instance = model.instance
-        thermal_units = instance.Thermalunits
+        thermal_units = model.instance.Thermalunits
         t = node.index - 1
-        # println("Refining bellman function at node ", node.index)
-        # println(t)
-        next_node = model[node.index + 1]
-        intercept_gamma = Dict{Tuple{Int64, Int64, Int64}, Float64}()
-        coefficients_gamma = Dict{Tuple{Int64, Int64, Int64}, Float64}()
-        for unit in thermal_units
-            for (a,b) in unit.intervals_t_extended[t+1]
-                # if unit.name == 1 && a == 1 && b == 23
-                #     println("here ", t)
-                # end
-                intercept_gamma[unit.name, a, b] = 0.0
-                coefficients_gamma[unit.name, a, b] = 0.0
-                if t+1 <= b-1
-                    for i in 1:length(objective_realizations)
-                        p = nominal_probability[i]
-                        yk =0.0
-                        if outgoing_state_gamma[unit.name, a, b] >= 0.1
-                            yk = outgoing_state_power[unit.name]
-                        else
-                            yk = incoming_state_j_a_b(unit, a, b, t)
-                        end
+        next_node = model[node.index+1]
+        improved_cuts = next_node.improved_cuts
+        nscen = length(objective_realizations)
 
-                        Qjab, π = compute_Q_jab_MSUC(
-                            next_node,
-                            yk,
-                            μ[i],
-                            ν[i],
-                            unit,
-                            a,
-                            b,
-                        )
-                        improved_cuts = next_node.improved_cuts
+        # La propagation tau~^sigma est lineaire en mu : sa moyenne sur les aleas ne
+        # depend que de ces poids moyens. Un seul parcours des coupes par intervalle
+        # au lieu de nscen.
+        mubar = [
+            sum(nominal_probability[i] * μ[i][k] for i in 1:nscen) for
+            k in 1:length(improved_cuts)
+        ]
 
-                        intercept_gamma[unit.name, a, b] += p * (Qjab + sum(μ[i][k]*cut.intercept_gamma[unit.name, a, b] for (k, cut) in enumerate(improved_cuts)) - π*yk)
-                        coefficients_gamma[unit.name, a, b] += p * π
-                    end
+        # Valeur d'essai de l'etat d'intervalle ytilde_{j,a,b,t} : le point ou la coupe
+        # doit etre tendue. Sert (i) a calibrer la constante intercept_cstr, et (ii) a
+        # la racine seulement, de coefficient de gamma dans la coupe, ou ytilde_0 n'est
+        # pas une variable mais une donnee.
+        #   - racine (t=0) : eq. (17), y_{j,0} si a<=0 et 0 sinon ;
+        #   - ailleurs     : ytilde_{j,a,b,t} = u_{a,b,t} y_{j,t}. On renvoie y_{j,t}
+        #     SANS le facteur u_{a,b,t} ; c'est licite parce que beta_hat = 0 sur tout
+        #     intervalle inactif, donc le produit beta_hat * ytilde est nul la ou
+        #     u_{a,b,t} = 0. Cet invariant est produit plus bas par le test
+        #     `a <= t+1 <= b-1` : ne pas le casser.
+        ytilde_trial(unit, a) =
+            node.index == 1 ? (a <= 0 ? unit.InitialPower : 0.0) :
+            outgoing_state_power[unit.name]
+
+        intercept_gamma = Dict{Tuple{Int64,Int64,Int64},Float64}()
+        coefficients_gamma = Dict{Tuple{Int64,Int64,Int64},Float64}()
+        for unit in thermal_units, (a, b) in unit.intervals
+            key = (unit.name, a, b)
+            h = sum(
+                mubar[k] * cut.intercept_gamma[key] for (k, cut) in enumerate(improved_cuts)
+            )
+            β = 0.0
+            if a <= t + 1 <= b - 1
+                # yk = point de LINEARISATION y^- ou l'on choisit le multiplicateur
+                # local. A ne pas confondre avec ytilde_trial ci-dessus, qui est l'ETAT
+                # auquel la coupe est evaluee :
+                #   - yk est libre : toute branche de (49) est une minorante valide ;
+                #   - ytilde_trial est impose par (17) / (41g).
+                # Sur un intervalle SELECTIONNE les deux coincident, et ce n'est pas
+                # optionnel : intercept_cstr retro-calcule alpha_hat depuis `intercept`
+                # au lieu d'appliquer (37), ce qui suppose la dualite forte, donc des
+                # multiplicateurs OPTIMAUX a l'etat d'essai (Prop. 4, cas gamma_hat = 1).
+                # Linéariser ailleurs sur un intervalle selectionne surestimerait
+                # alpha_hat et rendrait la coupe invalide.
+                yk = if outgoing_state_gamma[key] >= 0.1
+                    outgoing_state_power[unit.name]          # etat reel = ytilde_trial
+                else
+                    incoming_state_j_a_b(unit, a, b, t)      # trajectoire de reference q (49)
+                end
+                for i in 1:nscen
+                    Qjab, π = compute_Q_jab_MSUC(next_node, yk, μ[i], ν[i], unit, a, b)
+                    h += nominal_probability[i] * (Qjab - π * yk)
+                    β += nominal_probability[i] * π
                 end
             end
+            intercept_gamma[key] = h
+            coefficients_gamma[key] = β
         end
-        intercept=0.0
-        for i in 1:length(objective_realizations)
-            p = nominal_probability[i]
-            intercept += p * (objective_realizations[i])
-        end
-        intercept_cstr = intercept-sum(outgoing_state_gamma[unit.name, a, b]*(coefficients_gamma[unit.name, a, b]*outgoing_state_power[unit.name] + intercept_gamma[unit.name, a, b]) for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])
-        # println(intercept_cstr)
-        # println(intercept-sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
 
-        # println("true ", 700*model.instance.Demandbus[1][t+1]+sum(nominal_probability[i]*μ[i][k]*cut.intercept for (k, cut) in enumerate(next_node.improved_cuts) for i in 1:length(objective_realizations)))
-        # println((node.index, ν))
-        # println(μ)
+        intercept = sum(nominal_probability[i] * objective_realizations[i] for i in 1:nscen)
+        intercept_cstr =
+            intercept - sum(
+                outgoing_state_gamma[unit.name, a, b] * (
+                    coefficients_gamma[unit.name, a, b] * ytilde_trial(unit, a) +
+                    intercept_gamma[unit.name, a, b]
+                ) for unit in thermal_units for (a, b) in unit.intervals
+            )
 
-        # if node.index >= 0
-        #     println(value(node.bellman_function.global_theta.theta))
-        # end
-        # cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + node.states_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
-
-        if node.index == 1
-            cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr+sum(node.states_gamma[unit.name, a, b]*(unit.InitialPower*coefficients_gamma[unit.name, a, b] + intercept_gamma[unit.name, a, b]) for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1]))
-
-            cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
-
-            push!(node.improved_cuts, cut)
+        theta = node.bellman_function.global_theta.theta
+        cstr = if node.index == 1
+            @constraint(
+                node.subproblem,
+                theta >= intercept_cstr + sum(
+                    node.states_gamma[unit.name, a, b] * (
+                        ytilde_trial(unit, a) * coefficients_gamma[unit.name, a, b] +
+                        intercept_gamma[unit.name, a, b]
+                    ) for unit in thermal_units for (a, b) in unit.intervals
+                )
+            )
         else
-            cstr = @constraint(node.subproblem, node.bellman_function.global_theta.theta>= intercept_cstr + sum((node.states_power[Symbol("power[$j]")].out * coefficients_gamma[j, a, b] + intercept_gamma[j, a, b]) for (j, a, b) in selected_intervals if t+1 <= b))
-
-            cut = Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr)
-
-            push!(node.improved_cuts, cut)
+            @constraint(
+                node.subproblem,
+                theta >= intercept_cstr + sum(
+                    node.states_power[Symbol("power[$j]")].out *
+                    coefficients_gamma[j, a, b] + intercept_gamma[j, a, b] for
+                    (j, a, b) in selected_intervals
+                )
+            )
         end
-
-        # println((intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
-
-        # if node.index >= 0
-        #     println(("current", node.index, intercept, intercept_cstr+sum(outgoing_state_z[unit.name, a, b]*coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
-        # end
-
-        # previous_cut = node.improved_cuts[end-1]
-
-        # if node.index >= 0
-        #     println(("previous", previous_cut.intercept+sum(outgoing_state_z[unit.name, a, b]*previous_cut.coefficients_gamma[unit.name, a, b] + outgoing_state_gamma[unit.name, a, b]*previous_cut.intercept_gamma[unit.name, a, b] for unit in thermal_units for (a,b) in unit.intervals_t_extended[t+1])))
-        # end
-
-        if node.index == 1
-            for unit in thermal_units
-                # println((unit.name, outgoing_state_power[unit.name], unit.InitialPower))
-        #         for (a,b) in unit.intervals_t_extended[t+1]
-        #             if outgoing_state_gamma[unit.name, a, b] >= 0.1
-        #                 println((unit.name, a, b, outgoing_state_gamma[unit.name, a, b], outgoing_state_z[unit.name, a, b], outgoing_state_power[unit.name]))
-        #             end
-        #         end
-            end
-        #     println("-----")
-        #     for unit in thermal_units
-        #         for (a,b) in unit.intervals_t_extended[t+1]
-        #             if outgoing_state_gamma[unit.name, a, b] >= 0.1
-        #                 println((unit.name, a, b, cut.coefficients_gamma[unit.name, a, b], previous_cut.coefficients_gamma[unit.name, a, b], cut.intercept_gamma[unit.name, a, b], previous_cut.intercept_gamma[unit.name, a, b]))
-        #             end
-        #         end
-        #     end
-        end
-
-        if node.index >= 10
-            # println("-----", node.index)
-            # for unit in thermal_units
-            #     for (a,b) in unit.intervals_t_extended[t+1]
-            #         if outgoing_state_gamma[unit.name, a, b] >= 0.1 && a==0 && b == 25 && unit.name == 7
-            #             println((unit.name, a, b, outgoing_state_gamma[unit.name, a, b], outgoing_state_z[unit.name, a, b], outgoing_state_power[unit.name]))
-            #         end
-            #     end
-            # end
-            # println("-----")
-            # for unit in thermal_units
-            #     for (a,b) in unit.intervals_t_extended[t+1]
-            #         if a==0 && b == 25 && unit.name == 7
-            #             println((node.index, unit.name, a, b, outgoing_state_power[unit.name], compute_Pmax_j_a_b(unit, a, b, t), cut.coefficients_gamma[unit.name, a, b], previous_cut.coefficients_gamma[unit.name, a, b], cut.intercept_gamma[unit.name, a, b], previous_cut.intercept_gamma[unit.name, a, b]))
-            #         end
-            #     end
-            # end
-        end
+        push!(
+            node.improved_cuts,
+            Cut2(intercept_cstr, intercept_gamma, coefficients_gamma, cstr),
+        )
     finally
         unlock(node.lock)
     end
+    return
 end
 
 function _refine_bellman_function_no_lock(

@@ -194,10 +194,10 @@ function forward_pass(
                     for cut in node.improved_cuts
                         cstr = cut.constraint_ref
                         # println([(j,a,b) for (j,a,b) in selected_intervals])
-                        new_intercept = cut.intercept + sum(cut.intercept_gamma[j,a,b] for (j,a,b) in selected_intervals if t+1<=b; init=0.0)
+                        new_intercept = cut.intercept + sum(cut.intercept_gamma[j,a,b] for (j,a,b) in selected_intervals; init=0.0)
                         # println((cut.intercept, new_intercept))
                         set_normalized_rhs(cstr, new_intercept)
-                        set_normalized_coefficient.(cstr, [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N], [-sum(cut.coefficients_gamma[j,a,b] for (j,a,b) in selected_intervals if t+1<=b && j == i; init=0.0) for i in 1:instance.N])
+                        set_normalized_coefficient.(cstr, [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N], [-sum(cut.coefficients_gamma[j,a,b] for (j,a,b) in selected_intervals if j == i; init=0.0) for i in 1:instance.N])
                     end
                 end
             end

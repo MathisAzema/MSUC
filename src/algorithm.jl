@@ -772,7 +772,7 @@ function backward_pass(
                 options,
             )
 
-            new_cuts = refine_bellman_function_extended(
+            refine_bellman_function_extended(
                 model,
                 node,
                 selected_intervals,
