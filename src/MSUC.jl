@@ -13,19 +13,13 @@ import JSON
 import MutableArithmetics
 import Printf
 import Random
-import SHA
 import Statistics
 import TimerOutputs
 
 using Gurobi
 using NCDatasets
-using XLSX
 using CSV
 using DataFrames
-
-# Work-around for https://github.com/JuliaPlots/RecipesBase.jl/pull/55
-# Change this back to `import RecipesBase` once the fix is tagged.
-using RecipesBase
 
 export @stageobjective
 
@@ -34,32 +28,21 @@ const SHEDDING_COST=700.0
 const CURTAILEMENT_COST=700.0
 
 include("UC/Struct/Instance.jl")
-include("UC/Struct/tools.jl")
 include("UC/Unit/Thermal_unit.jl")
 include("UC/Unit/Line.jl")
 include("UC/Struct/parsing.jl")
-include("UC/Optimizer/extensive_formulation.jl")
-include("UC/Optimizer/initialisation_Benders.jl")
-include("UC/Optimizer/second_stage_SP.jl")
-include("UC/Optimizer/add_cut_SP.jl")
-include("UC/Optimizer/add_cut_AVAR.jl")
-include("UC/Optimizer/benders.jl")
-include("UC/Optimizer/benders_AVAR.jl")
-include("UC/Optimizer/options.jl")
+include("UC/extensive_formulation.jl")
 
 # Modelling interface.
 include("user_interface.jl")
-include("modeling_aids.jl")
 
 # Default definitions for MSUC related modular utilities.
 include("plugins/headers.jl")
 
 # Tools for overloading JuMP functions
-include("binary_expansion.jl")
 include("JuMP.jl")
 
 # Printing utilities.
-include("cyclic.jl")
 include("print.jl")
 
 # The core MSUC code.
@@ -80,19 +63,10 @@ include("plugins/backward_sampling_schemes.jl")
 include("plugins/forward_passes.jl")
 
 # Visualization related code.
-include("visualization/publication_plot.jl")
-include("visualization/spaghetti_plot.jl")
-include("visualization/value_functions.jl")
 
 # Other solvers.
-include("deterministic_equivalent.jl")
-include("biobjective.jl")
-include("alternative_forward.jl")
 
 # Inner approximation
-include("Inner.jl")
 
-include("Experimental.jl")
-include("MSPFormat.jl")
 
 end

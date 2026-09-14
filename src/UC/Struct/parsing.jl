@@ -1,3 +1,12 @@
+"""
+    read_data_forecast(file)
+
+Lit un fichier CSV de scenarios de demande nette (sans en-tete).
+"""
+function read_data_forecast(file)
+    return CSV.read(file, DataFrame; delim=",", header=0)
+end
+
 function parse_nc4(name_instance, optimizer, T=24)
     """
     Parse the SMS++ instances
@@ -10,7 +19,6 @@ function parse_nc4(name_instance, optimizer, T=24)
     demand=data_block["ActivePowerDemand"].var[:]
     N=size(keys(data_block.group))[1]-1
     Thermal_units=Vector{ThermalUnit}(undef, N)
-    Hydro_units=Dict()
     for unit in data_block.group
         if occursin("Block", first(unit))
             unit_name=parse(Int64, split(first(unit), "_")[end])+1
@@ -21,7 +29,6 @@ function parse_nc4(name_instance, optimizer, T=24)
                 MaxPower =last(unit)["MaxPower"].var[1] 
                 DeltaRampUp  =last(unit)["DeltaRampUp"].var[1]
                 DeltaRampDown  =last(unit)["DeltaRampDown"].var[1]
-                QuadTerm =last(unit)["QuadTerm"].var[1] 
                 StartUpCost=last(unit)["StartUpCost"].var[1]
                 StartDownCost=0.0 
                 LinearTerm=last(unit)["LinearTerm"].var[1]
@@ -32,32 +39,9 @@ function parse_nc4(name_instance, optimizer, T=24)
                 MinDownTime=last(unit)["MinDownTime"].var[1]
                 intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
                 intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T) for t in 1:T]
-                Tup=Int64(1+floor((MaxPower-MinPower)/DeltaRampUp))
-                Tdown=Int64(1+floor((MaxPower-MinPower)/DeltaRampDown))
 
-                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, Tup, Tdown)
+                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t)
                 Thermal_units[unit_name]=unit
-            end
-            if type == "HydroUnitBlock"
-                StartArc=last(unit)["StartArc"].var[:]
-                EndArc =last(unit)["EndArc"].var[:]
-                Inflows  =last(unit)["Inflows"].var[:, :]
-                InitialVolumetric  =last(unit)["InitialVolumetric"].var[:]
-                MinVolumetric =last(unit)["MinVolumetric"].var[:,:] 
-                MaxVolumetric=last(unit)["MaxVolumetric"].var[:,:]  
-                UphillFlow=last(unit)["UphillFlow"].var[:]  
-                DownhillFlow=last(unit)["DownhillFlow"].var[:]  
-                InitialFlowRate=last(unit)["InitialFlowRate"].var[:]  
-                DeltaRampUp =last(unit)["DeltaRampUp"].var[:,:] 
-                DeltaRampDown=last(unit)["DeltaRampDown"].var[:,:]  
-                MinFlow=last(unit)["MinFlow"].var[:,:]
-                MaxFlow=last(unit)["MaxFlow"].var[:,:]
-                MinPower=last(unit)["MinPower"].var[:,:]
-                MaxPower=last(unit)["MaxPower"].var[:,:]
-                NumberPieces=last(unit)["NumberPieces"].var[:] 
-                LinearTerm=last(unit)["LinearTerm"].var[:]  
-                ConstTerm=last(unit)["ConstantTerm"].var[:]
-                Hydro_units[unit_name]=HydroUnit(unit_name, StartArc, EndArc, Inflows, InitialVolumetric, MinVolumetric, MaxVolumetric, UphillFlow, DownhillFlow, InitialFlowRate, DeltaRampUp, DeltaRampDown, MinFlow, MaxFlow, MinPower, MaxPower, NumberPieces, LinearTerm, ConstTerm)
             end
         end
     end
@@ -87,11 +71,9 @@ function parse_nc4(name_instance, optimizer, T=24)
     for day in 1:Nb_total_scenario_test
         push!(WGscenariob,-table[(day-1)*24+1:day*24,1].*demand)
     end
-    Test_set=Nb_total_scenario_training+1:Nb_total_scenario_training+Nb_total_scenario_test
     push!(Training_set, [day for day in Nb_total_scenario_training+1:Nb_total_scenario_training+Nb_total_scenario_test])
     WGscenario=[hcat(WGscenariob...)]
-    model_Q_jab=Dict{Tuple{Int64, Int64, Int64}, JuMP.Model}()
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, Test_set, optimizer, model_Q_jab)
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, optimizer)
 end
 
 function parse_IEEE(folder, optimizer)
@@ -118,14 +100,11 @@ function parse_IEEE(folder, optimizer)
         StartDownCost = generators[i,10]
         MinUpTime=generators[i,15] 
         MinDownTime=generators[i,15]
-        QuadTerm =0.0        
         InitialPower=generators[i,12]
         InitUpDownTime =generators[i,15] *(InitialPower>=1e-3)-generators[i,15]*(InitialPower<=1e-3)
         intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, TimeHorizon)
         intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, TimeHorizon) for t in 1:TimeHorizon]
-        Tup=Int64(1+floor((MaxPower-MinPower)/DeltaRampUp))
-        Tdown=Int64(1+floor((MaxPower-MinPower)/DeltaRampDown))
-        unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, QuadTerm, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, Int64(InitUpDownTime), Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t, Tup, Tdown)
+        unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, Int64(InitUpDownTime), Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t)
         Thermal_units[unit_name]=unit
     end
 
@@ -157,8 +136,6 @@ function parse_IEEE(folder, optimizer)
     Num_batch=3
     Smax=100
     Training_set=[[(batch-1)*Smax+day for day in 1:Smax] for batch in 1:Num_batch]
-    Test_set=Num_batch*Smax+1:Num_batch*Smax+Nb_total_scenario
 
-    model_Q_jab=Dict{Tuple{Int64, Int64, Int64}, JuMP.Model}()
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, Test_set, optimizer, model_Q_jab)
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, optimizer)
 end

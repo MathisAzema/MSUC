@@ -20,51 +20,6 @@ struct DefaultForwardPass <: AbstractForwardPass
     end
 end
 
-function solve_root_node(
-    model::PolicyGraph{T},
-    instance::Instance,
-    options::Options,
-) where {T}
-    println("Solving root node...")
-    root_node = model[model.root_node]
-    master_problem = root_node.subproblem
-    optimize!(master_problem)
-
-    println(objective_value(master_problem))
-
-    thermal_units=values(instance.Thermalunits)
-    N=instance.N
-    TimeHorizon=instance.TimeHorizon
-
-    values_d = Dict{Symbol,Float64}()
-
-    for i in 1:N
-        for t in 0:TimeHorizon
-            var_name = "is_on[$i,$t]"
-            var_symbol = Symbol(var_name)
-            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
-        end
-        for t in 1:TimeHorizon
-            var_name = "start_up[$i,$t]"
-            var_symbol = Symbol(var_name)
-            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
-        end
-        for t in 1:TimeHorizon
-            var_name = "start_down[$i,$t]"
-            var_symbol = Symbol(var_name)
-            values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
-        end
-        var_name = "power[$i]"
-        var_symbol = Symbol(var_name)
-        values_d[var_symbol] = JuMP.value(JuMP.variable_by_name(master_problem, var_name))
-        # println((var_name, values_d[var_symbol]))
-    end
-
-    model.initial_root_state = values_d
-
-    return values_d
-end
-
 function forward_pass(
     model::PolicyGraph{T},
     options::Options,

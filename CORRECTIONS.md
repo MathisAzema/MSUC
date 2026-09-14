@@ -29,7 +29,8 @@ Convention : quand un point change de statut, ajouter une ligne dans le [Journal
 | R1 | Refonte du calcul de $\hat Q_{j,a,b,t}$ | **FAIT** |
 | NOT | Alignement de la notation sur l'article | **FAIT** |
 | E1 | Processus ARMA $\zeta$ absent | À ARBITRER |
-| S1 | Aucun test automatisé | TODO |
+| S1 | Aucun test automatisé | **PARTIEL** — `examples/toy_convergence.jl` vérifie validité + Prop. 3 |
+| B8 | Convention $b = T+1$ absente de `set_intervals` | **FAIT** |
 | S4 | Runs stochastiques non reproductibles (pas de graine) | TODO |
 | P1 | Coût en $O(k)$ sur $\hat z$ → entraînement en $O(k^2)$ | PARTIEL |
 | S3 | Nettoyage du dépôt | **FAIT** (hors artefacts versionnés) |
@@ -560,4 +561,7 @@ La vraie borne inférieure est le **premier** nombre de `Lower bound: <LB>, <co�
 | 2026-09-13 | R1 | `local_support` remplace `compute_Q_jab_MSUC` : renvoie $(\hat h,\hat\beta)$ directement. Supprime la soustraction catastrophique $z(y-R^D)-zy$ → coefficients exacts, borne it.10 : 1 817 736 → **1 820 387** |
 | 2026-09-13 | B4,B5,B6,B7 | γ dupliqué supprimé ; `parse_IEEE` réparé ; borne réelle dans le journal ; HTTP+dashboard retirés → **Julia 1.12 fonctionne** |
 | 2026-09-13 | E2,E3 | Lignes (44) implémentées côté 3-bin (plus de variables γ dans le builder 3-bin) ; bruit partagé via `forecast_error_support` |
+| 2026-09-14 | B8 | **Convention $b = T+1$ (Sect. 3.1) absente** de `set_intervals` : les intervalles $[a, T{+}1]$ ne respectant pas la durée minimale de marche étaient exclus. L'ensemble admissible du premier étage était donc **plus petit** que celui de la 3-bin, cassant la Prop. 3 (57 intervalles manquants à T=24 ; root infaisable à T=4). `set_intervals_t` dérive maintenant de `set_intervals` par filtrage, ce qui garantit $T_j(t) \subseteq T_j$ |
+| 2026-09-14 | — | Two-stage Benders retiré (7 fichiers + `tools.jl`) ; `extensive_formulation.jl` conservée et déplacée en `src/UC/` ; champs morts `model_Q_jab`, `Tup`, `Tdown` |
+| 2026-09-14 | S1 | `examples/compare_formulations.jl` et `examples/toy_convergence.jl` : à T=4 les deux formulations convergent vers 233 802,50 en 8 et 14 itérations |
 | 2026-09-13 | S3 | `states_z`, `intervals_t_extended`, builder commenté (~130 l.), blocs de debug supprimés ; `builder.jl` factorisé ; **README.md** écrit |

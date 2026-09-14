@@ -61,6 +61,93 @@ MSUC.train(model; iteration_limit = 20)
 La colonne `bound` du journal est la borne inférieure : la valeur optimale du problème racine (26)
 avec l'approximation courante, c'est-à-dire la ligne 5 de l'Algorithme 2.
 
+### Comparer les trois solveurs
+
+[`examples/compare_formulations.jl`](examples/compare_formulations.jl) lance les trois sur le
+même problème **déterministe** (`force = 0`), où l'optimum exact est calculable et sert de
+référence aux deux bornes SDDP :
+
+```bash
+julia --project=. examples/compare_formulations.jl
+```
+
+```julia
+using MSUC, Gurobi, Printf
+const GRB_ENV = Gurobi.Env()
+optimizer = () -> Gurobi.Optimizer(GRB_ENV)
+
+T, FORCE, ITER = 24, 0.0, 10
+instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T)
+
+# 1. Formulation extensive : optimum exact du problème déterministe
+res = MSUC.bin_extensive_neutral(instance; silent = true, force = FORCE, S = 1,
+                                 batch = 1, gap = 1e-6, timelimit = 300)
+opt = res[3]
+
+# 2. et 3. Les deux SDDP sur le même problème
+function run_sddp(builder, method, label)
+    model = MSUC.PolicyGraph(builder, instance, FORCE, MSUC.LinearGraph(T + 1), method;
+                             sense = :Min, lower_bound = 0.0, optimizer = optimizer)
+    MSUC.train(model; iteration_limit = ITER, print_level = 0)
+    log = model.most_recent_training_results.log
+    @printf("SDDP %-11s borne = %.1f  (%.1f %% de l'optimum)\n",
+            label, log[end].bound, 100 * log[end].bound / opt)
+    return [l.bound for l in log]
+end
+
+b_ext  = run_sddp(MSUC.subproblem_builder_UC_extended, MSUC.ExtendedFormulation, "intervalle")
+b_3bin = run_sddp(MSUC.subproblem_builder_UC_def,      MSUC.SDDPFormulation,     "3-bin")
+
+# Une borne inférieure valide ne peut pas dépasser l'optimum exact.
+@assert b_ext[end] <= opt && b_3bin[end] <= opt
+```
+
+Sortie obtenue sur `10_0_1_w.nc4` (10 unités, 1968 intervalles, optimum exact **1 850 053,2**) :
+
+| itération | intervalle (39) | % opt. | 3-bin (13) | % opt. |
+|---|---|---|---|---|
+| 1 | 58 914 | 3,2 | 58 914 | 3,2 |
+| 4 | 383 739 | 20,7 | 82 955 | 4,5 |
+| 5 | 1 795 493 | 97,1 | 85 452 | 4,6 |
+| 10 | **1 820 387** | **98,4** | 101 084 | 5,5 |
+
+C'est la thèse de l'article : les coupes intervalles atteignent 98 % de l'optimum en 5 itérations
+là où la 3-bin plafonne à 5 %.
+
+> ⚠️ **L'aléa n'est pas paramétré de la même façon** dans `bin_extensive_neutral`
+> (demande nette `= Demandbus - force * WGscenario`, soustraction éolienne absolue) et dans les
+> builders SDDP (`= Demandbus * (1 + force * ξ)`, erreur relative). Les deux ne coïncident qu'en
+> `force = 0` — seul régime où la comparaison à l'optimum exact est licite.
+
+
+### Exemple jouet : les deux formulations convergent
+
+À `T = 24` la 3-bin est trop lente pour converger, on ne peut donc pas vérifier qu'elle
+atteint le **même** optimum. [`examples/toy_convergence.jl`](examples/toy_convergence.jl)
+raccourcit l'horizon à `T = 4` (55 intervalles au lieu de 2025), où les deux convergent :
+
+```bash
+julia --project=. examples/toy_convergence.jl
+```
+
+Optimum exact **233 802,50** :
+
+| itération | intervalle (39) | % opt. | 3-bin (13) | % opt. |
+|---|---|---|---|---|
+| 1 | 43 262,46 | 18,50 | 43 262,46 | 18,50 |
+| 3 | 216 650,09 | 92,66 | 47 499,60 | 20,32 |
+| 5 | 233 548,40 | 99,89 | 216 309,14 | 92,52 |
+| **8** | **233 802,50** | **100,00** | 233 401,05 | 99,83 |
+| **14** | 233 802,50 | 100,00 | **233 802,50** | **100,00** |
+
+Les deux atteignent exactement le même optimum — c'est la **Proposition 3 vérifiée
+numériquement** (gaps respectifs 1,2·10⁻¹⁶ et 0) — la formulation intervalle en **8
+itérations contre 14**. Le script se termine sur deux `@assert` : égalité des deux bornes
+finales, et aucune ne dépasse l'optimum.
+
+C'est le test de non-régression le plus fort du dépôt : il vérifie la validité *et*
+l'équivalence, en une dizaine de secondes.
+
 ---
 
 ## Correspondance article ↔ code
@@ -197,31 +284,39 @@ src/
   UC/
     Struct/Instance.jl         ThermalUnit, Line, Instance
     Struct/parsing.jl          parse_nc4 (SMS++), parse_IEEE (118-bus)
-    Struct/tools.jl            utilitaires du Benders deux-étages
     Unit/Thermal_unit.jl       Section 4 : T_j, p, R^U, R^D, q, local_support
     Unit/Line.jl               réseau
     builder.jl                 sous-problèmes d'étape des deux formulations
-    Optimizer/                 Benders deux-étages de l'article [12] — autre algorithme
+    extensive_formulation.jl   formulation extensive 3-bin (vérité terrain)
   plugins/
     bellman_functions.jl       génération des coupes intervalles (Sect. 3.3)
     forward_passes.jl          passe avant + réinstanciation des coupes
     duality_handlers.jl        récupération de (σ, ν)
-    ...                        hérités de SDDP.jl
+    risk_measures.jl           mesures de risque (hérité SDDP.jl)
+    sampling_schemes.jl        échantillonnage des scénarios (hérité)
+    stopping_rules.jl          critères d'arrêt (hérité)
+    backward_sampling_schemes.jl, parallel_schemes.jl,
+    local_improvement_search.jl, headers.jl   (hérités)
   algorithm.jl                 boucle SDDP, passe arrière
   user_interface.jl            PolicyGraph, Node, IntervalCut
+  print.jl, JuMP.jl            journal et surcharges JuMP
 Data/
   T-Ramp/                      41 instances SMS++ (.nc4)
   IEEE/118_syst/               instance IEEE 118-bus
   Uncertainty/                 scénarios de demande nette
 ```
 
-`src/UC/Optimizer/` implémente le **Benders deux-étages** de l'article [12] (`benders_callback`,
-`bin_extensive_neutral`). C'est un autre algorithme, conservé pour les comparaisons et pour la
-vérité terrain du protocole ci-dessus.
+Le **Benders deux-étages** de l'article [12] (`benders_callback`, `add_cut_SP`, l'heuristique
+duale, les options `UCOptions`) a été retiré : c'est un autre algorithme, hors du périmètre de
+ce papier. Seule `bin_extensive_neutral` a été conservée, car elle fournit la vérité terrain.
 
-Sont hérités de SDDP.jl et **non utilisés** par ce travail : `Inner.jl`, `Experimental.jl`,
-`MSPFormat.jl`, `biobjective.jl`, `binary_expansion.jl`, `cyclic.jl`, `alternative_forward.jl`,
-`deterministic_equivalent.jl`, `visualization/`.
+Le code mort hérité de SDDP.jl a été supprimé : `Inner.jl`, `Experimental.jl`, `MSPFormat.jl`,
+`biobjective.jl`, `binary_expansion.jl`, `cyclic.jl`, `alternative_forward.jl`,
+`deterministic_equivalent.jl`, `modeling_aids.jl` et tout `visualization/`. Les dépendances
+correspondantes (`HTTP`, `SHA`, `XLSX`, `RecipesBase`, `Plots`) sont sorties de `Project.toml`.
+
+> **`Plots` n'est plus une dépendance du projet.** Si vos notebooks font `using Plots`,
+> rajoutez-le : `julia --project=. -e 'using Pkg; Pkg.add("Plots")'`.
 
 ---
 

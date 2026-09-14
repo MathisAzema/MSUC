@@ -206,32 +206,6 @@ function get_outgoing_state(node::Node)
     return values
 end
 
-function get_outgoing_state_power(node::Node)
-    values = Dict{Symbol,Float64}()
-    for (name, state) in node.states_power
-        # To fix some cases of numerical infeasiblities, if the outgoing value
-        # is outside its bounds, project the value back onto the bounds. There
-        # is a pretty large (×5) penalty associated with this check because it
-        # typically requires a call to the solver. It is worth reducing
-        # infeasibilities though.
-        outgoing_value = JuMP.value(state.out)
-        if JuMP.has_upper_bound(state.out)
-            current_bound = JuMP.upper_bound(state.out)
-            if current_bound < outgoing_value
-                outgoing_value = current_bound
-            end
-        end
-        if JuMP.has_lower_bound(state.out)
-            current_bound = JuMP.lower_bound(state.out)
-            if current_bound > outgoing_value
-                outgoing_value = current_bound
-            end
-        end
-        values[name] = outgoing_value
-    end
-    return values
-end
-
 
 # Internal function: set the objective of node to the stage objective, plus the
 # cost/value-to-go term.
