@@ -612,13 +612,15 @@ indexes par (j, a, b). `constraint_ref` est la ligne d'epigraphe correspondante 
 le sous-probleme ; elle est reecrite au planning courant a chaque passe avant, ce qui
 evite de porter les produits gamma * ytilde comme variables (cf. (41g)).
 
-Le coefficient d'etat d'incertitude delta~_t (40b) n'est pas stocke : le code n'implemente
-pas le processus ARMA du papier, les aleas sont independants par etape.
+`delta` est le coefficient de l'etat d'incertitude, delta~_t de (40b) : la coupe porte
+en plus le terme `delta' * zeta`. Il vaut identiquement zero quand `force = 0`, l'alea
+etant alors neutralise.
 """
 mutable struct IntervalCut
     alpha::Float64
     tau::Dict{Tuple{Int64,Int64,Int64},Float64}
     beta::Dict{Tuple{Int64,Int64,Int64},Float64}
+    delta::Vector{Float64}
     constraint_ref::JuMP.ConstraintRef
 end
 
@@ -640,6 +642,8 @@ mutable struct Node{T}
     states_power::Dict{Symbol,State{JuMP.VariableRef}}
     # gamma_{j,a,b} : variables d'intervalle (Def. 1), indexees par (j, a, b)
     states_gamma::Dict{Tuple{Int,Int,Int},JuMP.VariableRef}
+    # zeta_t : etat d'incertitude ARMA (1g), dans l'ordre des composantes
+    states_zeta::Vector{State{JuMP.VariableRef}}
     # Stage objective
     stage_objective::Any  # TODO(odow): make this a concrete type?
     stage_objective_set::Bool
@@ -733,8 +737,10 @@ mutable struct PolicyGraph{T}
 
     instance::Instance
     method::Method
+    # Amplitude de l'alea dans le bilan (1h) : force = 0 donne le probleme deterministe.
+    force::Float64
 
-    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance, method::Method) where {T}
+    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance, method::Method, force::Float64) where {T}
         if sense != :Min && sense != :Max
             error(
                 "The optimization sense must be `:Min` or `:Max`. It is $(sense).",
@@ -754,6 +760,7 @@ mutable struct PolicyGraph{T}
             ReentrantLock(),
             instance,
             method,
+            force,
         )
     end
 end
@@ -964,7 +971,7 @@ function PolicyGraph(
     _validate_graph(graph)
     # Construct a basic policy graph. We will add to it in the remainder of this
     # function.
-    policy_graph = PolicyGraph(sense, graph.root_node, instance, method)
+    policy_graph = PolicyGraph(sense, graph.root_node, instance, method, force)
     # Create a Bellman function if one is not given.
     if bellman_function === nothing
         if sense == :Min && lower_bound === -Inf
@@ -1001,6 +1008,7 @@ function PolicyGraph(
             Dict{Symbol,State{JuMP.VariableRef}}(),
             Dict{Symbol,State{JuMP.VariableRef}}(),
             Dict{Tuple{Int,Int,Int},JuMP.VariableRef}(),
+            State{JuMP.VariableRef}[],
             0.0,
             false,
             # Delay initializing the bellman function until later so that it can
@@ -1047,6 +1055,10 @@ function PolicyGraph(
                 node.states_power[state_sym] = state_var
             end
         end
+        node.states_zeta = [
+            node.states[Symbol("ζ[$i]")] for
+            i in 1:MSUC.zeta_dimension(instance.arma)
+        ]
 
 
         # Add a dummy noise here so that all nodes have at least one noise term.

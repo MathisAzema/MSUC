@@ -39,6 +39,7 @@ function forward_pass(
     # Storage for the list of outgoing states that we visit on the forward pass.
     sampled_states = Dict{Symbol,Float64}[]
     sampled_states_power = Vector{Float64}[]
+    sampled_states_zeta = Vector{Float64}[]
     sampled_states_gamma = Dict{Tuple{Int,Int,Int},Float64}[]
     selected_intervals = Tuple{Int,Int,Int}[]
     lower_bound = 0.0
@@ -166,6 +167,7 @@ function forward_pass(
 
             push!(sampled_states, incoming_state_value)
             push!(sampled_states_power, incoming_state_power)
+            push!(sampled_states_zeta, [JuMP.value(z.out) for z in node.states_zeta])
             push!(sampled_states_gamma, incoming_state_gamma)
 
             # println((node.index, value(node.bellman_function.global_theta.theta), stage_objective_value(node, node.stage_objective), objective_value(node.subproblem)))
@@ -173,7 +175,7 @@ function forward_pass(
             if node_index == 1
                 # Borne inferieure de l'iteration : valeur optimale du probleme racine
                 # (26) avec l'approximation courante V^{ext,k-1} (Alg. 2, ligne 5).
-                lower_bound = objective_value(node.subproblem)
+                lower_bound = JuMP.objective_bound(node.subproblem)
             end
         finally
             unlock(node.lock)
@@ -202,6 +204,7 @@ function forward_pass(
         scenario_path = scenario_path,
         sampled_states = sampled_states,
         sampled_states_power = sampled_states_power,
+        sampled_states_zeta = sampled_states_zeta,
         sampled_states_gamma = sampled_states_gamma,
         selected_intervals = selected_intervals,
         objective_states = objective_states,

@@ -684,6 +684,7 @@ function backward_pass(
     sampled_states::Vector{Dict{Symbol,Float64}},
     selected_intervals::Vector{Tuple{Int, Int, Int}},
     sampled_states_power::Vector{Vector{Float64}},
+    sampled_states_zeta::Vector{Vector{Float64}},
     sampled_states_gamma::Vector{Dict{Tuple{Int, Int,Int},Float64}},
     objective_states::Vector{NTuple{N,Float64}},
     belief_states::Vector{Tuple{Int,Dict{T,Float64}}},
@@ -693,6 +694,7 @@ function backward_pass(
     for index in length(scenario_path):-1:1
         outgoing_state = sampled_states[index]
         outgoing_state_power = sampled_states_power[index]
+        outgoing_state_zeta = sampled_states_zeta[index]
         outgoing_state_gamma = sampled_states_gamma[index]
         objective_state = get(objective_states, index, nothing)
         partition_index, belief_state = get(belief_states, index, (0, nothing))
@@ -749,6 +751,7 @@ function backward_pass(
                 selected_intervals,
                 outgoing_state_power,
                 outgoing_state_gamma,
+                outgoing_state_zeta,
                 items.σ,
                 items.ν,
                 items.probability,
@@ -1105,15 +1108,26 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
             forward_trajectory.sampled_states,
             forward_trajectory.selected_intervals,
             forward_trajectory.sampled_states_power,
+            forward_trajectory.sampled_states_zeta,
             forward_trajectory.sampled_states_gamma,
             forward_trajectory.objective_states,
             forward_trajectory.belief_states,
         )
     end
-    # Pour cette formulation a engagement fixe, la borne inferieure de l'iteration est
-    # la valeur optimale du probleme racine (26) resolu en debut de passe avant
-    # (Alg. 2, ligne 5) : pas besoin de recalculer un esperance sur les enfants.
-    bound = forward_trajectory.lower_bound
+    # Pour cette formulation a engagement fixe, la borne de l'iteration vient du probleme
+    # racine (26) resolu en debut de passe avant (Alg. 2, ligne 5) : pas besoin de
+    # recalculer une esperance sur les enfants. `root_outer_bound` en renvoie la borne
+    # DUALE, seule valide quand le MIP termine sur MIPGap.
+    #
+    # Cette borne duale est valide a chaque iteration mais PAS monotone : le
+    # branch-and-bound peut s'arreter a un point moins avance qu'a l'iteration
+    # precedente. Comme chaque borne minore l'optimum vrai (V^k <= V*), leur extremum
+    # courant le minore aussi et est monotone par construction : c'est lui qu'on publie.
+    is_min = model.objective_sense == MOI.MIN_SENSE
+    best = get(model.ext, :best_bound, is_min ? -Inf : Inf)
+    bound = is_min ? max(best, forward_trajectory.lower_bound) :
+            min(best, forward_trajectory.lower_bound)
+    model.ext[:best_bound] = bound
     lock(options.lock)
     try
         push!(

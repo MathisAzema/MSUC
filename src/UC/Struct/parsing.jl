@@ -7,7 +7,7 @@ function read_data_forecast(file)
     return CSV.read(file, DataFrame; delim=",", header=0)
 end
 
-function parse_nc4(name_instance, optimizer, T=24)
+function parse_nc4(name_instance, optimizer, T=24; sigma::Float64=1.0, S::Int=ARMA_SUPPORT_SIZE, discretization::Symbol=ARMA_DISCRETIZATION)
     """
     Parse the SMS++ instances
     """
@@ -73,10 +73,10 @@ function parse_nc4(name_instance, optimizer, T=24)
     end
     push!(Training_set, [day for day in Nb_total_scenario_training+1:Nb_total_scenario_training+Nb_total_scenario_test])
     WGscenario=[hcat(WGscenariob...)]
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, optimizer)
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
 end
 
-function parse_IEEE(folder, optimizer)
+function parse_IEEE(folder, optimizer; sigma::Float64=1.0, S::Int=ARMA_SUPPORT_SIZE, discretization::Symbol=ARMA_DISCRETIZATION)
     """
     Parse the IEEE 118-bus instnace
     """
@@ -137,5 +137,5 @@ function parse_IEEE(folder, optimizer)
     Smax=100
     Training_set=[[(batch-1)*Smax+day for day in 1:Smax] for batch in 1:Num_batch]
 
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, optimizer)
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
 end

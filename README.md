@@ -58,8 +58,18 @@ model = MSUC.PolicyGraph(
 MSUC.train(model; iteration_limit = 20)
 ```
 
-La colonne `bound` du journal est la borne inférieure : la valeur optimale du problème racine (26)
-avec l'approximation courante, c'est-à-dire la ligne 5 de l'Algorithme 2.
+La colonne `bound` du journal est la borne inférieure, issue du problème racine (26) résolu
+avec l'approximation courante (Algorithme 2, ligne 5).
+
+> Le problème racine est un **MIP**. La borne publiée est sa borne **duale**
+> (`objective_bound`), pas la valeur de l'incumbent : avec un `MIPGap` non nul, l'incumbent
+> *majore* l'optimum du MIP et n'est donc pas une borne inférieure valide. La trajectoire de
+> la passe avant utilise en revanche la solution incumbent — n'importe quel planning
+> admissible convient pour engendrer des coupes. Voir `root_outer_bound`.
+>
+> La borne duale est valide à chaque itération mais **pas monotone** (le branch-and-bound
+> peut s'arrêter à un point moins avancé qu'à l'itération précédente). Comme chaque borne
+> minore l'optimum vrai, c'est leur **maximum courant** qui est publié : valide et monotone.
 
 ### Comparer les trois solveurs
 
@@ -147,6 +157,68 @@ finales, et aucune ne dépasse l'optimum.
 
 C'est le test de non-régression le plus fort du dépôt : il vérifie la validité *et*
 l'équivalence, en une dizaine de secondes.
+
+---
+
+## Incertitude : processus ARMA
+
+L'erreur relative de prévision de demande nette suit le processus ARMA de la §2.1, avec les
+paramètres calibrés de l'article PSCC, éq. (40) :
+
+$$\eta_t = 0{,}67\,\eta_{t-1} + \xi_t + 0{,}117\,\xi_{t-1}, \qquad \xi_t \sim \mathcal N(0,\ 2{,}9\cdot10^{-4}\sigma)$$
+
+appliqué **indépendamment à chaque nœud**. Le processus est rendu markovien par
+l'augmentation d'état de la §2.1 : $\zeta_t = (\eta_t, \xi_t)$ pour un ARMA(1,1), avec
+
+$$\zeta_t = \Psi\,\zeta_{t-1} + E\,\xi_t, \qquad \eta_t = S_\eta\,\zeta_t$$
+
+$\zeta$ est une **variable d'état** du graphe, déclarée à tous les nœuds, et les coupes
+portent le terme $\tilde\delta_t^\top\zeta$ des éq. (10), (12) et (40b).
+
+> ⚠️ **Collision de notation entre les deux articles.** Ce que PSCC (40) note $\eta_t$ est
+> l'**innovation**, notre $\xi_t$ ; ce que PSCC note $\varepsilon_t$ est l'**erreur**, notre
+> $\eta_t$. Le code suit la notation MSUC.
+
+### Régler le support
+
+PSCC spécifie une innovation **gaussienne continue**, mais l'Hypothèse 1 exige un support
+**fini**. La discrétisation n'est donnée dans aucun des deux articles ; elle est ici un
+paramètre du parsing :
+
+```julia
+instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, 24;
+                          sigma          = 1.0,              # σ de l'éq. (40)
+                          S              = 5,                # taille du support
+                          discretization = :gauss_hermite)   # ou :equiprobable
+```
+
+Les défauts sont les constantes `ARMA_SUPPORT_SIZE` et `ARMA_DISCRETIZATION` de
+[`src/UC/Struct/ARMA.jl`](src/UC/Struct/ARMA.jl). Le nombre d'aléas par étape vaut
+exactement `S` : une seule innovation scalaire est tirée et appliquée à tous les nœuds
+(`common_innovation = true`), sans quoi il faudrait $S^{|\mathcal N|}$ combinaisons.
+
+**Les deux schémas**, tous deux de moyenne et variance exactes :
+
+| | $S=5$, nœud extrême | $p_{\min}$ | moments exacts |
+|---|---|---|---|
+| `:gauss_hermite` (défaut) | $\pm 2{,}86\,\sigma_\xi$ | 1,1 % | jusqu'à l'ordre $2S-1$ |
+| `:equiprobable` | $\pm 1{,}48\,\sigma_\xi$ | 20 % | moyenne et variance |
+
+- **Gauss-Hermite** (Golub-Welsch : valeurs propres de la matrice de Jacobi d'Hermite,
+  poids = carrés des premières composantes des vecteurs propres). Optimal pour une
+  **espérance** — c'est le cas risque-neutre du papier. Revers : les nœuds extrêmes portent
+  des probabilités infimes ($8{,}6\cdot10^{-10}$ à $S=15$), donc les queues comptent peu.
+- **Équiprobable** : chaque scénario pèse $1/S$, nœud = moyenne conditionnelle de sa strate.
+  À préférer pour une **mesure de risque** type AVaR, où les queues doivent être peuplées.
+
+> Le schéma équiprobable brut **sous-estime la variance** (0,897 à $S=5$) : la dispersion
+> intra-strate est perdue. Les nœuds sont donc renormalisés par défaut
+> (`match_variance = true`) pour que la variance discrète vaille exactement
+> $2{,}9\cdot10^{-4}\sigma$. Sans effet sur Gauss-Hermite, déjà exacte.
+
+`force` (argument de `PolicyGraph`) multiplie $\eta_t$ dans le bilan (1h) : `force = 0`
+neutralise l'aléa et, comme $\tilde\delta \equiv 0$ par récurrence, redonne **exactement**
+le problème déterministe — c'est ce qui rend le protocole de validation reproductible.
 
 ---
 

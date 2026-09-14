@@ -342,7 +342,7 @@ function initialize_bellman_function(
         τ[(unit.name, a, b)] = 0.0
         β[(unit.name, a, b)] = 0.0
     end
-    push!(node.interval_cuts, IntervalCut(0.0, τ, β, cstr))
+    push!(node.interval_cuts, IntervalCut(0.0, τ, β, zeros(length(node.states_zeta)), cstr))
 
     x′ = Dict(key => var.out for (key, var) in node.states)
     obj_μ = node.objective_state !== nothing ? node.objective_state.μ : nothing
@@ -465,6 +465,7 @@ function refine_bellman_function_extended(
     selected_intervals::Vector{Tuple{Int,Int,Int}},
     outgoing_state_power::Vector{Float64},
     outgoing_state_gamma::Dict{Tuple{Int,Int,Int},Float64},
+    outgoing_state_zeta::Vector{Float64},
     σ::Vector{Vector{Float64}},
     ν::Vector{Vector{Float64}},
     probability::Vector{Float64},
@@ -475,6 +476,7 @@ function refine_bellman_function_extended(
         instance = model.instance
         thermal_units = instance.Thermalunits
         horizon = instance.TimeHorizon
+        arma = instance.arma
         t = node.index - 1
         cuts = model[node.index+1].interval_cuts
         nscen = length(objective_realizations)
@@ -482,6 +484,22 @@ function refine_bellman_function_extended(
         # tau~^sigma est lineaire en sigma : sa moyenne sur les aleas ne depend que de
         # ces poids. Un seul parcours des coupes par intervalle au lieu de nscen.
         σ_mean = [sum(probability[i] * σ[i][k] for i in 1:nscen) for k in 1:length(cuts)]
+
+        # Coefficient de l'etat d'incertitude, eq. (10) puis (12) moyennees par (40b) :
+        #     lambda   = S_eta' D_t nu_bar + delta~^sigma_{t+1}
+        #     delta~_t = Psi' lambda
+        # Tout est lineaire en (nu, sigma), donc la moyenne sur les aleas ne demande que
+        # nu_bar et sigma_mean. Le facteur `force` est celui du bilan (1h) : a force = 0
+        # la premiere part s'annule et, par recurrence depuis delta = 0 au dernier
+        # etage, delta~ reste nul -- le cas deterministe est inchange.
+        nz = MSUC.zeta_dimension(arma)
+        nb = size(arma.S_eta, 1)
+        ν_mean = [sum(probability[i] * ν[i][n] for i in 1:nscen) for n in 1:nb]
+        λ = [sum(σ_mean[k] * cuts[k].delta[j] for k in 1:length(cuts)) for j in 1:nz]
+        for j in 1:nz, n in 1:nb
+            λ[j] += arma.S_eta[n, j] * instance.Demandbus[n][t+1] * ν_mean[n] * model.force
+        end
+        δ = [sum(arma.Psi[k, j] * λ[k] for k in 1:nz) for j in 1:nz]
 
         # ytilde_{j,a,b,t} au point d'essai. A la racine c'est l'etat initial (17) ;
         # ailleurs ytilde = u_{a,b,t} y_{j,t} (41g) et l'on renvoie y_{j,t} sans le
@@ -515,18 +533,19 @@ function refine_bellman_function_extended(
 
         value = sum(probability[i] * objective_realizations[i] for i in 1:nscen)
         α =
-            value - sum(
+            value - sum(δ[j] * outgoing_state_zeta[j] for j in 1:nz; init = 0.0) - sum(
                 outgoing_state_gamma[unit.name, a, b] * (
                     β[(unit.name, a, b)] * trial_output(unit, a) + τ[(unit.name, a, b)]
                 ) for unit in thermal_units for (a, b) in unit.intervals
             )
 
         theta = node.bellman_function.global_theta.theta
+        ζ_expr = sum(δ[j] * node.states_zeta[j].out for j in 1:nz; init = 0.0)
         cstr = if node.index == 1
             # ytilde_0 est une donnee (17) : la coupe ne depend plus que de gamma.
             @constraint(
                 node.subproblem,
-                theta >= α + sum(
+                theta >= α + ζ_expr + sum(
                     node.states_gamma[unit.name, a, b] * (
                         trial_output(unit, a) * β[(unit.name, a, b)] +
                         τ[(unit.name, a, b)]
@@ -538,13 +557,13 @@ function refine_bellman_function_extended(
             # physique, au planning courant. C'est la ligne d'epigraphe (41g).
             @constraint(
                 node.subproblem,
-                theta >= α + sum(
+                theta >= α + ζ_expr + sum(
                     node.states_power[Symbol("power[$j]")].out * β[(j, a, b)] +
                     τ[(j, a, b)] for (j, a, b) in selected_intervals
                 )
             )
         end
-        push!(node.interval_cuts, IntervalCut(α, τ, β, cstr))
+        push!(node.interval_cuts, IntervalCut(α, τ, β, δ, cstr))
     finally
         unlock(node.lock)
     end

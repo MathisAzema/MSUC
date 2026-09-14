@@ -35,5 +35,7 @@ struct Instance
     BusWind::Vector{Int64}
     WGscenario::Vector{Matrix{Float64}}
     Training_set::Vector{Vector{Int64}}
+    # Processus ARMA de l'erreur de prevision (Sect. 2.1, eq. 1g)
+    arma::ARMAProcess
     optimizer::Any
 end

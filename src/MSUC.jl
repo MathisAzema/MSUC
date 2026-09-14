@@ -9,6 +9,7 @@ import Reexport
 Reexport.@reexport using JuMP
 
 import Distributed
+import LinearAlgebra
 import JSON
 import MutableArithmetics
 import Printf
@@ -27,6 +28,7 @@ export @stageobjective
 const SHEDDING_COST=700.0
 const CURTAILEMENT_COST=700.0
 
+include("UC/Struct/ARMA.jl")
 include("UC/Struct/Instance.jl")
 include("UC/Unit/Thermal_unit.jl")
 include("UC/Unit/Line.jl")

@@ -12,36 +12,11 @@
 #  chaque sous-probleme a partir de x par les contraintes de liaison (26c).
 # =============================================================================
 
-"Taille du support de l'alea xi_t (Hypothese 1)."
-const NOISE_SUPPORT_SIZE = 11
-
-"Demi-amplitude de l'erreur relative de prevision de demande nette."
-const NOISE_SPREAD = 0.05
-
-"""
-    forecast_error_support(instance; S, spread) -> (Ω, P)
-
-Support fini et probabilites de l'alea xi_t (Hypothese 1) : erreur relative de
-prevision, de meme loi a chaque etape et independante entre etapes.
-
-Les DEUX formulations passent par cette fonction, sans quoi elles ne decriraient pas
-le meme probleme et la Prop. 3 ne serait pas testable.
-"""
-function forecast_error_support(
-    instance;
-    S::Int = NOISE_SUPPORT_SIZE,
-    spread::Float64 = NOISE_SPREAD,
-)
-    nw = length(instance.BusWind)
-    S <= 1 && return ([zeros(nw)], [1.0])
-    Ω = [[-spread + 2 * spread * (s - 1) / (S - 1) for _ in 1:nw] for s in 1:S]
-    return Ω, fill(1 / S, S)
-end
-
-# Variables d'etat communes aux deux formulations.
+# Variables d'etat communes aux deux formulations, dont l'etat d'incertitude zeta.
 function _declare_states!(subproblem, instance)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
+    nz = MSUC.zeta_dimension(instance.arma)
     @variable(
         subproblem,
         0.0 <= power[i = 1:N] <= units[i].MaxPower,
@@ -51,7 +26,10 @@ function _declare_states!(subproblem, instance)
     @variable(subproblem, 0.0 <= is_on[i = 1:N, t in 0:T] <= 1.0, MSUC.State, initial_value = 0.0)
     @variable(subproblem, 0.0 <= start_up[i = 1:N, t in 1:T] <= 1.0, MSUC.State, initial_value = 0.0)
     @variable(subproblem, 0.0 <= start_down[i = 1:N, t in 1:T] <= 1.0, MSUC.State, initial_value = 0.0)
-    return power, is_on, start_up, start_down
+    # zeta_t : etat d'incertitude de la recursion ARMA (1g). Declare a TOUS les noeuds,
+    # y compris la racine, pour que l'espace d'etat soit le meme partout.
+    @variable(subproblem, ζ[i = 1:nz], MSUC.State, initial_value = instance.arma.zeta0[i])
+    return power, is_on, start_up, start_down, ζ
 end
 
 # Contraintes d'engagement de la racine : (1a), duree minimale de marche et d'arret,
@@ -137,14 +115,15 @@ end
 
 # Reseau, alea et bilan de demande d'une etape de dispatch : (1e)-(1h).
 # Renvoie les contraintes de bilan, dont les duaux sont le nu du papier.
-function _dispatch_common!(subproblem, instance, force, power, t)
+function _dispatch_common!(subproblem, instance, force, power, ζ, t)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
     Next = instance.Next
     Buses = 1:size(Next)[1]
     Lines = values(instance.Lines)
-    BusWind = instance.BusWind
-    nw = length(BusWind)
+    arma = instance.arma
+    nz = MSUC.zeta_dimension(arma)
+    nb = length(Buses)
 
     @variables(subproblem, begin
         power_shedding[b in Buses] >= 0
@@ -152,14 +131,21 @@ function _dispatch_common!(subproblem, instance, force, power, t)
         θ[b in Buses]
         flow[b in Buses, bp in Next[b]]
     end)
-    # Alea : erreur relative de prevision, Hypothese 1.
-    @variable(subproblem, error_forecast[k in 1:nw])
-    Ω, P = forecast_error_support(instance)
-    MSUC.parameterize(subproblem, Ω, P) do ω
-        for k in 1:nw
-            JuMP.fix(error_forecast[k], ω[k])
+    # Innovation xi_t a support fini (Hypothese 1) et recursion ARMA (1g) :
+    #     zeta_t = Psi zeta_{t-1} + E xi_t
+    @variable(subproblem, ξ[n = 1:nb])
+    MSUC.parameterize(subproblem, arma.support, arma.probability) do ω
+        for n in 1:nb
+            JuMP.fix(ξ[n], ω[n])
         end
     end
+    @constraint(
+        subproblem,
+        [i in 1:nz],
+        ζ[i].out ==
+        sum(arma.Psi[i, k] * ζ[k].in for k in 1:nz) +
+        sum(arma.E[i, n] * ξ[n] for n in 1:nb)
+    )
     # (1e)-(1f) : flux DC et capacites de ligne.
     @constraints(subproblem, begin
         [line in Lines], flow[line.b1, line.b2] <= line.Fmax
@@ -173,7 +159,7 @@ function _dispatch_common!(subproblem, instance, force, power, t)
             sum(power[unit.name].out for unit in units if unit.Bus == b) -
             power_curtailement[b] + power_shedding[b] ==
             instance.Demandbus[b][t] *
-            (1 + force * sum(error_forecast[w] for w in 1:nw if BusWind[w] == b)) +
+            (1 + force * sum(arma.S_eta[b, k] * ζ[k].out for k in 1:nz)) +
             sum(flow[b, bp] for bp in Next[b])
         ) for b in Buses
     ]
@@ -220,11 +206,12 @@ l'instant d'arret, il faut donc enumerer les decalages.
 function subproblem_builder_UC_def(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
-    power, is_on, start_up, start_down = _declare_states!(subproblem, instance)
+    power, is_on, start_up, start_down, ζ = _declare_states!(subproblem, instance)
 
     if node == 1
         _commitment_constraints!(subproblem, instance, is_on, start_up, start_down)
         @constraint(subproblem, [i in 1:N], power[i].out == power[i].in)
+        @constraint(subproblem, [i in eachindex(ζ)], ζ[i].out == ζ[i].in)
         return JuMP.ConstraintRef[]
     end
 
@@ -249,7 +236,7 @@ function subproblem_builder_UC_def(instance::MSUC.Instance, force::Float64, subp
         end
     end
     _capacity_and_ramping!(subproblem, instance, power, is_on, start_up, start_down, t)
-    return _dispatch_common!(subproblem, instance, force, power, t)
+    return _dispatch_common!(subproblem, instance, force, power, ζ, t)
 end
 
 """
@@ -269,7 +256,7 @@ que fait la passe avant en reinstanciant les coupes.
 function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
-    power, is_on, start_up, start_down = _declare_states!(subproblem, instance)
+    power, is_on, start_up, start_down, ζ = _declare_states!(subproblem, instance)
 
     # gamma_{j,a,b} >= 0, [a:b] in T_j.
     gamma = Dict{Tuple{Int,Int,Int},JuMP.VariableRef}()
@@ -287,6 +274,7 @@ function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64,
     if node == 1
         _commitment_constraints!(subproblem, instance, is_on, start_up, start_down)
         @constraint(subproblem, [i in 1:N], power[i].out == power[i].in)
+        @constraint(subproblem, [i in eachindex(ζ)], ζ[i].out == ζ[i].in)
         return JuMP.ConstraintRef[], gamma
     end
 
@@ -304,5 +292,5 @@ function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64,
         sum(units[i].MaxPower * gamma[i, a, b] for (a, b) in units[i].intervals_t[t] if b > T))
 
     _capacity_and_ramping!(subproblem, instance, power, is_on, start_up, start_down, t)
-    return _dispatch_common!(subproblem, instance, force, power, t), gamma
+    return _dispatch_common!(subproblem, instance, force, power, ζ, t), gamma
 end
