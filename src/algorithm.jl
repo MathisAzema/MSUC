@@ -1066,12 +1066,6 @@ Train the policy for `model`.
     same children, it can cheaply add a cut discovered at one to the other. In
     almost all cases this should be set to `true`.
 
- - `cut_deletion_minimum::Int`: the minimum number of cuts to cache before
-    deleting  cuts from the subproblem. The impact on performance is solver
-    specific; however, smaller values result in smaller subproblems (and
-    therefore quicker solves), at the expense of more time spent performing cut
-    selection.
-
  - `risk_measure`: the risk measure to use at each node. Defaults to
    [`Expectation`](@ref).
 
@@ -1130,7 +1124,6 @@ function train(
     sampling_scheme = InSampleMonteCarlo(),
     cut_type = SINGLE_CUT,
     refine_at_similar_nodes::Bool = true,
-    cut_deletion_minimum::Int = 1,
     backward_sampling_scheme::AbstractBackwardSamplingScheme = CompleteSampler(),
     dashboard::Bool = false,
     parallel_scheme::AbstractParallelScheme = Serial(),
@@ -1243,18 +1236,9 @@ function train(
     if isempty(stopping_rules)
         push!(stopping_rules, SimulationStoppingRule())
     end
-    # Update the nodes with the selected cut type (SINGLE_CUT or MULTI_CUT)
-    # and the cut deletion minimum.
-    if cut_deletion_minimum < 0
-        cut_deletion_minimum = typemax(Int)
-    end
+    # Type de coupe retenu (SINGLE_CUT ou MULTI_CUT).
     for (_, node) in model.nodes
         node.bellman_function.cut_type = cut_type
-        node.bellman_function.global_theta.deletion_minimum =
-            cut_deletion_minimum
-        for oracle in node.bellman_function.local_thetas
-            oracle.deletion_minimum = cut_deletion_minimum
-        end
     end
     dashboard_callback = if dashboard
         launch_dashboard()

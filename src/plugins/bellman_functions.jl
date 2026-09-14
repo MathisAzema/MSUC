@@ -6,38 +6,19 @@
 mutable struct Cut
     intercept::Float64
     coefficients::Dict{Symbol,Float64}
-    non_dominated_count::Int
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
-end
-
-mutable struct SampledState
-    state::Dict{Symbol,Float64}
-    dominating_cut::Cut
-    best_objective::Float64
 end
 
 mutable struct ConvexApproximation
     theta::JuMP.VariableRef
     states::Dict{Symbol,JuMP.VariableRef}
-    # Storage for cut selection
     cuts::Vector{Cut}
-    sampled_states::Vector{SampledState}
-    cuts_to_be_deleted::Vector{Cut}
-    deletion_minimum::Int
 
     function ConvexApproximation(
         theta::JuMP.VariableRef,
         states::Dict{Symbol,JuMP.VariableRef},
-        deletion_minimum::Int,
     )
-        return new(
-            theta,
-            states,
-            Cut[],
-            SampledState[],
-            Cut[],
-            deletion_minimum,
-        )
+        return new(theta, states, Cut[])
     end
 end
 
@@ -77,18 +58,15 @@ function _add_cut(
     V::ConvexApproximation,
     θᵏ::Float64,
     πᵏ::Dict{Symbol,Float64},
-    xᵏ::Dict{Symbol,Float64};
-    cut_selection::Bool = true,
+    xᵏ::Dict{Symbol,Float64},
 )
     for (key, x) in xᵏ
         θᵏ -= πᵏ[key] * x
     end
     _dynamic_range_warning(θᵏ, πᵏ)
-    cut = Cut(θᵏ, πᵏ, 1, nothing)
+    cut = Cut(θᵏ, πᵏ, nothing)
     _add_cut_constraint_to_model(V, cut)
-    if cut_selection
-        _cut_selection_update(V, cut, xᵏ)
-    end
+    push!(V.cuts, cut)
     return
 end
 
@@ -103,83 +81,6 @@ function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
     else
         @constraint(model, expr <= cut.intercept)
     end
-    return
-end
-
-"""
-Internal function: calculate the height of `cut` evaluated at `state`.
-"""
-function _eval_height(cut::Cut, sampled_state::SampledState)
-    height = cut.intercept
-    for (key, value) in cut.coefficients
-        height += value * sampled_state.state[key]
-    end
-    return height
-end
-
-"""
-Internal function: check if the candidate point dominates the incumbent.
-"""
-function _dominates(candidate, incumbent, minimization::Bool)
-    return minimization ? candidate >= incumbent : candidate <= incumbent
-end
-
-function _cut_selection_update(
-    V::ConvexApproximation,
-    cut::Cut,
-    state::Dict{Symbol,Float64},
-)
-    model = JuMP.owner_model(V.theta)
-    is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
-    sampled_state = SampledState(state, cut, NaN)
-    sampled_state.best_objective = _eval_height(cut, sampled_state)
-    # Loop through previously sampled states and compare the height of the most
-    # recent cut against the current best. If this new cut is an improvement,
-    # store this one instead.
-    for old_state in V.sampled_states
-        height = _eval_height(cut, old_state)
-        if _dominates(height, old_state.best_objective, is_minimization)
-            old_state.dominating_cut.non_dominated_count -= 1
-            cut.non_dominated_count += 1
-            old_state.dominating_cut = cut
-            old_state.best_objective = height
-        end
-    end
-    push!(V.sampled_states, sampled_state)
-    # Now loop through previously discovered cuts and compare their height at
-    # `sampled_state`. If a cut is an improvement, add it to a queue to be
-    # added.
-    for old_cut in V.cuts
-        if old_cut.constraint_ref !== nothing
-            # We only care about cuts not currently in the model.
-            continue
-        end
-        height = _eval_height(old_cut, sampled_state)
-        if _dominates(height, sampled_state.best_objective, is_minimization)
-            sampled_state.dominating_cut.non_dominated_count -= 1
-            old_cut.non_dominated_count += 1
-            sampled_state.dominating_cut = old_cut
-            sampled_state.best_objective = height
-            _add_cut_constraint_to_model(V, old_cut)
-        end
-    end
-    push!(V.cuts, cut)
-    # Delete cuts that need to be deleted.
-    for cut in V.cuts
-        if cut.non_dominated_count < 1
-            if cut.constraint_ref !== nothing
-                push!(V.cuts_to_be_deleted, cut)
-            end
-        end
-    end
-    if length(V.cuts_to_be_deleted) >= V.deletion_minimum
-        for cut in V.cuts_to_be_deleted
-            JuMP.delete(model, cut.constraint_ref)
-            cut.constraint_ref = nothing
-            cut.non_dominated_count = 0
-        end
-    end
-    empty!(V.cuts_to_be_deleted)
     return
 end
 
@@ -237,20 +138,17 @@ end
     BellmanFunction(;
         lower_bound = -Inf,
         upper_bound = Inf,
-        deletion_minimum::Int = 1,
         cut_type::CutType = MULTI_CUT,
     )
 """
 function BellmanFunction(;
     lower_bound = -Inf,
     upper_bound = Inf,
-    deletion_minimum::Int = 1,
     cut_type::CutType = MULTI_CUT,
 )
     return InstanceFactory{BellmanFunction}(;
         lower_bound = lower_bound,
         upper_bound = upper_bound,
-        deletion_minimum = deletion_minimum,
         cut_type = cut_type,
     )
 end
@@ -264,8 +162,7 @@ function initialize_bellman_function(
     model::PolicyGraph{T},
     node::Node{T},
 ) where {T}
-    lower_bound, upper_bound, deletion_minimum, cut_type =
-        -Inf, Inf, 0, SINGLE_CUT
+    lower_bound, upper_bound, cut_type = -Inf, Inf, SINGLE_CUT
     if length(factory.args) > 0
         error(
             "Positional arguments $(factory.args) ignored in BellmanFunction.",
@@ -276,8 +173,6 @@ function initialize_bellman_function(
             lower_bound = value
         elseif kw == :upper_bound
             upper_bound = value
-        elseif kw == :deletion_minimum
-            deletion_minimum = value
         elseif kw == :cut_type
             cut_type = value
         else
@@ -310,7 +205,7 @@ function initialize_bellman_function(
     x′ = Dict(key => var.out for (key, var) in node.states)
     return BellmanFunction(
         cut_type,
-        ConvexApproximation(Θᴳ, x′, deletion_minimum),
+        ConvexApproximation(Θᴳ, x′),
         ConvexApproximation[],
         Set{Vector{Float64}}(),
     )
@@ -626,47 +521,9 @@ function _add_locals_if_necessary(
     for local_theta in local_thetas
         push!(
             bellman_function.local_thetas,
-            ConvexApproximation(
-                local_theta,
-                global_theta.states,
-                global_theta.deletion_minimum,
-            ),
+            ConvexApproximation(local_theta, global_theta.states),
         )
     end
     return
 end
 
-"""
-    add_all_cuts(model::PolicyGraph)
-
-Add all cuts that may have been deleted back into the model.
-
-## Explanation
-
-During the solve, MSUC.jl may decide to remove cuts for a variety of reasons.
-
-These can include cuts that define the optimal value function, particularly
-around the extremes of the state-space (e.g., reservoirs empty).
-
-This function ensures that all cuts discovered are added back into the model.
-
-You should call this after [`train`](@ref) and before [`simulate`](@ref).
-"""
-function add_all_cuts(model::PolicyGraph)
-    for node in values(model.nodes)
-        global_theta = node.bellman_function.global_theta
-        for cut in global_theta.cuts
-            if cut.constraint_ref === nothing
-                _add_cut_constraint_to_model(global_theta, cut)
-            end
-        end
-        for approximation in node.bellman_function.local_thetas
-            for cut in approximation.cuts
-                if cut.constraint_ref === nothing
-                    _add_cut_constraint_to_model(approximation, cut)
-                end
-            end
-        end
-    end
-    return
-end
