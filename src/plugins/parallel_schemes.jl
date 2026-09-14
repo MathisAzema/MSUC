@@ -13,7 +13,6 @@ function _should_log(options, log_frequency::Function)
 end
 
 function log_iteration(options; force_if_needed::Bool = false)
-    options.dashboard_callback(options.log[end], false)
     force_if_needed &= options.last_log_iteration[] != length(options.log)
     if force_if_needed || _should_log(options, options.log_frequency)
         print_helper(print_iteration, options.log_file_handle, options.log[end])

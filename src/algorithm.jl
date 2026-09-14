@@ -96,7 +96,6 @@ struct Options{T}
     # A list of nodes that contain a subset of the children of node i.
     similar_children::Dict{T,Vector{T}}
     stopping_rules::Vector{AbstractStoppingRule}
-    dashboard_callback::Function
     print_level::Int
     start_time::Float64
     log::Vector{Log}
@@ -120,7 +119,6 @@ struct Options{T}
         risk_measures = Expectation(),
         refine_at_similar_nodes::Bool = true,
         stopping_rules::Vector{AbstractStoppingRule} = AbstractStoppingRule[],
-        dashboard_callback::Function = (a, b) -> nothing,
         print_level::Int = 0,
         start_time::Float64 = 0.0,
         log::Vector{Log} = Log[],
@@ -141,7 +139,6 @@ struct Options{T}
             build_Φ(model),
             get_same_children(model),
             stopping_rules,
-            dashboard_callback,
             print_level,
             start_time,
             log,
@@ -1084,9 +1081,6 @@ Train the policy for `model`.
  - `cut_type`: choose between `MSUC.SINGLE_CUT` and `MSUC.MULTI_CUT` versions of
    MSUC.
 
- - `dashboard::Bool`: open a visualization of the training over time. Defaults
-    to `false`.
-
  - `parallel_scheme::AbstractParallelScheme`: specify a scheme for solving in
    parallel. Defaults to `Threaded()`.
 
@@ -1125,7 +1119,6 @@ function train(
     cut_type = SINGLE_CUT,
     refine_at_similar_nodes::Bool = true,
     backward_sampling_scheme::AbstractBackwardSamplingScheme = CompleteSampler(),
-    dashboard::Bool = false,
     parallel_scheme::AbstractParallelScheme = Serial(),
     forward_pass::AbstractForwardPass = DefaultForwardPass(),
     forward_pass_resampling_probability::Union{Nothing,Float64} = nothing,
@@ -1240,11 +1233,6 @@ function train(
     for (_, node) in model.nodes
         node.bellman_function.cut_type = cut_type
     end
-    dashboard_callback = if dashboard
-        launch_dashboard()
-    else
-        (::Any, ::Any) -> nothing
-    end
     options = Options(
         model,
         model.initial_root_state;
@@ -1253,7 +1241,6 @@ function train(
         risk_measures = risk_measure,
         refine_at_similar_nodes,
         stopping_rules,
-        dashboard_callback,
         print_level,
         start_time = time(),
         log,
@@ -1285,8 +1272,6 @@ function train(
             throw(ex)
         end
     finally
-        # And close the dashboard callback if necessary.
-        dashboard_callback(nothing, true)
     end
     training_results = TrainingResults(status, log)
     model.most_recent_training_results = training_results
