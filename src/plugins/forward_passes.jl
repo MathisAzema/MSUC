@@ -134,28 +134,7 @@ function forward_pass(
                 end
             end
             if node.index == 1
-                for (node_name, node) in model.nodes
-                    # println(node_name)
-                    # println("Selected Intervals at node 1: ", selected_intervals)
-                    if node_name == 1
-                        continue
-                    end
-                    t = node_name - 1
-                    # println(t)
-                    # Reinstanciation de chaque coupe (39) au planning gamma courant.
-                    # C'est ce qui donne la ligne d'epigraphe (41g) sans porter les
-                    # produits gamma * ytilde comme variables.
-                    for cut in node.interval_cuts
-                        cstr = cut.constraint_ref
-                        rhs = cut.alpha + sum(cut.tau[j,a,b] for (j,a,b) in selected_intervals; init=0.0)
-                        set_normalized_rhs(cstr, rhs)
-                        set_normalized_coefficient.(
-                            cstr,
-                            [node.states[Symbol("power[$(i)]")].out for i in 1:instance.N],
-                            [-sum(cut.beta[j,a,b] for (j,a,b) in selected_intervals if j == i; init=0.0) for i in 1:instance.N],
-                        )
-                    end
-                end
+                reinstantiate_interval_cuts!(model, selected_intervals)
             end
 
             incoming_state_power = Float64[]
@@ -173,8 +152,10 @@ function forward_pass(
             # println((node.index, value(node.bellman_function.global_theta.theta), stage_objective_value(node, node.stage_objective), objective_value(node.subproblem)))
 
             if node_index == 1
-                # Borne inferieure de l'iteration : valeur optimale du probleme racine
-                # (26) avec l'approximation courante V^{ext,k-1} (Alg. 2, ligne 5).
+                # Borne inferieure de l'iteration : probleme racine (26) avec
+                # l'approximation courante (Alg. 2, ligne 5). C'est un MIP, donc on prend
+                # sa borne DUALE : l'incumbent majore l'optimum de la tolerance MIPGap et
+                # ne serait pas une borne valide. La trajectoire, elle, utilise l'incumbent.
                 lower_bound = JuMP.objective_bound(node.subproblem)
             end
         finally
@@ -212,6 +193,48 @@ function forward_pass(
         cumulative_value = cumulative_value,
         lower_bound = lower_bound,
     )
+end
+
+"""
+    reinstantiate_interval_cuts!(model, selected_intervals)
+
+Reecrit chaque coupe intervalle (39) deja stockee, au planning `selected_intervals`.
+
+C'est le mecanisme central de l'implementation : les coupes gardent leurs coefficients
+PAR INTERVALLE (`tau`, `beta`), et la ligne d'epigraphe effective du sous-probleme est
+reconstruite en sommant sur les intervalles selectionnes. On obtient ainsi (41g) sans
+jamais porter les produits gamma * ytilde comme variables.
+
+A appeler des que le planning change : apres la resolution de la racine dans la passe
+avant, et avant toute simulation de politique.
+"""
+function reinstantiate_interval_cuts!(
+    model::PolicyGraph,
+    selected_intervals::Vector{Tuple{Int,Int,Int}},
+)
+    N = model.instance.N
+    for (node_name, node) in model.nodes
+        node_name == 1 && continue
+        for cut in node.interval_cuts
+            cstr = cut.constraint_ref
+            set_normalized_rhs(
+                cstr,
+                cut.alpha +
+                sum(cut.tau[j, a, b] for (j, a, b) in selected_intervals; init = 0.0),
+            )
+            set_normalized_coefficient.(
+                cstr,
+                [node.states[Symbol("power[$(i)]")].out for i in 1:N],
+                [
+                    -sum(
+                        cut.beta[j, a, b] for (j, a, b) in selected_intervals if j == i;
+                        init = 0.0
+                    ) for i in 1:N
+                ],
+            )
+        end
+    end
+    return
 end
 
 mutable struct RevisitingForwardPass <: AbstractForwardPass

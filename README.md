@@ -130,33 +130,60 @@ là où la 3-bin plafonne à 5 %.
 > `force = 0` — seul régime où la comparaison à l'optimum exact est licite.
 
 
-### Exemple jouet : les deux formulations convergent
+### Exemple jouet : encadrement complet de l'optimum
 
-À `T = 24` la 3-bin est trop lente pour converger, on ne peut donc pas vérifier qu'elle
-atteint le **même** optimum. [`examples/toy_convergence.jl`](examples/toy_convergence.jl)
-raccourcit l'horizon à `T = 4` (55 intervalles au lieu de 2025), où les deux convergent :
+À `T = 24` la 3-bin ne converge pas et l'arbre de scénarios est hors de portée. À `T = 4`
+avec `S = 2`, l'arbre n'a que $2^4 = 16$ feuilles : on calcule l'optimum multi-étapes
+**exact** par son équivalent déterministe et on encadre sans rien supposer.
+[`examples/toy_convergence.jl`](examples/toy_convergence.jl) :
 
 ```bash
 julia --project=. examples/toy_convergence.jl
 ```
 
-Optimum exact **233 802,50** :
+$$\underbrace{\text{borne inférieure}}_{\text{entraînement}} \;\le\; \underbrace{\text{optimum}}_{\text{arbre exact}} \;\le\; \underbrace{\text{coût de la politique}}_{\text{simulation}}$$
+
+Optimum multi-étapes exact = **235 205,1131** (arbre de 31 nœuds) :
 
 | itération | intervalle (39) | % opt. | 3-bin (13) | % opt. |
 |---|---|---|---|---|
-| 1 | 43 262,46 | 18,50 | 43 262,46 | 18,50 |
-| 3 | 216 650,09 | 92,66 | 47 499,60 | 20,32 |
-| 5 | 233 548,40 | 99,89 | 216 309,14 | 92,52 |
-| **8** | **233 802,50** | **100,00** | 233 401,05 | 99,83 |
-| **14** | 233 802,50 | 100,00 | **233 802,50** | **100,00** |
+| 1 | 43 262,46 | 18,4 | 43 262,46 | 18,4 |
+| 3 | 220 124,06 | 93,6 | 47 397,96 | 20,2 |
+| **6** | **235 205,11** | **100,0** | 224 640,38 | 95,5 |
+| **15** | 235 205,11 | 100,0 | **235 205,11** | **100,0** |
 
-Les deux atteignent exactement le même optimum — c'est la **Proposition 3 vérifiée
-numériquement** (gaps respectifs 1,2·10⁻¹⁶ et 0) — la formulation intervalle en **8
-itérations contre 14**. Le script se termine sur deux `@assert` : égalité des deux bornes
-finales, et aucune ne dépasse l'optimum.
+| | borne | politique | encadrement |
+|---|---|---|---|
+| intervalle (39) | 235 205,1131 | 235 205,1131 | $-5\cdot10^{-16}$ |
+| 3-bin (13) | 235 205,1131 | 235 205,1131 | $0$ |
 
-C'est le test de non-régression le plus fort du dépôt : il vérifie la validité *et*
-l'équivalence, en une dizaine de secondes.
+Les trois quantités coïncident à la précision machine, pour les deux formulations — la
+formulation intervalle en **6 itérations contre 15**. C'est la vérification la plus
+complète du dépôt : elle couvre la validité des coupes, l'équivalence de la
+**Proposition 3**, le processus ARMA, l'état $\zeta$ et les coefficients $\tilde\delta$.
+
+Trois briques la rendent possible :
+
+- **`multistage_extensive(instance; force)`** — équivalent déterministe de l'arbre de
+  scénarios, donc l'optimum **exact** du problème multi-étapes (1) avec la
+  non-anticipativité (1j). À ne pas confondre avec `bin_extensive_neutral`, qui est
+  **deux-étages** : son dispatch voit toute la trajectoire d'un coup, elle *minore* le
+  multi-étapes. L'arbre a $\sum_{t=0}^{T} S^t$ nœuds, donc n'est tractable que pour
+  $S$ et $T$ petits. Les lignes (44) n'y sont pas imposées — sur l'horizon complet elles
+  sont impliquées par les rampes — ce qui rend la référence indépendante de (44) et (46).
+- **`simulate_policy(model)`** — coût espéré de la politique entraînée, donc un
+  **majorant** de l'optimum. L'engagement est figé (état sortant de la racine), les coupes
+  intervalles réinstanciées à ce planning, puis chaque chemin est parcouru en résolvant les
+  sous-problèmes d'étage. Le coût d'étage exclut la variable d'épigraphe : on mesure le coût
+  réellement encouru, pas l'approximation de la valeur future. Énumère les $S^T$ chemins
+  quand c'est tractable (coût espéré **exact**, aucune erreur d'échantillonnage), sinon tire
+  `samples` chemins avec une graine.
+- **`scenario_tree(instance, T)`** — l'arbre lui-même. La récursion (1g) y est évaluée
+  numériquement, donc $\zeta$ n'est pas une variable du programme étendu.
+
+> ⚠️ La comparaison à `bin_extensive_neutral` (deux-étages) ne vaut qu'en `force = 0`, où
+> les deux modèles d'aléa coïncident. En stochastique, la référence est
+> `multistage_extensive`.
 
 ---
 

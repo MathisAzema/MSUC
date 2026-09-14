@@ -29,7 +29,7 @@ Convention : quand un point change de statut, ajouter une ligne dans le [Journal
 | R1 | Refonte du calcul de $\hat Q_{j,a,b,t}$ | **FAIT** |
 | NOT | Alignement de la notation sur l'article | **FAIT** |
 | E1 | Processus ARMA $\zeta$ (1g) | **FAIT** — ARMA(1,1) de PSCC (40), état $\zeta$, coefficient $\tilde\delta$ |
-| S1 | Aucun test automatisé | **PARTIEL** — `examples/toy_convergence.jl` vérifie validité + Prop. 3 |
+| S1 | Aucun test automatisé | **PARTIEL** — `examples/toy_convergence.jl` encadre l'optimum exact (borne / arbre / politique) |
 | B8 | Convention $b = T+1$ absente de `set_intervals` | **FAIT** |
 | B9 | Borne = incumbent du MIP racine au lieu de sa borne duale | **FAIT** |
 | S4 | Runs stochastiques non reproductibles (pas de graine) | TODO |
@@ -562,6 +562,7 @@ La vraie borne inférieure est le **premier** nombre de `Lower bound: <LB>, <co�
 | 2026-09-13 | R1 | `local_support` remplace `compute_Q_jab_MSUC` : renvoie $(\hat h,\hat\beta)$ directement. Supprime la soustraction catastrophique $z(y-R^D)-zy$ → coefficients exacts, borne it.10 : 1 817 736 → **1 820 387** |
 | 2026-09-13 | B4,B5,B6,B7 | γ dupliqué supprimé ; `parse_IEEE` réparé ; borne réelle dans le journal ; HTTP+dashboard retirés → **Julia 1.12 fonctionne** |
 | 2026-09-13 | E2,E3 | Lignes (44) implémentées côté 3-bin (plus de variables γ dans le builder 3-bin) ; bruit partagé via `forecast_error_support` |
+| 2026-09-14 | S1 | `multistage_extensive` (équivalent déterministe de l'arbre) et `simulate_policy` (majorant par simulation exhaustive). À T=4, S=2 : borne = optimum = politique = 235 205,1131 pour les **deux** formulations, en 6 et 15 itérations. Valide l'ARMA, l'état $\zeta$ et $\tilde\delta$ |
 | 2026-09-14 | B9 | **La borne publiée n'était pas valide** : `objective_value` du MIP racine renvoie l'incumbent, qui majore l'optimum de la tolérance `MIPGap`. Remplacé par `objective_bound` (borne duale) via `root_outer_bound`, et publication du **maximum courant** des bornes duales — celles-ci sont valides mais non monotones. Corrige aussi les reculs de borne observés à $\sigma = 3$ |
 | 2026-09-14 | E1 | **Processus ARMA implémenté** : ARMA(p,q) sous forme d'état (1g) avec les paramètres PSCC (40), $\zeta$ comme variable d'état, et le coefficient de coupe $\tilde\delta_t = \Psi^\top(S_\eta^\top \hat D_t \bar\nu + \tilde\delta^\sigma_{t+1})$ des éq. (10)/(12)/(40b). Discrétisation à support fini paramétrable (Gauss-Hermite ou équiprobable, variance renormalisée). Vérifié : récursion conforme à (40) à 1e-18, $\delta^\xi/\delta^\eta = \Theta_1/\Phi_1$, non-régression exacte à `force = 0` |
 | 2026-09-14 | B8 | **Convention $b = T+1$ (Sect. 3.1) absente** de `set_intervals` : les intervalles $[a, T{+}1]$ ne respectant pas la durée minimale de marche étaient exclus. L'ensemble admissible du premier étage était donc **plus petit** que celui de la 3-bin, cassant la Prop. 3 (57 intervalles manquants à T=24 ; root infaisable à T=4). `set_intervals_t` dérive maintenant de `set_intervals` par filtrage, ce qui garantit $T_j(t) \subseteq T_j$ |

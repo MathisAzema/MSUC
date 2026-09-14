@@ -34,6 +34,7 @@ include("UC/Unit/Thermal_unit.jl")
 include("UC/Unit/Line.jl")
 include("UC/Struct/parsing.jl")
 include("UC/extensive_formulation.jl")
+include("UC/multistage_extensive.jl")
 
 # Modelling interface.
 include("user_interface.jl")
@@ -63,6 +64,9 @@ include("plugins/duality_handlers.jl")
 include("plugins/parallel_schemes.jl")
 include("plugins/backward_sampling_schemes.jl")
 include("plugins/forward_passes.jl")
+
+# Simulation de politique (utilise reinstantiate_interval_cuts!)
+include("UC/simulation.jl")
 
 # Visualization related code.
 
