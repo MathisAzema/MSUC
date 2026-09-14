@@ -6,16 +6,12 @@
 mutable struct Cut
     intercept::Float64
     coefficients::Dict{Symbol,Float64}
-    obj_y::Union{Nothing,NTuple{N,Float64} where {N}}
-    belief_y::Union{Nothing,Dict{T,Float64} where {T}}
     non_dominated_count::Int
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
 end
 
 mutable struct SampledState
     state::Dict{Symbol,Float64}
-    obj_y::Union{Nothing,NTuple{N,Float64} where {N}}
-    belief_y::Union{Nothing,Dict{T,Float64} where {T}}
     dominating_cut::Cut
     best_objective::Float64
 end
@@ -23,8 +19,6 @@ end
 mutable struct ConvexApproximation
     theta::JuMP.VariableRef
     states::Dict{Symbol,JuMP.VariableRef}
-    objective_states::Union{Nothing,NTuple{N,JuMP.VariableRef} where {N}}
-    belief_states::Union{Nothing,Dict{T,JuMP.VariableRef} where {T}}
     # Storage for cut selection
     cuts::Vector{Cut}
     sampled_states::Vector{SampledState}
@@ -34,15 +28,11 @@ mutable struct ConvexApproximation
     function ConvexApproximation(
         theta::JuMP.VariableRef,
         states::Dict{Symbol,JuMP.VariableRef},
-        objective_states,
-        belief_states,
         deletion_minimum::Int,
     )
         return new(
             theta,
             states,
-            objective_states,
-            belief_states,
             Cut[],
             SampledState[],
             Cut[],
@@ -87,16 +77,14 @@ function _add_cut(
     V::ConvexApproximation,
     θᵏ::Float64,
     πᵏ::Dict{Symbol,Float64},
-    xᵏ::Dict{Symbol,Float64},
-    obj_y::Union{Nothing,NTuple{N,Float64}},
-    belief_y::Union{Nothing,Dict{T,Float64}};
+    xᵏ::Dict{Symbol,Float64};
     cut_selection::Bool = true,
-) where {N,T}
+)
     for (key, x) in xᵏ
         θᵏ -= πᵏ[key] * x
     end
     _dynamic_range_warning(θᵏ, πᵏ)
-    cut = Cut(θᵏ, πᵏ, obj_y, belief_y, 1, nothing)
+    cut = Cut(θᵏ, πᵏ, 1, nothing)
     _add_cut_constraint_to_model(V, cut)
     if cut_selection
         _cut_selection_update(V, cut, xᵏ)
@@ -106,20 +94,9 @@ end
 
 function _add_cut_constraint_to_model(V::ConvexApproximation, cut::Cut)
     model = JuMP.owner_model(V.theta)
-    yᵀμ = JuMP.AffExpr(0.0)
-    if V.objective_states !== nothing
-        for (y, μ) in zip(cut.obj_y, V.objective_states)
-            JuMP.add_to_expression!(yᵀμ, y, μ)
-        end
-    end
-    if V.belief_states !== nothing
-        for (k, μ) in V.belief_states
-            JuMP.add_to_expression!(yᵀμ, cut.belief_y[k], μ)
-        end
-    end
     expr = @expression(
         model,
-        V.theta + yᵀμ - sum(cut.coefficients[i] * x for (i, x) in V.states)
+        V.theta - sum(cut.coefficients[i] * x for (i, x) in V.states)
     )
     cut.constraint_ref = if JuMP.objective_sense(model) == MOI.MIN_SENSE
         @constraint(model, expr >= cut.intercept)
@@ -154,16 +131,12 @@ function _cut_selection_update(
 )
     model = JuMP.owner_model(V.theta)
     is_minimization = JuMP.objective_sense(model) == MOI.MIN_SENSE
-    sampled_state = SampledState(state, cut.obj_y, cut.belief_y, cut, NaN)
+    sampled_state = SampledState(state, cut, NaN)
     sampled_state.best_objective = _eval_height(cut, sampled_state)
     # Loop through previously sampled states and compare the height of the most
     # recent cut against the current best. If this new cut is an improvement,
     # store this one instead.
     for old_state in V.sampled_states
-        # Only compute cut selection at same points in concave space.
-        if old_state.obj_y != cut.obj_y || old_state.belief_y != cut.belief_y
-            continue
-        end
         height = _eval_height(cut, old_state)
         if _dominates(height, old_state.best_objective, is_minimization)
             old_state.dominating_cut.non_dominated_count -= 1
@@ -179,12 +152,6 @@ function _cut_selection_update(
     for old_cut in V.cuts
         if old_cut.constraint_ref !== nothing
             # We only care about cuts not currently in the model.
-            continue
-        elseif old_cut.obj_y != sampled_state.obj_y
-            # Only compute cut selection at same points in objective space.
-            continue
-        elseif old_cut.belief_y != sampled_state.belief_y
-            # Only compute cut selection at same points in belief space.
             continue
         end
         height = _eval_height(old_cut, sampled_state)
@@ -235,8 +202,7 @@ representation of the value function that is undocumented in the literature.
 It supports three types of state variables:
 
  1) x - convex "resource" states
- 2) b - concave "belief" states
- 3) y - concave "objective" states
+ 2) y - concave "objective" states
 
 In addition, we have three types of cuts:
 
@@ -329,9 +295,6 @@ function initialize_bellman_function(
     Θᴳ = @variable(node.subproblem)
     # lower_bound > -Inf && JuMP.set_lower_bound(Θᴳ, lower_bound)
     # upper_bound < Inf && JuMP.set_upper_bound(Θᴳ, upper_bound)
-    # # Initialize bounds for the objective states. If objective_state==nothing,
-    # # this check will be skipped by dispatch.
-    # _add_initial_bounds(node.objective_state, Θᴳ)
 
     # Coupe initiale nulle : V^{ext,0} = 0, de la forme (27).
     cstr = @constraint(node.subproblem, Θᴳ >= 0.0)
@@ -345,70 +308,12 @@ function initialize_bellman_function(
     push!(node.interval_cuts, IntervalCut(0.0, τ, β, zeros(length(node.states_zeta)), cstr))
 
     x′ = Dict(key => var.out for (key, var) in node.states)
-    obj_μ = node.objective_state !== nothing ? node.objective_state.μ : nothing
-    belief_μ = node.belief_state !== nothing ? node.belief_state.μ : nothing
     return BellmanFunction(
         cut_type,
-        ConvexApproximation(Θᴳ, x′, obj_μ, belief_μ, deletion_minimum),
+        ConvexApproximation(Θᴳ, x′, deletion_minimum),
         ConvexApproximation[],
         Set{Vector{Float64}}(),
     )
-end
-
-# Internal function: helper used in _add_initial_bounds.
-function _add_objective_state_constraint(
-    theta::JuMP.VariableRef,
-    y::NTuple{N,Float64},
-    μ::NTuple{N,JuMP.VariableRef},
-) where {N}
-    is_finite = [-Inf < y[i] < Inf for i in 1:N]
-    model = JuMP.owner_model(theta)
-    lower_bound = JuMP.has_lower_bound(theta) ? JuMP.lower_bound(theta) : -Inf
-    upper_bound = JuMP.has_upper_bound(theta) ? JuMP.upper_bound(theta) : Inf
-    if lower_bound ≈ upper_bound ≈ 0.0
-        @constraint(model, [i = 1:N], μ[i] == 0.0)
-        return
-    end
-    expr = @expression(
-        model,
-        sum(y[i] * μ[i] for i in 1:N if is_finite[i]) + theta
-    )
-    if lower_bound > -Inf
-        @constraint(model, expr >= lower_bound)
-    end
-    if upper_bound < Inf
-        @constraint(model, expr <= upper_bound)
-    end
-    return
-end
-
-# Internal function: When created, θ has bounds of [-M, M], but, since we are
-# adding these μ terms, we really want to bound <y, μ> + θ ∈ [-M, M]. We need to
-# consider all possible values for `y`. Because the domain of `y` is
-# rectangular, we want to add a constraint at each extreme point. This involves
-# adding 2^N constraints where N = |μ|. This is only feasible for
-# low-dimensional problems, e.g., N < 5.
-_add_initial_bounds(::Nothing, ::Any) = nothing
-
-function _add_initial_bounds(obj_state::ObjectiveState, theta)
-    if length(obj_state.μ) < 5
-        for y in
-            Base.product(zip(obj_state.lower_bound, obj_state.upper_bound)...)
-            _add_objective_state_constraint(theta, y, obj_state.μ)
-        end
-    else
-        _add_objective_state_constraint(
-            theta,
-            obj_state.lower_bound,
-            obj_state.μ,
-        )
-        _add_objective_state_constraint(
-            theta,
-            obj_state.upper_bound,
-            obj_state.μ,
-        )
-    end
-    return
 end
 
 function refine_bellman_function(
@@ -641,27 +546,9 @@ function _add_average_cut(
             πᵏ[key] += p * dual
         end
     end
-    # Now add the average-cut to the subproblem. We include the objective-state
-    # component μᵀy and the belief state (if it exists).
-    obj_y =
-        node.objective_state === nothing ? nothing : node.objective_state.state
-    belief_y =
-        node.belief_state === nothing ? nothing : node.belief_state.belief
-    _add_cut(
-        node.bellman_function.global_theta,
-        θᵏ,
-        πᵏ,
-        outgoing_state,
-        obj_y,
-        belief_y,
-    )
-    return (
-        theta = θᵏ,
-        pi = πᵏ,
-        x = outgoing_state,
-        obj_y = obj_y,
-        belief_y = belief_y,
-    )
+    # Coupe moyenne ajoutee au sous-probleme.
+    _add_cut(node.bellman_function.global_theta, θᵏ, πᵏ, outgoing_state)
+    return (theta = θᵏ, pi = πᵏ, x = outgoing_state)
 end
 
 function _add_multi_cut(
@@ -675,17 +562,12 @@ function _add_multi_cut(
     N = length(risk_adjusted_probability)
     @assert N == length(objective_realizations) == length(dual_variables)
     bellman_function = node.bellman_function
-    μᵀy = get_objective_state_component(node)
-    JuMP.add_to_expression!(μᵀy, get_belief_state_component(node))
     for i in 1:length(dual_variables)
         _add_cut(
             bellman_function.local_thetas[i],
             objective_realizations[i],
             dual_variables[i],
             outgoing_state,
-            node.objective_state === nothing ? nothing :
-            node.objective_state.state,
-            node.belief_state === nothing ? nothing : node.belief_state.belief,
         )
     end
     model = JuMP.owner_model(bellman_function.global_theta.theta)
@@ -694,11 +576,11 @@ function _add_multi_cut(
         sum(
             risk_adjusted_probability[i] *
             bellman_function.local_thetas[i].theta for i in 1:N
-        ) - (1 - sum(risk_adjusted_probability)) * μᵀy + offset
+        ) + offset
     )
     # TODO(odow): should we use `cut_expr` instead?
     ξ = copy(risk_adjusted_probability)
-    if !(ξ in bellman_function.risk_set_cuts) || μᵀy != JuMP.AffExpr(0.0)
+    if !(ξ in bellman_function.risk_set_cuts)
         push!(bellman_function.risk_set_cuts, ξ)
         if JuMP.objective_sense(model) == MOI.MIN_SENSE
             @constraint(model, bellman_function.global_theta.theta >= cut_expr)
@@ -747,225 +629,9 @@ function _add_locals_if_necessary(
             ConvexApproximation(
                 local_theta,
                 global_theta.states,
-                node.objective_state === nothing ? nothing :
-                node.objective_state.μ,
-                node.belief_state === nothing ? nothing : node.belief_state.μ,
                 global_theta.deletion_minimum,
             ),
         )
-    end
-    return
-end
-
-"""
-    write_cuts_to_file(
-        model::PolicyGraph{T},
-        filename::String;
-        kwargs...,
-    ) where {T}
-
-Write the cuts that form the policy in `model` to `filename` in JSON format.
-
-## Keyword arguments
-
- - `node_name_parser` is a function which converts the name of each node into a
-    string representation. It has the signature: `node_name_parser(::T)::String`.
-
- - `write_only_selected_cuts` write only the selected cuts to the json file.
-    Defaults to false.
-
-See also [`MSUC.read_cuts_from_file`](@ref).
-"""
-function write_cuts_to_file(
-    model::PolicyGraph{T},
-    filename::String;
-    node_name_parser::Function = string,
-    write_only_selected_cuts::Bool = false,
-) where {T}
-    cuts = Dict{String,Any}[]
-    for (node_name, node) in model.nodes
-        if node.objective_state !== nothing || node.belief_state !== nothing
-            error(
-                "Unable to write cuts to file because model contains " *
-                "objective states or belief states.",
-            )
-        end
-        node_cuts = Dict(
-            "node" => node_name_parser(node_name),
-            "single_cuts" => Dict{String,Any}[],
-            "multi_cuts" => Dict{String,Any}[],
-            "risk_set_cuts" => Vector{Float64}[],
-        )
-        oracle = node.bellman_function.global_theta
-        for (cut, state) in zip(oracle.cuts, oracle.sampled_states)
-            if write_only_selected_cuts && cut.constraint_ref === nothing
-                continue
-            end
-            intercept = cut.intercept
-            for (key, π) in cut.coefficients
-                intercept += π * state.state[key]
-            end
-            push!(
-                node_cuts["single_cuts"],
-                Dict(
-                    "intercept" => intercept,
-                    "coefficients" => copy(cut.coefficients),
-                    "state" => copy(state.state),
-                ),
-            )
-        end
-        for (i, theta) in enumerate(node.bellman_function.local_thetas)
-            for (cut, state) in zip(theta.cuts, theta.sampled_states)
-                if write_only_selected_cuts && cut.constraint_ref === nothing
-                    continue
-                end
-                intercept = cut.intercept
-                for (key, π) in cut.coefficients
-                    intercept += π * state.state[key]
-                end
-                push!(
-                    node_cuts["multi_cuts"],
-                    Dict(
-                        "realization" => i,
-                        "intercept" => intercept,
-                        "coefficients" => copy(cut.coefficients),
-                        "state" => copy(state.state),
-                    ),
-                )
-            end
-        end
-        for p in node.bellman_function.risk_set_cuts
-            push!(node_cuts["risk_set_cuts"], p)
-        end
-        push!(cuts, node_cuts)
-    end
-    open(filename, "w") do io
-        return write(io, JSON.json(cuts))
-    end
-    return
-end
-
-_node_name_parser(::Type{Int}, name::String) = parse(Int, name)
-
-_node_name_parser(::Type{Symbol}, name::String) = Symbol(name)
-
-function _node_name_parser(::Type{NTuple{N,Int}}, name::String) where {N}
-    keys = parse.(Int, strip.(split(name[2:end-1], ",")))
-    if length(keys) != N
-        error("Unable to parse node called $(name). Expected $N elements.")
-    end
-    return tuple(keys...)
-end
-
-function _node_name_parser(::Any, name)
-    return error(
-        "Unable to read name $(name). Provide a custom parser to " *
-        "`read_cuts_from_file` using the `node_name_parser` keyword.",
-    )
-end
-
-"""
-    read_cuts_from_file(
-        model::PolicyGraph{T},
-        filename::String;
-        kwargs...,
-    ) where {T}
-
-Read cuts (saved using [`MSUC.write_cuts_to_file`](@ref)) from `filename` into
-`model`.
-
-Since `T` can be an arbitrary Julia type, the conversion to JSON is lossy. When
-reading, `read_cuts_from_file` only supports `T=Int`, `T=NTuple{N, Int}`, and
-`T=Symbol`. If you have manually created a policy graph with a different node
-type `T`, provide a function `node_name_parser` with the signature
-
-## Keyword arguments
-
- - `node_name_parser(T, name::String)::T where {T}` that returns the name of each
-    node given the string name `name`.
-    If `node_name_parser` returns `nothing`, those cuts are skipped.
-
- - `cut_selection::Bool` run or not the cut selection algorithm when adding the
-    cuts to the model.
-
-See also [`MSUC.write_cuts_to_file`](@ref).
-"""
-function read_cuts_from_file(
-    model::PolicyGraph{T},
-    filename::String;
-    node_name_parser::Function = _node_name_parser,
-    cut_selection::Bool = true,
-) where {T}
-    cuts = JSON.parsefile(filename; use_mmap = false)
-    for node_cuts in cuts
-        node_name = node_name_parser(T, node_cuts["node"])::Union{Nothing,T}
-        if node_name === nothing
-            continue  # Skip reading these cuts
-        end
-        node = model[node_name]
-        bf = node.bellman_function
-        # Loop through and add the single-cuts.
-        for json_cut in node_cuts["single_cuts"]
-            has_state = haskey(json_cut, "state")
-            state = if has_state
-                Dict(Symbol(k) => v for (k, v) in json_cut["state"])
-            else
-                Dict(Symbol(k) => 0.0 for k in keys(json_cut["coefficients"]))
-            end
-            _add_cut(
-                bf.global_theta,
-                json_cut["intercept"],
-                Dict(Symbol(k) => v for (k, v) in json_cut["coefficients"]),
-                state,
-                nothing,
-                nothing;
-                cut_selection = (cut_selection && has_state),
-            )
-        end
-        # Loop through and add the multi-cuts. There are two parts:
-        #  (i) the cuts w.r.t. the state variable x
-        # (ii) the cuts that define the risk set
-        # There is one additional complication: if these cuts are being read
-        # into a new model, the local theta variables may not exist yet.
-        if length(node_cuts["risk_set_cuts"]) > 0
-            _add_locals_if_necessary(
-                node,
-                bf,
-                length(first(node_cuts["risk_set_cuts"])),
-            )
-        end
-        for json_cut in node_cuts["multi_cuts"]
-            has_state = haskey(json_cut, "state")
-            state = if has_state
-                Dict(Symbol(k) => v for (k, v) in json_cut["state"])
-            else
-                Dict(Symbol(k) => 0.0 for k in keys(json_cut["coefficients"]))
-            end
-            _add_cut(
-                bf.local_thetas[json_cut["realization"]],
-                json_cut["intercept"],
-                Dict(Symbol(k) => v for (k, v) in json_cut["coefficients"]),
-                state,
-                nothing,
-                nothing;
-                cut_selection = (cut_selection && has_state),
-            )
-        end
-        # Here is part (ii): adding the constraints that define the risk-set
-        # representation of the risk measure.
-        for json_cut in node_cuts["risk_set_cuts"]
-            expr = @expression(
-                node.subproblem,
-                bf.global_theta.theta - sum(
-                    p * V.theta for (p, V) in zip(json_cut, bf.local_thetas)
-                )
-            )
-            if JuMP.objective_sense(node.subproblem) == MOI.MIN_SENSE
-                @constraint(node.subproblem, expr >= 0)
-            else
-                @constraint(node.subproblem, expr <= 0)
-            end
-        end
     end
     return
 end

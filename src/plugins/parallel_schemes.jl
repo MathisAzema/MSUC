@@ -156,9 +156,7 @@ function slave_update(model::PolicyGraph, result::IterationResult)
                 model[node_index].bellman_function.global_theta,
                 cut.theta,
                 cut.pi,
-                cut.x,
-                cut.obj_y,
-                cut.belief_y;
+                cut.x;
                 cut_selection = true,
             )
         end

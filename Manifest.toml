@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "ba18eda09e55b665dc6f793bd07d5aa91397b288"
+project_hash = "c8315581262c4a4433d1a2ddd151bb59dd224f05"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -410,7 +410,7 @@ uuid = "f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748"
 version = "5.5.4+0"
 
 [[deps.MSUC]]
-deps = ["CSV", "DataFrames", "Distributed", "Gurobi", "JSON", "JuMP", "MutableArithmetics", "NCDatasets", "Printf", "Random", "Reexport", "Statistics", "TimerOutputs"]
+deps = ["CSV", "DataFrames", "Distributed", "Gurobi", "JuMP", "LinearAlgebra", "MutableArithmetics", "NCDatasets", "Printf", "Random", "Reexport", "Statistics", "TimerOutputs"]
 path = "."
 uuid = "c72bd6a2-8f38-4d7b-825b-ee248ce3838b"
 version = "0.1.0"

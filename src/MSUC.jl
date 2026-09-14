@@ -10,7 +10,6 @@ Reexport.@reexport using JuMP
 
 import Distributed
 import LinearAlgebra
-import JSON
 import MutableArithmetics
 import Printf
 import Random
@@ -59,7 +58,6 @@ include("plugins/risk_measures.jl")
 include("plugins/sampling_schemes.jl")
 include("plugins/bellman_functions.jl")
 include("plugins/stopping_rules.jl")
-include("plugins/local_improvement_search.jl")
 include("plugins/duality_handlers.jl")
 include("plugins/parallel_schemes.jl")
 include("plugins/backward_sampling_schemes.jl")

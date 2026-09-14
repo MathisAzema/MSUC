@@ -87,14 +87,8 @@ struct Options{T}
     # The sampling scheme to use on the forward pass.
     sampling_scheme::AbstractSamplingScheme
     backward_sampling_scheme::AbstractBackwardSamplingScheme
-    # Storage for the set of possible sampling states at each node. We only use
-    # this if there is a cycle in the policy graph.
-    starting_states::Dict{T,Vector{Dict{Symbol,Float64}}}
     # Risk measure to use at each node.
     risk_measures::Dict{T,AbstractRiskMeasure}
-    # The delta by which to check if a state is close to a previously sampled
-    # state.
-    cycle_discretization_delta::Float64
     # Flag to add cuts to similar nodes.
     refine_at_similar_nodes::Bool
     # The node transition matrix.
@@ -124,7 +118,6 @@ struct Options{T}
         sampling_scheme::AbstractSamplingScheme = InSampleMonteCarlo(),
         backward_sampling_scheme::AbstractBackwardSamplingScheme = CompleteSampler(),
         risk_measures = Expectation(),
-        cycle_discretization_delta::Float64 = 0.0,
         refine_at_similar_nodes::Bool = true,
         stopping_rules::Vector{AbstractStoppingRule} = AbstractStoppingRule[],
         dashboard_callback::Function = (a, b) -> nothing,
@@ -143,9 +136,7 @@ struct Options{T}
             initial_state,
             sampling_scheme,
             backward_sampling_scheme,
-            to_nodal_form(model, x -> Dict{Symbol,Float64}[]),
             to_nodal_form(model, risk_measures),
-            cycle_discretization_delta,
             refine_at_similar_nodes,
             build_Φ(model),
             get_same_children(model),
@@ -210,22 +201,13 @@ end
 # Internal function: set the objective of node to the stage objective, plus the
 # cost/value-to-go term.
 function set_objective(node::Node{T}) where {T}
-    objective_state_component = get_objective_state_component(node)
-    belief_state_component = get_belief_state_component(node)
-    if objective_state_component != JuMP.AffExpr(0.0) ||
-       belief_state_component != JuMP.AffExpr(0.0)
-        node.stage_objective_set = false
-    end
     if !node.stage_objective_set
         JuMP.set_objective(
             node.subproblem,
             JuMP.objective_sense(node.subproblem),
             @expression(
                 node.subproblem,
-                node.stage_objective +
-                objective_state_component +
-                belief_state_component +
-                bellman_term(node.bellman_function)
+                node.stage_objective + bellman_term(node.bellman_function)
             )
         )
     end
@@ -241,9 +223,6 @@ _value(x) = JuMP.value(x)
 stage_objective_value(::Node, x::Union{GenericVariableRef,Real}) = _value(x)
 
 function stage_objective_value(node::Node, stage_objective)
-    if node.objective_state !== nothing || node.belief_state !== nothing
-        return _value(stage_objective)
-    end
     theta = bellman_term(node.bellman_function)
     return JuMP.objective_value(node.subproblem) - JuMP.value(theta)
 end
@@ -378,13 +357,9 @@ function attempt_numerical_recovery(
     callback(model, node; require_dual)
     missing_dual_solution = require_dual && !_has_dual_solution(node)
     if !_has_primal_solution(node) || missing_dual_solution
-        # We use the `node.index` in the filename because two threads could both
-        # try to write the cuts to file at the same time. If, after writing this
-        # file, a second thread finds an infeasibility of the same node, it
-        # doesn't matter if we over-write this file.
-        filename = "model_infeasible_node_$(node.index).cuts.json"
-        @info "Writing cuts to the file `$filename`"
-        write_cuts_to_file(model, filename)
+        # On ecrit le sous-probleme fautif, rejouable directement dans le solveur.
+        # Le `node.index` est dans le nom parce que deux threads peuvent echouer en
+        # meme temps ; s'ils tombent sur le meme noeud, s'ecraser est sans importance.
         write_subproblem_to_file(
             node,
             "subproblem_$(node.index).mof.json";
@@ -617,62 +592,6 @@ function solve_subproblem_extended(
     )
 end
 
-# Internal function to get the objective state at the root node.
-function initialize_objective_state(first_node::Node)
-    objective_state = first_node.objective_state
-    if objective_state !== nothing
-        initial_objective_state = objective_state.initial_value
-        return initial_objective_state, length(initial_objective_state)
-    else
-        return nothing, 0
-    end
-end
-
-# Internal function: update the objective state given incoming `current_state`
-# and `noise`.
-update_objective_state(::Nothing, ::Any, ::Any) = nothing
-
-function update_objective_state(obj_state, current_state, noise)
-    if length(current_state) == 1
-        obj_state.state = (obj_state.update(current_state[1], noise),)
-    else
-        obj_state.state = obj_state.update(current_state, noise)
-    end
-    return obj_state.state
-end
-
-# Internal function: calculate the initial belief state.
-function initialize_belief(model::PolicyGraph{T}) where {T}
-    current_belief = Dict{T,Float64}(keys(model.nodes) .=> 0.0)
-    current_belief[model.root_node] = 1.0
-    return current_belief
-end
-
-# Internal function: calculate the minimum distance between the state `state`
-# and the list of states in `starting_states` using the distance measure `norm`.
-function distance(
-    starting_states::Vector{Dict{Symbol,Float64}},
-    state::Dict{Symbol,Float64},
-    norm::Function = inf_norm,
-)
-    if length(starting_states) == 0
-        return Inf
-    end
-    return minimum(norm.(starting_states, Ref(state)); init = Inf)
-end
-
-# Internal function: the norm to use when checking the distance between two
-# possible starting states. We're going to use: d(x, y) = |x - y| / (1 + |y|).
-function inf_norm(x::Dict{Symbol,Float64}, y::Dict{Symbol,Float64})
-    norm = 0.0
-    for (key, value) in y
-        if abs(x[key] - value) > norm
-            norm = abs(x[key] - value) / (1 + abs(value))
-        end
-    end
-    return norm
-end
-
 # Internal function: perform a backward pass of the MSUC algorithm along the
 # scenario_path, refining the bellman function at sampled_states. Assumes that
 # scenario_path does not end in a leaf node (i.e., the forward pass was solved
@@ -686,9 +605,7 @@ function backward_pass(
     sampled_states_power::Vector{Vector{Float64}},
     sampled_states_zeta::Vector{Vector{Float64}},
     sampled_states_gamma::Vector{Dict{Tuple{Int, Int,Int},Float64}},
-    objective_states::Vector{NTuple{N,Float64}},
-    belief_states::Vector{Tuple{Int,Dict{T,Float64}}},
-) where {T,NoiseType,N}
+) where {T,NoiseType}
     # TODO(odow): improve storage type.
     cuts = Dict{T,Vector{Any}}(index => Any[] for index in keys(model.nodes))
     for index in length(scenario_path):-1:1
@@ -696,8 +613,6 @@ function backward_pass(
         outgoing_state_power = sampled_states_power[index]
         outgoing_state_zeta = sampled_states_zeta[index]
         outgoing_state_gamma = sampled_states_gamma[index]
-        objective_state = get(objective_states, index, nothing)
-        partition_index, belief_state = get(belief_states, index, (0, nothing))
         node_index, _ = scenario_path[index]
         node = model[node_index]
         if length(node.children) == 0
@@ -709,9 +624,6 @@ function backward_pass(
                 model,
                 node,
                 items,
-                1.0,
-                belief_state,
-                objective_state,
                 outgoing_state,
                 options.backward_sampling_scheme,
                 scenario_path[1:index],
@@ -736,8 +648,6 @@ function backward_pass(
                 model,
                 node,
                 items,
-                1.0,
-                belief_state,
                 outgoing_state,
                 options.backward_sampling_scheme,
                 scenario_path[1:index],
@@ -773,14 +683,12 @@ struct BackwardPassItems{T,U}
     nodes::Vector{T}
     probability::Vector{Float64}
     objectives::Vector{Float64}
-    belief::Vector{Float64}
     function BackwardPassItems(T, U)
         return new{T,U}(
             Dict{Tuple{T,Any},Int}(),
             Dict{Symbol,Float64}[],
             U[],
             T[],
-            Float64[],
             Float64[],
             Float64[],
         )
@@ -798,7 +706,6 @@ struct BackwardPassItems_extended{T,U}
     nodes::Vector{T}
     probability::Vector{Float64}
     objectives::Vector{Float64}
-    belief::Vector{Float64}
     function BackwardPassItems_extended(T, U)
         return new{T,U}(
             Dict{Tuple{T,Any},Int}(),
@@ -806,7 +713,6 @@ struct BackwardPassItems_extended{T,U}
             Vector{Float64}[],
             U[],
             T[],
-            Float64[],
             Float64[],
             Float64[],
         )
@@ -817,9 +723,6 @@ function solve_all_children(
     model::PolicyGraph{T},
     node::Node{T},
     items::BackwardPassItems,
-    belief::Float64,
-    belief_state,
-    objective_state,
     outgoing_state::Dict{Symbol,Float64},
     backward_sampling_scheme::AbstractBackwardSamplingScheme,
     scenario_path,
@@ -829,18 +732,8 @@ function solve_all_children(
     length_scenario_path = length(scenario_path)
     for child in node.children
         # println((node.index, child.term, child.probability))
-        # We _do_ want to solve zero probability nodes, because they might allow
-        # us to cut share between similar nodes of a Markovian policy graph. If
-        # the user put them in, assume that they're there for a reason.
-        #
-        # If we have a belief state, then skip the node. I don't really know
-        # why, but tests failed when I tried to remove this.
-        #
-        # See MSUC.jl#796 and MSUC.jl#797 for more discussion.
-        if belief_state !== nothing &&
-           isapprox(child.probability, 0.0; atol = 1e-6)
-            continue
-        end
+        # On resout aussi les noeuds de probabilite nulle : ils permettent de
+        # partager des coupes entre noeuds similaires d'un graphe markovien.
         child_node = model[child.term]
         lock(child_node.lock)
         try
@@ -868,9 +761,7 @@ function solve_all_children(
                     push!(items.nodes, child_node.index)
                     push!(items.probability, items.probability[sol_index])
                     push!(items.objectives, items.objectives[sol_index])
-                    push!(items.belief, belief)
                 else
-                    # Update belief state, etc.
                     @_timeit_threadsafe model.timer_output "solve_subproblem" begin
                         subproblem_results = solve_subproblem(
                             model,
@@ -889,7 +780,6 @@ function solve_all_children(
                         child.probability * noise.probability,
                     )
                     push!(items.objectives, subproblem_results.objective)
-                    push!(items.belief, belief)
                     items.cached_solutions[(child.term, noise.term)] =
                         length(items.duals)
                 end
@@ -914,8 +804,6 @@ function solve_all_children_extended(
     model::PolicyGraph{T},
     node::Node{T},
     items::BackwardPassItems_extended,
-    belief::Float64,
-    belief_state,
     outgoing_state::Dict{Symbol,Float64},
     backward_sampling_scheme::AbstractBackwardSamplingScheme,
     scenario_path,
@@ -925,10 +813,6 @@ function solve_all_children_extended(
     length_scenario_path = length(scenario_path)
     for child in node.children
         # println((node.index, child.term, child.probability))
-        if belief_state !== nothing &&
-           isapprox(child.probability, 0.0; atol = 1e-6)
-            continue
-        end
         child_node = model[child.term]
         lock(child_node.lock)
         try
@@ -957,9 +841,7 @@ function solve_all_children_extended(
                     push!(items.nodes, child_node.index)
                     push!(items.probability, items.probability[sol_index])
                     push!(items.objectives, items.objectives[sol_index])
-                    push!(items.belief, belief)
                 else
-                    # Update belief state, etc.
                     @_timeit_threadsafe model.timer_output "solve_subproblem" begin
                         subproblem_results = solve_subproblem_extended(
                             model,
@@ -981,7 +863,6 @@ function solve_all_children_extended(
                         child.probability * noise.probability,
                     )
                     push!(items.objectives, subproblem_results.objective)
-                    push!(items.belief, belief)
                     items.cached_solutions[(child.term, noise.term)] =
                         length(items.σ)
                 end
@@ -1022,7 +903,6 @@ function calculate_bound(
     noise_supports = Any[]
     probabilities = Float64[]
     objectives = Float64[]
-    current_belief = initialize_belief(model)
     # Solve all problems that are children of the root node.
     for child in model.root_children
         # It's okay to skip nodes with zero probability.
@@ -1035,24 +915,6 @@ function calculate_bound(
         lock(node.lock)
         try
             for noise in node.noise_terms
-                if node.objective_state !== nothing
-                    update_objective_state(
-                        node.objective_state,
-                        node.objective_state.initial_value,
-                        noise.term,
-                    )
-                end
-                # Update belief state, etc.
-                if node.belief_state !== nothing
-                    belief = node.belief_state::BeliefState{T}
-                    partition_index = belief.partition_index
-                    belief.updater(
-                        belief.belief,
-                        current_belief,
-                        partition_index,
-                        noise.term,
-                    )
-                end
                 subproblem_results = solve_subproblem(
                     model,
                     node,
@@ -1110,8 +972,6 @@ function iteration(model::PolicyGraph{T}, options::Options) where {T}
             forward_trajectory.sampled_states_power,
             forward_trajectory.sampled_states_zeta,
             forward_trajectory.sampled_states_gamma,
-            forward_trajectory.objective_states,
-            forward_trajectory.belief_states,
         )
     end
     # Pour cette formulation a engagement fixe, la borne de l'iteration vient du probleme
@@ -1253,11 +1113,6 @@ Train the policy for `model`.
    `post_iteration_callback(::IterationResult)` that is evaluated after each
    iteration of the algorithm.
 
-There is also a special option for infinite horizon problems
-
- - `cycle_discretization_delta`: the maximum distance between states allowed on
-    the forward pass. This is for advanced users only and needs to be used in
-    conjunction with a different `sampling_scheme`.
 """
 function train(
     model::PolicyGraph;
@@ -1274,7 +1129,6 @@ function train(
     root_node_risk_measure::AbstractRiskMeasure = Expectation(),
     sampling_scheme = InSampleMonteCarlo(),
     cut_type = SINGLE_CUT,
-    cycle_discretization_delta::Float64 = 0.0,
     refine_at_similar_nodes::Bool = true,
     cut_deletion_minimum::Int = 1,
     backward_sampling_scheme::AbstractBackwardSamplingScheme = CompleteSampler(),
@@ -1287,10 +1141,6 @@ function train(
     forward_pass_callback::Function = (x) -> nothing,
     post_iteration_callback = result -> nothing,
 )
-    if any(node -> node.objective_state !== nothing, values(model.nodes))
-        # FIXME(odow): Threaded is broken for objective states
-        parallel_scheme = Serial()
-    end
     log_frequency = something(log_frequency, 1)
     if log_frequency <= 0
         msg = "`log_frequency` must be at least `1`. Got $log_frequency."
@@ -1417,7 +1267,6 @@ function train(
         sampling_scheme,
         backward_sampling_scheme,
         risk_measures = risk_measure,
-        cycle_discretization_delta,
         refine_at_similar_nodes,
         stopping_rules,
         dashboard_callback,
@@ -1491,39 +1340,13 @@ function _simulate(
 
     # Storage for the simulation results.
     simulation = Dict{Symbol,Any}[]
-    current_belief = initialize_belief(model)
     # A cumulator for the stage-objectives.
     cumulative_value = 0.0
 
-    # Objective state interpolation.
-    objective_state_vector, N =
-        initialize_objective_state(model[scenario_path[1][1]])
-    objective_states = NTuple{N,Float64}[]
     for (depth, (node_index, noise)) in enumerate(scenario_path)
         node = model[node_index]
         lock(node.lock)
         try
-            # Objective state interpolation.
-            objective_state_vector = update_objective_state(
-                node.objective_state,
-                objective_state_vector,
-                noise,
-            )
-            if objective_state_vector !== nothing
-                push!(objective_states, objective_state_vector)
-            end
-            if node.belief_state !== nothing
-                belief = node.belief_state::BeliefState{T}
-                partition_index = belief.partition_index
-                current_belief = belief.updater(
-                    belief.belief,
-                    current_belief,
-                    partition_index,
-                    noise,
-                )
-            else
-                current_belief = Dict(node_index => 1.0)
-            end
             # Solve the subproblem.
             subproblem_results = solve_subproblem(
                 model,
@@ -1543,12 +1366,7 @@ function _simulate(
                 :bellman_term =>
                     subproblem_results.objective -
                     subproblem_results.stage_objective,
-                :objective_state => objective_state_vector,
-                :belief => copy(current_belief),
             )
-            if objective_state_vector !== nothing && N == 1
-                store[:objective_state] = store[:objective_state][1]
-            end
             # Loop through the primal variable values that the user wants.
             for variable in variables
                 if haskey(node.subproblem.obj_dict, variable)

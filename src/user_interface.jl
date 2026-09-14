@@ -9,9 +9,6 @@ struct Graph{T}
     # nodes[x] returns a vector of the children of node x and their
     # probabilities.
     nodes::Dict{T,Vector{Tuple{T,Float64}}}
-    # A partition of the nodes into ambiguity sets.
-    belief_partition::Vector{Vector{T}}
-    belief_lipschitz::Vector{Vector{Float64}}
 end
 
 """
@@ -51,8 +48,6 @@ function Graph(root_node::T) where {T}
     return Graph{T}(
         root_node,
         Dict{T,Vector{Tuple{T,Float64}}}(root_node => Tuple{T,Float64}[]),
-        Vector{T}[],
-        Vector{Float64}[],
     )
 end
 
@@ -93,12 +88,6 @@ function Base.show(io::IO, graph::Graph)
     if !has_arc
         print(io, "\n {}")
     end
-    if length(graph.belief_partition) > 0
-        print(io, "\nPartitions")
-        for element in graph.belief_partition
-            print(io, "\n {", join(string.(sort_nodes(element)), ", "), "}")
-        end
-    end
     return
 end
 
@@ -113,22 +102,6 @@ function _validate_graph(graph::Graph)
                     "$(probability), but this must be in [0.0, 1.0]",
                 )
             end
-        end
-    end
-    if length(graph.belief_partition) > 0
-        # The -1 accounts for the root node, which shouldn't be in the
-        # partition.
-        if graph.root_node in union(graph.belief_partition...)
-            error(
-                "Belief partition $(graph.belief_partition) cannot contain " *
-                "the root node $(graph.root_node).",
-            )
-        end
-        if length(graph.nodes) - 1 != length(union(graph.belief_partition...))
-            error(
-                "Belief partition $(graph.belief_partition) does not form a" *
-                " valid partition of the nodes in the graph.",
-            )
         end
     end
     return
@@ -238,128 +211,16 @@ function add_edge(
     return
 end
 
-"""
-    add_ambiguity_set(
-        graph::Graph{T},
-        set::Vector{T},
-        lipschitz::Vector{Float64},
-    ) where {T}
-
-Add `set` to the belief partition of `graph`.
-
-`lipschitz` is a vector of Lipschitz constants, with one element for each node
-in `set`. The Lipschitz constant is the maximum slope of the cost-to-go function
-with respect to the belief state associated with each node at any point in the
-state-space.
-
-## Examples
-
-```julia
-julia> graph = MSUC.LinearGraph(3)
-Root
- 0
-Nodes
- 1
- 2
- 3
-Arcs
- 0 => 1 w.p. 1.0
- 1 => 2 w.p. 1.0
- 2 => 3 w.p. 1.0
-
-julia> MSUC.add_ambiguity_set(graph, [1, 2], [1e3, 1e2])
-
-julia> MSUC.add_ambiguity_set(graph, [3], [1e5])
-
-julia> graph
-Root
- 0
-Nodes
- 1
- 2
- 3
-Arcs
- 0 => 1 w.p. 1.0
- 1 => 2 w.p. 1.0
- 2 => 3 w.p. 1.0
-Partitions
- {1, 2}
- {3}
-```
-"""
-function add_ambiguity_set(
-    graph::Graph{T},
-    set::Vector{T},
-    lipschitz::Vector{Float64},
-) where {T}
-    if any(l -> l < 0.0, lipschitz)
-        error("Cannot provide negative Lipschitz constant: $(lipschitz)")
-    elseif length(set) != length(lipschitz)
-        error(
-            "You must provide on Lipschitz contsant for every element in " *
-            "the ambiguity set.",
-        )
-    end
-    push!(graph.belief_partition, set)
-    push!(graph.belief_lipschitz, lipschitz)
-    return
-end
-
-"""
-    add_ambiguity_set(graph::Graph{T}, set::Vector{T}, lipschitz::Float64)
-
-Add `set` to the belief partition of `graph`.
-
-`lipschitz` is a Lipschitz constant for each node in `set`. The Lipschitz
-constant is the maximum slope of the cost-to-go function with respect to the
-belief state associated with each node at any point in the state-space.
-
-## Examples
-
-```julia
-julia> graph = MSUC.LinearGraph(3);
-
-julia> MSUC.add_ambiguity_set(graph, [1, 2], 1e3)
-
-julia> MSUC.add_ambiguity_set(graph, [3], 1e5)
-
-julia> graph
-Root
- 0
-Nodes
- 1
- 2
- 3
-Arcs
- 0 => 1 w.p. 1.0
- 1 => 2 w.p. 1.0
- 2 => 3 w.p. 1.0
-Partitions
- {1, 2}
- {3}
-```
-"""
-function add_ambiguity_set(
-    graph::Graph{T},
-    set::Vector{T},
-    lipschitz::Float64 = 1e5,
-) where {T}
-    return add_ambiguity_set(graph, set, fill(lipschitz, length(set)))
-end
-
 function Graph(
     root_node::T,
     nodes::Vector{T},
-    edges::Vector{Tuple{Pair{T,T},Float64}};
-    belief_partition::Vector{Vector{T}} = Vector{T}[],
-    belief_lipschitz::Vector{Vector{Float64}} = Vector{Float64}[],
+    edges::Vector{Tuple{Pair{T,T},Float64}},
 ) where {T}
     graph = Graph(root_node)
     add_node.(Ref(graph), nodes)
     for (edge, probability) in edges
         add_edge(graph, edge, probability)
     end
-    add_ambiguity_set.(Ref(graph), belief_partition, belief_lipschitz)
     return graph
 end
 
@@ -582,23 +443,6 @@ struct State{T}
     out::T
 end
 
-mutable struct ObjectiveState{N}
-    update::Function
-    initial_value::NTuple{N,Float64}
-    state::NTuple{N,Float64}
-    lower_bound::NTuple{N,Float64}
-    upper_bound::NTuple{N,Float64}
-    μ::NTuple{N,JuMP.VariableRef}
-end
-
-# Storage for belief-related things.
-struct BeliefState{T}
-    partition_index::Int
-    belief::Dict{T,Float64}
-    μ::Dict{T,JuMP.VariableRef}
-    updater::Function
-end
-
 """
     IntervalCut
 
@@ -649,10 +493,6 @@ mutable struct Node{T}
     stage_objective_set::Bool
     # Bellman function
     bellman_function::Any  # TODO(odow): make this a concrete type?
-    # For dynamic interpolation of objective states.
-    objective_state::Union{Nothing,ObjectiveState}
-    # For dynamic interpolation of belief states.
-    belief_state::Union{Nothing,BeliefState{T}}
     # An over-loadable hook for the JuMP.optimize! function.
     pre_optimize_hook::Union{Nothing,Function}
     post_optimize_hook::Union{Nothing,Function}
@@ -725,8 +565,6 @@ mutable struct PolicyGraph{T}
     initial_root_state::Dict{Symbol,Float64}
     # All nodes in the graph.
     nodes::Dict{T,Node{T}}
-    # Belief partition.
-    belief_partition::Vector{Set{T}}
     # Storage for the most recent training results.
     most_recent_training_results::Union{Nothing,TrainingResults}
     # An extension dictionary. This is a useful place for packages that extend
@@ -753,7 +591,6 @@ mutable struct PolicyGraph{T}
             Noise{T}[],
             Dict{Symbol,Float64}(),
             Dict{T,Node{T}}(),
-            Set{T}[],
             nothing,
             Dict{Symbol,Any}(),
             TimerOutputs.TimerOutput(),
@@ -1015,10 +852,6 @@ function PolicyGraph(
             # use information about the children and number of
             # stagewise-independent noise realizations.
             nothing,
-            # Likewise for the objective states.
-            nothing,
-            # And for belief states.
-            nothing,
             # The optimize hook defaults to nothing.
             nothing,
             nothing,
@@ -1097,10 +930,6 @@ function PolicyGraph(
             end
         end
     end
-    # Initialize belief states.
-    if length(graph.belief_partition) > 0
-        initialize_belief_states(policy_graph, graph)
-    end
     domain = _get_incoming_domain(policy_graph)
     for (node_name, node) in policy_graph.nodes
         for (k, v) in domain[node_name]
@@ -1176,72 +1005,6 @@ function _get_incoming_domain(model::PolicyGraph{T}) where {T}
         end
     end
     return incoming_bounds
-end
-
-# Internal function: set up ::BeliefState for each node.
-function initialize_belief_states(
-    policy_graph::PolicyGraph{T},
-    graph::Graph{T},
-) where {T}
-    # Pre-compute the function `belief_updater`. See `construct_belief_update`
-    # for details.
-    belief_updater =
-        construct_belief_update(policy_graph, Set.(graph.belief_partition))
-    # Initialize a belief dictionary (containing one element for each node in
-    # the graph).
-    belief = Dict{T,Float64}(keys(graph.nodes) .=> 0.0)
-    delete!(belief, graph.root_node)
-    # Now for each element in the partition...
-    for (partition_index, partition) in enumerate(graph.belief_partition)
-        # Store the partition in the `policy_graph` object.
-        push!(policy_graph.belief_partition, Set(partition))
-        # Then for each node in the partition.
-        for node_index in partition
-            # Get the `::Node` object.
-            node = policy_graph[node_index]
-            # Add the dual variable μ for the cut:
-            # <b, μ> + θ ≥ α + <β, x>
-            # We need one variable for each non-zero belief state.
-            μ = Dict{T,JuMP.VariableRef}()
-            for (node_name, L) in
-                zip(partition, graph.belief_lipschitz[partition_index])
-                μ[node_name] = @variable(
-                    node.subproblem,
-                    lower_bound = -L,
-                    upper_bound = L
-                )
-            end
-            add_initial_bounds(node, μ)
-            # Attach the belief state as an extension.
-            node.belief_state =
-                BeliefState{T}(partition_index, copy(belief), μ, belief_updater)
-
-            node.bellman_function.global_theta.belief_states = μ
-            for theta in node.bellman_function.local_thetas
-                theta.belief_states = μ
-            end
-        end
-    end
-    return
-end
-
-# Internal function: When created, θ has bounds of [-M, M], but, since we are
-# adding these μ terms, we really want to bound <b, μ> + θ ∈ [-M, M]. Keeping in
-# mind that ∑b = 1, we really only need to add these constraints at the corners
-# of the box where one element in b is 1, and all the rest are 0.
-function add_initial_bounds(node, μ::Dict)
-    θ = bellman_term(node.bellman_function)
-    lower_bound = JuMP.has_lower_bound(θ) ? JuMP.lower_bound(θ) : -Inf
-    upper_bound = JuMP.has_upper_bound(θ) ? JuMP.upper_bound(θ) : Inf
-    for (_, variable) in μ
-        if lower_bound > -Inf
-            @constraint(node.subproblem, variable + θ >= lower_bound)
-        end
-        if upper_bound < Inf
-            @constraint(node.subproblem, variable + θ <= upper_bound)
-        end
-    end
-    return
 end
 
 # Internal function: helper to get the node given a subproblem.
@@ -1347,125 +1110,6 @@ macro stageobjective(subproblem, expr)
     end
 end
 
-"""
-    add_objective_state(update::Function, subproblem::JuMP.Model; kwargs...)
-
-Add an objective state variable to `subproblem`.
-
-Required `kwargs` are:
-
- - `initial_value`: The initial value of the objective state variable at the
-    root node.
- - `lipschitz`: The lipschitz constant of the objective state variable.
-
-Setting a tight value for the lipschitz constant can significantly improve the
-speed of convergence.
-
-Optional `kwargs` are:
-
- - `lower_bound`: A valid lower bound for the objective state variable. Can be
-    `-Inf`.
- - `upper_bound`: A valid upper bound for the objective state variable. Can be
-    `+Inf`.
-
-Setting tight values for these optional variables can significantly improve the
-speed of convergence.
-
-If the objective state is `N`-dimensional, each keyword argument must be an
-`NTuple{N,Float64}`. For example, `initial_value = (0.0, 1.0)`.
-"""
-function add_objective_state(
-    update::Function,
-    subproblem::JuMP.Model;
-    initial_value::Union{Real,Tuple},
-    lipschitz::Union{Real,Tuple},
-    lower_bound::Union{Real,Tuple} = -Inf,
-    upper_bound::Union{Real,Tuple} = Inf,
-)
-    tup_initial_value = _to_tuple(initial_value)
-    N = length(tup_initial_value)
-    return add_objective_state(
-        update,
-        subproblem,
-        tup_initial_value,
-        _to_tuple(lower_bound, N),
-        _to_tuple(upper_bound, N),
-        _to_tuple(lipschitz, N),
-    )
-end
-
-_to_tuple(x::Real, N::Int = 1) = ntuple(i -> Float64(x), N)
-
-function _to_tuple(x::Tuple, N::Int = length(x))
-    if length(x) != N
-        error(
-            "Invalid dimension in the input to `add_objective_state`. Got: ",
-            "`$x`, but expected it to have length `$N`.",
-        )
-    end
-    return Float64.(x)
-end
-
-# Internal function: add_objective_state with positional NTuple arguments.
-function add_objective_state(
-    update::Function,
-    subproblem::JuMP.Model,
-    initial_value::NTuple{N,Float64},
-    lower_bound::NTuple{N,Float64},
-    upper_bound::NTuple{N,Float64},
-    lipschitz::NTuple{N,Float64},
-) where {N}
-    node = get_node(subproblem)
-    if node.objective_state !== nothing
-        error("add_objective_state can only be called once.")
-    end
-    μ = @variable(
-        subproblem,
-        [i = 1:N],
-        lower_bound = -lipschitz[i],
-        upper_bound = lipschitz[i]
-    )
-    node.objective_state = ObjectiveState(
-        update,
-        initial_value,
-        initial_value,
-        lower_bound,
-        upper_bound,
-        tuple(μ...),
-    )
-    return
-end
-
-"""
-    objective_state(subproblem::JuMP.Model)
-
-Return the current objective state of the problem.
-
-Can only be called from [`MSUC.parameterize`](@ref).
-"""
-function objective_state(subproblem::JuMP.Model)
-    objective_state = get_node(subproblem).objective_state
-    if objective_state === nothing
-        error("No objective state defined.")
-    elseif length(objective_state.state) == 1
-        return objective_state.state[1]
-    else
-        return objective_state.state
-    end
-end
-
-# Internal function: calculate <y, μ>.
-function get_objective_state_component(node::Node)
-    objective_state_component = JuMP.AffExpr(0.0)
-    objective_state = node.objective_state
-    if objective_state !== nothing
-        for (y, μ) in zip(objective_state.state, objective_state.μ)
-            JuMP.add_to_expression!(objective_state_component, y, μ)
-        end
-    end
-    return objective_state_component
-end
-
 function build_Φ(graph::PolicyGraph{T}) where {T}
     Φ = Dict{Tuple{T,T},Float64}()
     for (node_index_1, node_1) in graph.nodes
@@ -1479,100 +1123,3 @@ function build_Φ(graph::PolicyGraph{T}) where {T}
     return Φ
 end
 
-"""
-    construct_belief_update(graph::PolicyGraph{T}, partition::Vector{Set{T}})
-
-Returns a function that calculates the belief update. That function has the
-following signature and returns the outgoing belief:
-
-    belief_update(
-        incoming_belief::Dict{T, Float64},
-        observed_partition::Int,
-        observed_noise
-    )::Dict{T,Float64}
-
-We use Bayes theorem: P(X′ | Y) = P(Y | X′) × P(X′) / P(Y), where P(Xᵢ′ | Y) is
-the probability of being in node i given the observation of ω. In addition
-
- - P(Xⱼ′) = ∑ᵢ P(Xᵢ) × Φᵢⱼ
- - P(Y|Xᵢ′) = P(ω ∈ Ωᵢ)
- - P(Y) = ∑ᵢ P(Xᵢ′) × P(ω ∈ Ωᵢ)
-"""
-function construct_belief_update(
-    graph::MSUC.PolicyGraph{T},
-    partition::Vector{Set{T}},
-) where {T}
-    # TODO: check that partition is proper.
-    Φ = build_Φ(graph)  # Dict{Tuple{T, T}, Float64}
-    Ω = Dict{T,Dict{Any,Float64}}()
-    for (index, node) in graph.nodes
-        Ω[index] = Dict{Any,Float64}()
-        for noise in node.noise_terms
-            Ω[index][noise.term] = noise.probability
-        end
-    end
-    function belief_updater(
-        outgoing_belief::Dict{T,Float64},
-        incoming_belief::Dict{T,Float64},
-        observed_partition::Int,
-        observed_noise,
-    )::Dict{T,Float64}
-        # P(Y) = ∑ᵢ Xᵢ × ∑ⱼ P(i->j) × P(ω ∈ Ωⱼ)
-        PY = 0.0
-        for (node_i, belief) in incoming_belief
-            probability = 0.0
-            for (node_j, Ωj) in Ω
-                p_ij = get(Φ, (node_i, node_j), 0.0)
-                p_ω = get(Ωj, observed_noise, 0.0)
-                probability += p_ij * p_ω
-            end
-            PY += belief * probability
-        end
-        if PY ≈ 0.0
-            error(
-                "Unable to update belief in partition ",
-                observed_partition,
-                " after observing ",
-                observed_noise,
-                ".The incoming belief ",
-                "is:\n  ",
-                incoming_belief,
-            )
-        end
-        # Now update each belief.
-        for (node_i, belief) in incoming_belief
-            PX = sum(
-                belief * get(Φ, (node_j, node_i), 0.0) for
-                (node_j, belief) in incoming_belief
-            )
-            PY_X = 0.0
-            if node_i in partition[observed_partition]
-                PY_X += get(Ω[node_i], observed_noise, 0.0)
-            end
-            outgoing_belief[node_i] = PY_X * PX / PY
-        end
-        if length(outgoing_belief) == 2
-            for (node_i, belief) in incoming_belief
-                if belief < 1e-6
-                    incoming_belief[node_i] = 0.0
-                elseif belief > 1 - 1e-6
-                    incoming_belief[node_i] = 1.0
-                end
-            end
-        end
-        return outgoing_belief
-    end
-    return belief_updater
-end
-
-# Internal function: calculate <b, μ>.
-function get_belief_state_component(node::Node)
-    belief_component = JuMP.AffExpr(0.0)
-    if node.belief_state !== nothing
-        belief = node.belief_state
-        for (key, μ) in belief.μ
-            JuMP.add_to_expression!(belief_component, belief.belief[key], μ)
-        end
-    end
-    return belief_component
-end

@@ -12,7 +12,7 @@
 #
 #   julia --project=. examples/toy_convergence.jl
 
-using MSUC, Gurobi, Printf
+using MSUC, Gurobi, Printf, Random
 
 const GRB_ENV = Gurobi.Env()
 optimizer = () -> Gurobi.Optimizer(GRB_ENV)
@@ -20,8 +20,11 @@ optimizer = () -> Gurobi.Optimizer(GRB_ENV)
 T     = 4       # horizon court : la 3-bin converge
 S     = 2       # support de l'innovation : 2^4 = 16 scenarios, arbre tractable
 FORCE = 1.0     # amplitude de l'alea ARMA
-ITER  = 20
+ITER  = 30
 TOL   = 1e-6
+SEED  = 1234    # la passe avant echantillonne via le rand() global : graine fixee
+                # pour que l'exemple soit reproductible et que les deux
+                # formulations voient la meme suite de scenarios
 
 instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T; S = S)
 @printf("jouet : T = %d, S = %d, %d unites, %d intervalles, %d scenarios\n\n",
@@ -37,6 +40,7 @@ function run(builder, method, label)
         builder, instance, FORCE, MSUC.LinearGraph(T + 1), method;
         sense = :Min, lower_bound = 0.0, optimizer = optimizer,
     )
+    Random.seed!(SEED)
     MSUC.train(model; iteration_limit = ITER, print_level = 0)
     bounds = [l.bound for l in model.most_recent_training_results.log]
     k = findfirst(x -> (opt - x) / opt < TOL, bounds)

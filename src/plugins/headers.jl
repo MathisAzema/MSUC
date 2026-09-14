@@ -225,8 +225,6 @@ Return a forward pass as a named tuple with the following fields:
     (
         ;scenario_path,
         sampled_states,
-        objective_states,
-        belief_states,
         cumulative_value,
     )
 

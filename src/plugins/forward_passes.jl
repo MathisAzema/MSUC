@@ -25,16 +25,10 @@ function forward_pass(
     options::Options,
     pass::DefaultForwardPass,
 ) where {T}
-    # First up, sample a scenario. Note that if a cycle is detected, this will
-    # return the cycle node as well.
+    # Le graphe est un chemin (LinearGraph) : l'echantillonnage ne peut pas boucler.
     instance = model.instance
     @_timeit_threadsafe model.timer_output "sample_scenario" begin
-        scenario_path, terminated_due_to_cycle =
-            sample_scenario(model, options.sampling_scheme)
-    end
-    final_node = scenario_path[end]
-    if terminated_due_to_cycle && !pass.include_last_node
-        pop!(scenario_path)
+        scenario_path, _ = sample_scenario(model, options.sampling_scheme)
     end
     # Storage for the list of outgoing states that we visit on the forward pass.
     sampled_states = Dict{Symbol,Float64}[]
@@ -43,70 +37,17 @@ function forward_pass(
     sampled_states_gamma = Dict{Tuple{Int,Int,Int},Float64}[]
     selected_intervals = Tuple{Int,Int,Int}[]
     lower_bound = 0.0
-    # Storage for the belief states: partition index and the belief dictionary.
-    belief_states = Tuple{Int,Dict{T,Float64}}[]
-    current_belief = initialize_belief(model)
 
     # A cumulator for the stage-objectives.
     cumulative_value = 0.0
-    # Objective state interpolation.
-    objective_state_vector, N =
-        initialize_objective_state(model[scenario_path[1][1]])
-    objective_states = NTuple{N,Float64}[]
-    # Iterate down the scenario.
 
-      # Our initial incoming state.
+    # Our initial incoming state.
     incoming_state_value = copy(options.initial_state)
-    # solve_root_node(model, model.instance, options)
-
-    # incoming_state_value = copy(model.initial_root_state)
 
     for (depth, (node_index, noise)) in enumerate(scenario_path)
         node = model[node_index]
         lock(node.lock)
         try
-            # Objective state interpolation.
-            objective_state_vector = update_objective_state(
-                node.objective_state,
-                objective_state_vector,
-                noise,
-            )
-            if objective_state_vector !== nothing
-                push!(objective_states, objective_state_vector)
-            end
-            # Update belief state, etc.
-            if node.belief_state !== nothing
-                belief = node.belief_state::BeliefState{T}
-                partition_index = belief.partition_index
-                current_belief = belief.updater(
-                    belief.belief,
-                    current_belief,
-                    partition_index,
-                    noise,
-                )
-                push!(belief_states, (partition_index, copy(current_belief)))
-            end
-            # ===== Begin: starting state for infinite horizon =====
-            starting_states = options.starting_states[node_index]
-            if length(starting_states) > 0
-                # There is at least one other possible starting state. If our
-                # incoming state is more than δ away from the other states, add it
-                # as a possible starting state.
-                if distance(starting_states, incoming_state_value) >
-                   options.cycle_discretization_delta
-                    push!(starting_states, incoming_state_value)
-                end
-                # TODO(odow):
-                # - A better way of randomly sampling a starting state.
-                # - Is is bad that we splice! here instead of just sampling? For
-                #   convergence it is probably bad, since our list of possible
-                #   starting states keeps changing, but from a computational
-                #   perspective, we don't want to keep a list of discretized points
-                #   in the state-space δ distance apart...
-                incoming_state_value =
-                    splice!(starting_states, rand(1:length(starting_states)))
-            end
-            # ===== End: starting state for infinite horizon =====
             # Solve the subproblem, note that `duality_handler = nothing`.
             @_timeit_threadsafe model.timer_output "solve_subproblem" begin
                 subproblem_results = solve_subproblem(
@@ -162,25 +103,6 @@ function forward_pass(
             unlock(node.lock)
         end
     end
-    if terminated_due_to_cycle
-        # We terminated due to a cycle. Here is the list of possible
-        # starting states for that node:
-        starting_states = options.starting_states[final_node[1]]
-        # We also need the incoming state variable to the final node, which
-        # is the outgoing state value of the second to last node:
-        incoming_state_value = if pass.include_last_node
-            sampled_states[end-1]
-        else
-            sampled_states[end]
-        end
-        # If this incoming state value is more than δ away from another
-        # state, add it to the list.
-        if distance(starting_states, incoming_state_value) >
-           options.cycle_discretization_delta
-            push!(starting_states, incoming_state_value)
-        end
-    end
-    # ===== End: drop off starting state if terminated due to cycle =====
     return (
         scenario_path = scenario_path,
         sampled_states = sampled_states,
@@ -188,8 +110,6 @@ function forward_pass(
         sampled_states_zeta = sampled_states_zeta,
         sampled_states_gamma = sampled_states_gamma,
         selected_intervals = selected_intervals,
-        objective_states = objective_states,
-        belief_states = belief_states,
         cumulative_value = cumulative_value,
         lower_bound = lower_bound,
     )
@@ -507,7 +427,6 @@ function forward_pass(
     options::Options,
     pass::ImportanceSamplingForwardPass,
 ) where {T}
-    @assert isempty(model.belief_partition)
     scenario_path = Tuple{T,Any}[]
     sampled_states = Dict{Symbol,Float64}[]
     cumulative_value = 0.0
@@ -573,8 +492,6 @@ function forward_pass(
     return (
         scenario_path = scenario_path,
         sampled_states = sampled_states,
-        objective_states = NTuple{0,Float64}[],
-        belief_states = Tuple{Int,Dict{T,Float64}}[],
         cumulative_value = cumulative_value,
     )
 end

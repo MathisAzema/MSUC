@@ -390,12 +390,11 @@ src/
   plugins/
     bellman_functions.jl       génération des coupes intervalles (Sect. 3.3)
     forward_passes.jl          passe avant + réinstanciation des coupes
-    duality_handlers.jl        récupération de (σ, ν)
+    duality_handlers.jl        récupération de (σ, ν) et ContinuousConicDuality
     risk_measures.jl           mesures de risque (hérité SDDP.jl)
     sampling_schemes.jl        échantillonnage des scénarios (hérité)
     stopping_rules.jl          critères d'arrêt (hérité)
-    backward_sampling_schemes.jl, parallel_schemes.jl,
-    local_improvement_search.jl, headers.jl   (hérités)
+    backward_sampling_schemes.jl, parallel_schemes.jl, headers.jl  (hérités)
   algorithm.jl                 boucle SDDP, passe arrière
   user_interface.jl            PolicyGraph, Node, IntervalCut
   print.jl, JuMP.jl            journal et surcharges JuMP
@@ -413,6 +412,17 @@ Le code mort hérité de SDDP.jl a été supprimé : `Inner.jl`, `Experimental.j
 `biobjective.jl`, `binary_expansion.jl`, `cyclic.jl`, `alternative_forward.jl`,
 `deterministic_equivalent.jl`, `modeling_aids.jl` et tout `visualization/`. Les dépendances
 correspondantes (`HTTP`, `SHA`, `XLSX`, `RecipesBase`, `Plots`) sont sorties de `Project.toml`.
+
+Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignables** avec un
+`LinearGraph` :
+
+| | à quoi ça servait | pourquoi inatteignable |
+|---|---|---|
+| `belief_state` | graphes partiellement observables (POMDP) : loi de probabilité sur la partition de nœuds, mise à jour bayésienne, terme de coupe concave $\langle b,\mu\rangle$ | `belief_partition` n'est rempli que par `add_ambiguity_set` ; `LinearGraph` le laisse vide |
+| `objective_state` | objectif dépendant d'un prix exogène markovien, avec interpolation et terme $\mu^\top y$ | positionné seulement par `add_objective_state`, que les builders n'appellent jamais |
+| cycles | horizon infini : `terminated_due_to_cycle`, `starting_states`, `cycle_discretization_delta` | un chemin ne boucle pas |
+| persistance de politique | `write_cuts_to_file` / `read_cuts_from_file` : sauver une politique entraînée pour la recharger sans réentraîner | ne sérialisent que les coupes génériques, **pas** les `IntervalCut` ; le dump était vide en formulation étendue, et `read_` jamais appelée |
+| handlers SDDiP | `LagrangianDuality`, `StrengthenedConicDuality`, `BanditDuality`, `FixedDiscreteDuality` et `local_improvement_search.jl` : duaux de sous-problèmes **entiers** | §1 du papier — seule la racine est non convexe, chaque étage est un LP, donc `ContinuousConicDuality` est exacte |
 
 > **`Plots` n'est plus une dépendance du projet.** Si vos notebooks font `using Plots`,
 > rajoutez-le : `julia --project=. -e 'using Pkg; Pkg.add("Plots")'`.
