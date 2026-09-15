@@ -388,38 +388,3 @@ function numerical_stability_report(model::PolicyGraph; kwargs...)
     return numerical_stability_report(stdout, model; kwargs...)
 end
 
-###
-### Machine readable log
-###
-
-"""
-    write_log_to_csv(model::PolicyGraph, filename::String)
-
-Write the log of the most recent training to a csv for post-analysis.
-
-Assumes that the model has been trained via [`MSUC.train`](@ref).
-"""
-function write_log_to_csv(model::PolicyGraph, filename::String)
-    if model.most_recent_training_results === nothing
-        error(
-            "Unable to write the log to file because the model has not " *
-            "been trained.",
-        )
-    end
-    open(filename, "w") do io
-        println(io, "iteration, simulation, bound, time")
-        for log in model.most_recent_training_results.log
-            println(
-                io,
-                log.iteration,
-                ", ",
-                log.simulation_value,
-                ", ",
-                log.bound,
-                ", ",
-                log.time,
-            )
-        end
-    end
-    return
-end
