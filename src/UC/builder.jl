@@ -58,39 +58,22 @@ function _commitment_constraints!(subproblem, instance, is_on, start_up, start_d
     # constant impose la fin de la duree minimale heritee des conditions initiales.
     @constraint(
         subproblem,
-        [unit in units, t in 1:T; unit.InitUpDownTime !== nothing],
+        [unit in units, t in 1:T],
         sum(start_up[unit.name, τ].out for τ in max(1, t - unit.MinUpTime + 1):t) +
         1 * (t < unit.MinUpTime - unit.InitUpDownTime + 1) * (unit.InitUpDownTime > 0) <=
         is_on[unit.name, t].out
     )
     @constraint(
         subproblem,
-        [unit in units, t in 1:T; unit.InitUpDownTime !== nothing],
+        [unit in units, t in 1:T],
         sum(start_down[unit.name, τ].out for τ in max(1, t - unit.MinDownTime + 1):t) +
         1 * (t < unit.MinDownTime + unit.InitUpDownTime + 1) * (unit.InitUpDownTime < 0) <=
         1 - is_on[unit.name, t].out
     )
     @constraint(
         subproblem,
-        [unit in units, t in 1:T; unit.InitUpDownTime === nothing],
-        sum(start_up[unit.name, τ].out for τ in max(1, t - unit.MinUpTime + 1):t) <=
-        is_on[unit.name, t].out
-    )
-    @constraint(
-        subproblem,
-        [unit in units, t in 1:T; unit.InitUpDownTime === nothing],
-        sum(start_down[unit.name, τ].out for τ in max(1, t - unit.MinDownTime + 1):t) <=
-        1 - is_on[unit.name, t].out
-    )
-    @constraint(
-        subproblem,
-        [unit in units; unit.InitUpDownTime !== nothing],
+        [unit in units],
         is_on[unit.name, 0].out == (unit.InitUpDownTime >= 0)
-    )
-    @constraint(
-        subproblem,
-        [unit in units; unit.InitUpDownTime === nothing],
-        is_on[unit.name, 0].out == 0
     )
     # Une unite demarree au-dessus de MinPower ne peut pas s'arreter avant d'avoir
     # eu le temps de redescendre : elle reste allumee jusqu'a `limit`.

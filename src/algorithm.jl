@@ -411,9 +411,6 @@ function _initialize_solver(node::Node; throw_error::Bool)
             )
         end
         set_optimizer(node.subproblem, node.optimizer)
-        if node.index > 2
-            set_silent(node.subproblem)
-        end
         set_silent(node.subproblem)
     end
     return

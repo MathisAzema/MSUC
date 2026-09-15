@@ -42,7 +42,7 @@ function set_intervals(MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaR
             push!(intervals, [a, b])
         end
     end
-    if InitUpDownTime !== nothing && InitUpDownTime >= 0
+    if InitUpDownTime >= 0
         a0 = -InitUpDownTime + 1
         bmin = max(
             1,
@@ -197,14 +197,10 @@ function thermal_unit_commit_constraints(model, instance)
     @constraint(model,  [unit in thermal_units, t in 1:T], is_on[unit.name, t]-is_on[unit.name, t-1]==start_up[unit.name, t]-start_down[unit.name, t])
     @constraint(model,  [unit in thermal_units, t in 1:T], start_up[unit.name, t]<=is_on[unit.name, t])
     @constraint(model,  [unit in thermal_units, t in 1:T], start_down[unit.name, t]<=1-is_on[unit.name, t])
-    @constraint(model,  [unit in thermal_units, t in 1:T; unit.InitUpDownTime!=nothing], sum(start_up[unit.name, τ] for τ in max(1, t-unit.MinUpTime+1):t)+1*(t<unit.MinUpTime-unit.InitUpDownTime+1)*(unit.InitUpDownTime>0) <= is_on[unit.name, t])
-    @constraint(model,  [unit in thermal_units, t in 1:T; unit.InitUpDownTime!=nothing], sum(start_down[unit.name, τ] for τ in max(1, t-unit.MinDownTime+1):t)+1*(t<unit.MinDownTime+unit.InitUpDownTime+1)*(unit.InitUpDownTime<0) <= 1-is_on[unit.name, t])
-    @constraint(model,  [unit in thermal_units, t in 1:T; unit.InitUpDownTime==nothing], sum(start_up[unit.name, τ] for τ in max(1, t-unit.MinUpTime+1):t) <= is_on[unit.name, t])
-    @constraint(model,  [unit in thermal_units, t in 1:T; unit.InitUpDownTime==nothing], sum(start_down[unit.name, τ] for τ in max(1, t-unit.MinDownTime+1):t) <= 1-is_on[unit.name, t])
+    @constraint(model,  [unit in thermal_units, t in 1:T], sum(start_up[unit.name, τ] for τ in max(1, t-unit.MinUpTime+1):t)+1*(t<unit.MinUpTime-unit.InitUpDownTime+1)*(unit.InitUpDownTime>0) <= is_on[unit.name, t])
+    @constraint(model,  [unit in thermal_units, t in 1:T], sum(start_down[unit.name, τ] for τ in max(1, t-unit.MinDownTime+1):t)+1*(t<unit.MinDownTime+unit.InitUpDownTime+1)*(unit.InitUpDownTime<0) <= 1-is_on[unit.name, t])
 
-    @constraint(model,  [unit in thermal_units; unit.InitUpDownTime!=nothing], is_on[unit.name, 0]==(unit.InitUpDownTime>=0))
-
-    @constraint(model,  [unit in thermal_units; unit.InitUpDownTime==nothing], is_on[unit.name, 0]==0)
+    @constraint(model,  [unit in thermal_units], is_on[unit.name, 0]==(unit.InitUpDownTime>=0))
 
     @constraint(model, thermal_fixed_cost>=sum(unit.ConstTerm*is_on[unit.name, t]+unit.StartUpCost*start_up[unit.name, t]+unit.StartDownCost*start_down[unit.name, t] for unit in thermal_units for t in 1:T))
 
@@ -239,7 +235,7 @@ function thermal_unit_capacity_constraints_scenarios(model, instance, S)
 
     @constraint(model,  [unit in thermal_units, t in 0:T, s in 1:S], power[unit.name, t, s]>=unit.MinPower*is_on[unit.name, t])
     @constraint(model,  [unit in thermal_units, t in 0:T, s in 1:S], power[unit.name, t, s]<=unit.MaxPower*is_on[unit.name, t])
-    @constraint(model,  [unit in thermal_units, s in 1:S; unit.InitialPower!=nothing], power[unit.name, 0, s]==unit.InitialPower)
+    @constraint(model,  [unit in thermal_units, s in 1:S], power[unit.name, 0, s]==unit.InitialPower)
 
     @constraint(model,  [unit in thermal_units, t in 1:T, s in 1:S], power[unit.name, t, s]-power[unit.name, t-1, s]<=(-unit.DeltaRampUp)*start_up[unit.name, t]+(unit.MinPower+unit.DeltaRampUp)*is_on[unit.name, t]-(unit.MinPower)*is_on[unit.name, t-1])
     @constraint(model,  [unit in thermal_units, t in 1:T, s in 1:S], power[unit.name, t-1, s]-power[unit.name, t, s]<=(-unit.DeltaRampDown)*start_down[unit.name, t]+(unit.MinPower+unit.DeltaRampDown)*is_on[unit.name, t-1]-(unit.MinPower)*is_on[unit.name, t])

@@ -26,10 +26,6 @@ function bin_extensive_neutral(instance; silent=true, force::Float64=1.0, S::Int
     thermal_units_name=keys(instance.Thermalunits)
     thermal_units=values(instance.Thermalunits)
 
-    T= instance.TimeHorizon
-    thermal_units_name=keys(instance.Thermalunits)
-    thermal_units=values(instance.Thermalunits)
-
     Next=instance.Next
     Buses=1:size(Next)[1]
     @variable(model, power[unit in thermal_units_name, t in 0:T, s in 1:S]>=0)

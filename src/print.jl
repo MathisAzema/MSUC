@@ -18,9 +18,6 @@ function print_banner(io)
 end
 
 function _unique_paths(model::PolicyGraph{T}) where {T}
-    if is_cyclic(model)
-        return Inf
-    end
     parents = Dict{T,Set{T}}(t => Set{T}() for t in keys(model.nodes))
     children = Dict{T,Set{T}}(t => Set{T}() for t in keys(model.nodes))
     for (t, node) in model.nodes
