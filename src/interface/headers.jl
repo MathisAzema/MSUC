@@ -3,10 +3,6 @@
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
 
-abstract type AbstractRiskMeasure end
-
-function adjust_probability end
-
 abstract type AbstractSamplingScheme end
 
 function sample_scenario end
@@ -47,12 +43,6 @@ function get_dual_solution end
 function prepare_backward_pass(::Node, ::AbstractDualityHandler, ::Any)
     return () -> nothing
 end
-
-abstract type AbstractParallelScheme end
-
-function master_loop end
-
-function _simulate end
 
 abstract type AbstractForwardPass end
 

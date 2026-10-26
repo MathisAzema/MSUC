@@ -39,8 +39,6 @@ function print_problem_statistics(
     io::IO,
     model::PolicyGraph,
     existing_cuts::Bool,
-    parallel_scheme,
-    risk_measure,
     sampling_scheme,
 )
     constraint_types = Dict{String,Tuple{Int,Int}}()
@@ -64,8 +62,6 @@ function print_problem_statistics(
     println(io, "  scenarios       : ", paths)
     println(io, "  existing cuts   : ", existing_cuts)
     println(io, "options")
-    println(io, "  solver          : ", parallel_scheme)
-    println(io, "  risk measure    : ", risk_measure)
     println(io, "  sampling scheme : ", typeof(sampling_scheme))
     println(io, "subproblem structure")
     a, b = variables
@@ -81,7 +77,7 @@ function print_iteration_header(io)
     println(io, _RULE)
     println(
         io,
-        " iteration    simulation      bound        time (s)     solves  pid",
+        " iteration    simulation      bound        time (s)     solves",
     )
     println(io, _RULE)
     return
@@ -89,7 +85,6 @@ end
 
 print_value(x::Real) = lpad(Printf.@sprintf("%1.6e", x), 13)
 print_value(x::Int) = Printf.@sprintf("%9d", x)
-print_value3(x::Int) = Printf.@sprintf("%3d", x)
 
 function print_iteration(io, log::Log)
     print(io, log.serious_numerical_issue ? "†" : " ")
@@ -99,7 +94,6 @@ function print_iteration(io, log::Log)
     print(io, " ", print_value(log.bound))
     print(io, " ", print_value(log.time))
     print(io, " ", print_value(log.total_solves))
-    print(io, " ", print_value3(log.pid))
     println(io)
     return
 end

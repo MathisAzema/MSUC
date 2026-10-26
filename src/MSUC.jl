@@ -8,7 +8,6 @@ module MSUC
 import Reexport
 Reexport.@reexport using JuMP
 
-import Distributed
 import LinearAlgebra
 import MutableArithmetics
 import Printf
@@ -35,42 +34,23 @@ include("UC/Struct/parsing.jl")
 include("UC/extensive_formulation.jl")
 include("UC/multistage_extensive.jl")
 
-# Modelling interface.
-include("user_interface.jl")
+include("interface/user_interface.jl")
+include("interface/headers.jl")
+include("interface/JuMP.jl")
+include("interface/print.jl")
 
-# Default definitions for MSUC related modular utilities.
-include("plugins/headers.jl")
-
-# Tools for overloading JuMP functions
-include("JuMP.jl")
-
-# Printing utilities.
-include("print.jl")
-
-# The core MSUC code.
-include("algorithm.jl")
-
+include("algorithm/train.jl")
+include("algorithm/backward_pass.jl")
 
 include("UC/builder.jl")
 
-# Specific plugins.
-include("plugins/risk_measures.jl")
-include("plugins/sampling_schemes.jl")
-include("plugins/bellman_functions.jl")
-include("plugins/stopping_rules.jl")
-include("plugins/duality_handlers.jl")
-include("plugins/parallel_schemes.jl")
-include("plugins/backward_sampling_schemes.jl")
-include("plugins/forward_passes.jl")
+include("algorithm/sampling_schemes.jl")
+include("algorithm/bellman_functions.jl")
+include("algorithm/stopping_rules.jl")
+include("algorithm/duality_handlers.jl")
+include("algorithm/backward_sampling_schemes.jl")
+include("algorithm/forward_passes.jl")
 
-# Simulation de politique (utilise reinstantiate_interval_cuts!)
-include("UC/simulation.jl")
-
-# Visualization related code.
-
-# Other solvers.
-
-# Inner approximation
-
+include("interface/simulate.jl")
 
 end

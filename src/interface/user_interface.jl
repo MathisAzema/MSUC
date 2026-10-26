@@ -56,7 +56,6 @@ mutable struct Node
     has_integrality::Bool
     optimizer::Any
     ext::Dict{Symbol,Any}
-    lock::ReentrantLock
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
     interval_cuts::Vector{IntervalCut}
     demand_constraint::Vector{JuMP.ConstraintRef}
@@ -76,7 +75,6 @@ struct Log
     bound::Float64
     simulation_value::Float64
     time::Float64
-    pid::Int
     total_solves::Int
     duality_key::String
     serious_numerical_issue::Bool
@@ -103,7 +101,6 @@ mutable struct PolicyGraph
     most_recent_training_results::Union{Nothing,TrainingResults}
     ext::Dict{Symbol,Any}
     timer_output::TimerOutputs.TimerOutput
-    lock::ReentrantLock
 
     instance::Instance
     method::Method
@@ -119,7 +116,6 @@ mutable struct PolicyGraph
             nothing,
             Dict{Symbol,Any}(),
             TimerOutputs.TimerOutput(),
-            ReentrantLock(),
             instance,
             method,
             force,
@@ -178,7 +174,6 @@ function PolicyGraph(
             false,
             optimizer,
             Dict{Symbol,Any}(),
-            ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
             IntervalCut[],
             JuMP.ConstraintRef[],

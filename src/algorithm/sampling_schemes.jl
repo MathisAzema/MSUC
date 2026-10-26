@@ -60,14 +60,12 @@ mutable struct PSRSamplingScheme{A} <: AbstractSamplingScheme
     sampling_scheme::A
     scenarios::Vector{Any}
     counter::Int
-    lock::ReentrantLock
 
     function PSRSamplingScheme(
         N::Int;
         sampling_scheme::AbstractSamplingScheme = InSampleMonteCarlo(),
     )
-        lock = ReentrantLock()
-        return new{typeof(sampling_scheme)}(N, sampling_scheme, Any[], 0, lock)
+        return new{typeof(sampling_scheme)}(N, sampling_scheme, Any[], 0)
     end
 end
 
@@ -81,20 +79,15 @@ function sample_scenario(
     s::PSRSamplingScheme{A};
     kwargs...,
 ) where {A}
-    lock(s.lock)
-    try
-        s.counter += 1
-        if s.counter > s.N
-            s.counter = 1
-        end
-        if s.counter > length(s.scenarios)
-            push!(
-                s.scenarios,
-                sample_scenario(graph, s.sampling_scheme; kwargs...),
-            )
-        end
-        return s.scenarios[s.counter]
-    finally
-        unlock(s.lock)
+    s.counter += 1
+    if s.counter > s.N
+        s.counter = 1
     end
+    if s.counter > length(s.scenarios)
+        push!(
+            s.scenarios,
+            sample_scenario(graph, s.sampling_scheme; kwargs...),
+        )
+    end
+    return s.scenarios[s.counter]
 end

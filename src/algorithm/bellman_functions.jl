@@ -166,35 +166,6 @@ function initialize_bellman_function(
     )
 end
 
-function refine_bellman_function(
-    model::PolicyGraph,
-    node::Node,
-    bellman_function::BellmanFunction,
-    risk_measure::AbstractRiskMeasure,
-    outgoing_state::Dict{Symbol,Float64},
-    dual_variables::Vector{Dict{Symbol,Float64}},
-    noise_supports::Vector,
-    nominal_probability::Vector{Float64},
-    objective_realizations::Vector{Float64},
-)
-    lock(node.lock)
-    try
-        return _refine_bellman_function_no_lock(
-            model,
-            node,
-            bellman_function,
-            risk_measure,
-            outgoing_state,
-            dual_variables,
-            noise_supports,
-            nominal_probability,
-            objective_realizations,
-        )
-    finally
-        unlock(node.lock)
-    end
-end
-
 function refine_bellman_function_extended(
     model::PolicyGraph,
     node::Node,
@@ -207,95 +178,89 @@ function refine_bellman_function_extended(
     probability::Vector{Float64},
     objective_realizations::Vector{Float64},
 )
-    lock(node.lock)
-    try
-        instance = model.instance
-        thermal_units = instance.Thermalunits
-        horizon = instance.TimeHorizon
-        arma = instance.arma
-        t = node.index - 1
-        cuts = model[node.index+1].interval_cuts
-        nscen = length(objective_realizations)
+    instance = model.instance
+    thermal_units = instance.Thermalunits
+    horizon = instance.TimeHorizon
+    arma = instance.arma
+    t = node.index - 1
+    cuts = model[node.index+1].interval_cuts
+    nscen = length(objective_realizations)
 
-        σ_mean = [sum(probability[i] * σ[i][k] for i in 1:nscen) for k in 1:length(cuts)]
+    σ_mean = [sum(probability[i] * σ[i][k] for i in 1:nscen) for k in 1:length(cuts)]
 
-        nz = MSUC.zeta_dimension(arma)
-        nb = size(arma.S_eta, 1)
-        ν_mean = [sum(probability[i] * ν[i][n] for i in 1:nscen) for n in 1:nb]
-        λ = [sum(σ_mean[k] * cuts[k].delta[j] for k in 1:length(cuts)) for j in 1:nz]
-        for j in 1:nz, n in 1:nb
-            λ[j] += arma.S_eta[n, j] * instance.Demandbus[n][t+1] * ν_mean[n] * model.force
-        end
-        δ = [sum(arma.Psi[k, j] * λ[k] for k in 1:nz) for j in 1:nz]
+    nz = MSUC.zeta_dimension(arma)
+    nb = size(arma.S_eta, 1)
+    ν_mean = [sum(probability[i] * ν[i][n] for i in 1:nscen) for n in 1:nb]
+    λ = [sum(σ_mean[k] * cuts[k].delta[j] for k in 1:length(cuts)) for j in 1:nz]
+    for j in 1:nz, n in 1:nb
+        λ[j] += arma.S_eta[n, j] * instance.Demandbus[n][t+1] * ν_mean[n] * model.force
+    end
+    δ = [sum(arma.Psi[k, j] * λ[k] for k in 1:nz) for j in 1:nz]
 
-        trial_output(unit, a) =
-            node.index == 1 ? initial_interval_output(unit, a) :
-            outgoing_state_power[unit.name]
+    trial_output(unit, a) =
+        node.index == 1 ? initial_interval_output(unit, a) :
+        outgoing_state_power[unit.name]
 
-        τ = Dict{Tuple{Int64,Int64,Int64},Float64}()
-        β = Dict{Tuple{Int64,Int64,Int64},Float64}()
-        for unit in thermal_units, (a, b) in unit.intervals
-            key = (unit.name, a, b)
-            τ_ab = sum(σ_mean[k] * cut.tau[key] for (k, cut) in enumerate(cuts))
-            β_ab = 0.0
-            if is_on_interval(a, b, t + 1)
-                y_prev =
-                    outgoing_state_gamma[key] >= 0.1 ? outgoing_state_power[unit.name] :
-                    reference_output(unit, a, b, t, horizon)
-                for i in 1:nscen
-                    z =
-                        unit.LinearTerm - ν[i][unit.Bus] +
-                        sum(σ[i][k] * cut.beta[key] for (k, cut) in enumerate(cuts))
-                    h, β_z = local_support(unit, a, b, t + 1, horizon, y_prev, z)
-                    τ_ab += probability[i] * h
-                    β_ab += probability[i] * β_z
-                end
+    τ = Dict{Tuple{Int64,Int64,Int64},Float64}()
+    β = Dict{Tuple{Int64,Int64,Int64},Float64}()
+    for unit in thermal_units, (a, b) in unit.intervals
+        key = (unit.name, a, b)
+        τ_ab = sum(σ_mean[k] * cut.tau[key] for (k, cut) in enumerate(cuts))
+        β_ab = 0.0
+        if is_on_interval(a, b, t + 1)
+            y_prev =
+                outgoing_state_gamma[key] >= 0.1 ? outgoing_state_power[unit.name] :
+                reference_output(unit, a, b, t, horizon)
+            for i in 1:nscen
+                z =
+                    unit.LinearTerm - ν[i][unit.Bus] +
+                    sum(σ[i][k] * cut.beta[key] for (k, cut) in enumerate(cuts))
+                h, β_z = local_support(unit, a, b, t + 1, horizon, y_prev, z)
+                τ_ab += probability[i] * h
+                β_ab += probability[i] * β_z
             end
-            τ[key] = τ_ab
-            β[key] = β_ab
         end
+        τ[key] = τ_ab
+        β[key] = β_ab
+    end
 
-        value = sum(probability[i] * objective_realizations[i] for i in 1:nscen)
-        α =
-            value - sum(δ[j] * outgoing_state_zeta[j] for j in 1:nz; init = 0.0) - sum(
-                outgoing_state_gamma[unit.name, a, b] * (
-                    β[(unit.name, a, b)] * trial_output(unit, a) + τ[(unit.name, a, b)]
+    value = sum(probability[i] * objective_realizations[i] for i in 1:nscen)
+    α =
+        value - sum(δ[j] * outgoing_state_zeta[j] for j in 1:nz; init = 0.0) - sum(
+            outgoing_state_gamma[unit.name, a, b] * (
+                β[(unit.name, a, b)] * trial_output(unit, a) + τ[(unit.name, a, b)]
+            ) for unit in thermal_units for (a, b) in unit.intervals
+        )
+
+    theta = node.bellman_function.global_theta.theta
+    ζ_expr = sum(δ[j] * node.states_zeta[j].out for j in 1:nz; init = 0.0)
+    cstr = if node.index == 1
+        @constraint(
+            node.subproblem,
+            theta >= α + ζ_expr + sum(
+                node.states_gamma[unit.name, a, b] * (
+                    trial_output(unit, a) * β[(unit.name, a, b)] +
+                    τ[(unit.name, a, b)]
                 ) for unit in thermal_units for (a, b) in unit.intervals
             )
-
-        theta = node.bellman_function.global_theta.theta
-        ζ_expr = sum(δ[j] * node.states_zeta[j].out for j in 1:nz; init = 0.0)
-        cstr = if node.index == 1
-            @constraint(
-                node.subproblem,
-                theta >= α + ζ_expr + sum(
-                    node.states_gamma[unit.name, a, b] * (
-                        trial_output(unit, a) * β[(unit.name, a, b)] +
-                        τ[(unit.name, a, b)]
-                    ) for unit in thermal_units for (a, b) in unit.intervals
-                )
+        )
+    else
+        @constraint(
+            node.subproblem,
+            theta >= α + ζ_expr + sum(
+                node.states_power[Symbol("power[$j]")].out * β[(j, a, b)] +
+                τ[(j, a, b)] for (j, a, b) in selected_intervals
             )
-        else
-            @constraint(
-                node.subproblem,
-                theta >= α + ζ_expr + sum(
-                    node.states_power[Symbol("power[$j]")].out * β[(j, a, b)] +
-                    τ[(j, a, b)] for (j, a, b) in selected_intervals
-                )
-            )
-        end
-        push!(node.interval_cuts, IntervalCut(α, τ, β, δ, cstr))
-    finally
-        unlock(node.lock)
+        )
     end
+    push!(node.interval_cuts, IntervalCut(α, τ, β, δ, cstr))
     return
 end
 
-function _refine_bellman_function_no_lock(
+function refine_bellman_function(
     model::PolicyGraph,
     node::Node,
     bellman_function::BellmanFunction,
-    risk_measure::AbstractRiskMeasure,
     outgoing_state::Dict{Symbol,Float64},
     dual_variables::Vector{Dict{Symbol,Float64}},
     noise_supports::Vector,
@@ -306,23 +271,14 @@ function _refine_bellman_function_no_lock(
             length(noise_supports) ==
             length(nominal_probability) ==
             length(objective_realizations)
-    risk_adjusted_probability = similar(nominal_probability)
-    offset = adjust_probability(
-        risk_measure,
-        risk_adjusted_probability,
-        nominal_probability,
-        noise_supports,
-        objective_realizations,
-        model.objective_sense == MOI.MIN_SENSE,
-    )
     if bellman_function.cut_type == SINGLE_CUT
         return _add_average_cut(
             node,
             outgoing_state,
-            risk_adjusted_probability,
+            nominal_probability,
             objective_realizations,
             dual_variables,
-            offset,
+            0.0,
         )
     else
         @assert bellman_function.cut_type == MULTI_CUT
@@ -330,10 +286,10 @@ function _refine_bellman_function_no_lock(
         return _add_multi_cut(
             node,
             outgoing_state,
-            risk_adjusted_probability,
+            nominal_probability,
             objective_realizations,
             dual_variables,
-            offset,
+            0.0,
         )
     end
 end

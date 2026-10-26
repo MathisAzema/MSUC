@@ -75,7 +75,6 @@ function SimulationStoppingRule(;
             model,
             N;
             sampling_scheme = cached_sampling_scheme,
-            parallel_scheme = Serial(),
         )
         keys = [:stage_objective, :bellman_term]
         return map(scenarios) do scenario
