@@ -17,57 +17,8 @@ function print_banner(io)
     return
 end
 
-function _unique_paths(model::PolicyGraph{T}) where {T}
-    parents = Dict{T,Set{T}}(t => Set{T}() for t in keys(model.nodes))
-    children = Dict{T,Set{T}}(t => Set{T}() for t in keys(model.nodes))
-    for (t, node) in model.nodes
-        for child in node.children
-            if child.probability > 0
-                push!(parents[child.term], t)
-                push!(children[t], child.term)
-            end
-        end
-    end
-    ordered = T[]
-    in_order = Dict{T,Bool}(t => false for t in keys(model.nodes))
-    stack = Tuple{T,Bool}[]
-    for root_child in model.root_children
-        if iszero(root_child.probability) || in_order[root_child.term]
-            continue
-        end
-        push!(stack, (root_child.term, true))
-        while !isempty(stack)
-            node, needs_checking = pop!(stack)
-            if !needs_checking
-                push!(ordered, node)
-                in_order[node] = true
-                continue
-            elseif in_order[node]
-                continue
-            end
-            push!(stack, (node, false))
-            for child in children[node]
-                if !in_order[child]
-                    push!(stack, (child, true))
-                end
-            end
-        end
-    end
-    total_scenarios = 0.0
-    incoming_scenarios = Dict{T,Float64}(t => 0.0 for t in keys(model.nodes))
-    for node in reverse!(ordered)
-        N = length(model[node].noise_terms)
-        if length(parents[node]) == 0  # Must come from the root node.
-            incoming_scenarios[node] = N
-        else
-            incoming_scenarios[node] =
-                N * sum(incoming_scenarios[p] for p in parents[node])
-        end
-        if length(children[node]) == 0  # It's a leaf!
-            total_scenarios += incoming_scenarios[node]
-        end
-    end
-    return total_scenarios
+function _unique_paths(model::PolicyGraph)
+    return prod(length(node.noise_terms) for node in values(model.nodes); init = 1)
 end
 
 function _merge_tuple(x, y)
@@ -173,22 +124,11 @@ function print_footer(io, training_results::TrainingResults)
     return
 end
 
-"""
-    confidence_interval(x::Vector{Float64}, z_score::Float64 = 1.96)
-
-Return a confidence interval of `x` corresponding to the `z_score`.
-
-`z_score` defaults to `1.96` for a 95% confidence interval.
-"""
 function confidence_interval(x::Vector{Float64}, z_score::Float64 = 1.96)
     μ = Statistics.mean(x)
     σ = z_score * Statistics.std(x) / sqrt(length(x))
     return μ, σ
 end
-
-###
-### Numerical stability checks
-###
 
 struct CoefficientRanges
     matrix::Vector{Float64}
@@ -307,7 +247,6 @@ function _update_range(range::Vector{Float64}, func::MOI.Interval)
     return
 end
 
-# Default fallback for unsupported constraints.
 _update_range(range::Vector{Float64}, x) = nothing
 
 function _coefficient_ranges(model::JuMP.Model)
@@ -332,25 +271,6 @@ function _coefficient_ranges(model::JuMP.Model)
     return ranges
 end
 
-"""
-    numerical_stability_report(
-        [io::IO = stdout,]
-        model::PolicyGraph;
-        by_node::Bool = false,
-        print::Bool = true,
-        warn::Bool = true,
-    )
-
-Print a report identifying possible numeric stability issues.
-
-## Keyword arguments
-
- - If `by_node`, print a report for each node in the graph.
-
- - If `print`, print to `io`.
-
- - If `warn`, warn if the coefficients may cause numerical issues.
-"""
 function numerical_stability_report(
     io::IO,
     model::PolicyGraph;
@@ -384,4 +304,3 @@ end
 function numerical_stability_report(model::PolicyGraph; kwargs...)
     return numerical_stability_report(stdout, model; kwargs...)
 end
-

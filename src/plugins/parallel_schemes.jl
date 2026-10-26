@@ -22,11 +22,6 @@ function log_iteration(options; force_if_needed::Bool = false)
     return
 end
 
-"""
-    Serial()
-
-Run MSUC in serial mode.
-"""
 struct Serial <: AbstractParallelScheme end
 
 Base.show(io::IO, ::Serial) = print(io, "serial mode")
@@ -35,16 +30,12 @@ interrupt(::Serial) = nothing
 
 function master_loop(
     ::Serial,
-    model::PolicyGraph{T},
+    model::PolicyGraph,
     options::Options,
-) where {T}
+)
     _initialize_solver(model; throw_error = false)
     status = nothing
     while status === nothing
-        # Disable CTRL+C so that InterruptExceptions can be thrown only between
-        # each iteration. Note that if the user presses CTRL+C during an
-        # iteration, then this will be cached and re-thrown as disable_sigint
-        # exits.
         status = disable_sigint() do
             result = iteration(model, options)
             options.post_iteration_callback(result)
@@ -72,25 +63,6 @@ function _simulate(
     )
 end
 
-"""
-    Threaded()
-
-Run MSUC in multi-threaded mode.
-
-Use `julia --threads N` to start Julia with `N` threads. In most cases, you
-should pick `N` to be the number of physical cores on your machine.
-
-!!! danger
-    This plug-in is experimental, and parts of MSUC.jl may not be threadsafe. If
-    you encounter any problems or crashes, please open a GitHub issue.
-
-## Example
-
-```julia
-MSUC.train(model; parallel_scheme = MSUC.Threaded())
-MSUC.simulate(model; parallel_scheme = MSUC.Threaded())
-```
-"""
 struct Threaded <: AbstractParallelScheme end
 
 Base.show(io::IO, ::Threaded) = print(io, "Threaded()")
@@ -99,9 +71,9 @@ interrupt(::Threaded) = nothing
 
 function master_loop(
     ::Threaded,
-    model::PolicyGraph{T},
+    model::PolicyGraph,
     options::Options,
-) where {T}
+)
     max_threads = Threads.nthreads()
     num_nodes = length(model.nodes)
     if num_nodes < max_threads
@@ -117,14 +89,7 @@ function master_loop(
     @sync for _ in 1:max_threads
         Threads.@spawn begin
             try
-                # This access of `keep_iterating` is not thread-safe, but it
-                # doesn't matter because all it will do is another iteration
-                # before terminating.
                 while keep_iterating
-                    # Disable CTRL+C so that InterruptExceptions can be thrown
-                    # only between each iteration. Note that if the user presses
-                    # CTRL+C during an iteration, then this will be cached and
-                    # re-thrown as disable_sigint exits.
                     disable_sigint() do
                         result = iteration(model, options)
                         lock(options.lock) do
@@ -181,8 +146,6 @@ function _simulate(
     end
     _initialize_solver(model; throw_error = false)
     ret = Vector{Vector{Dict{Symbol,Any}}}(undef, number_replications)
-    # Limit the number of Threads that we `@spawn` to the number of threads.
-    # Naively spawning `number_replications` threads can slow down the scheduler.
     @sync for chunk in _chunk_split(number_replications, max_threads)
         Threads.@spawn for j in chunk
             ret[j] = _simulate(model, variables; kwargs...)

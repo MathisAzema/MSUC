@@ -37,8 +37,8 @@ opt = MSUC.multistage_extensive(instance; force = FORCE, gap = 1e-9, timelimit =
 
 function run(builder, method, label)
     model = MSUC.PolicyGraph(
-        builder, instance, FORCE, MSUC.LinearGraph(T + 1), method;
-        sense = :Min, lower_bound = 0.0, optimizer = optimizer,
+        builder, instance, FORCE, MSUC.Graph(T + 1), method;
+        lower_bound = 0.0, optimizer = optimizer,
     )
     Random.seed!(SEED)
     MSUC.train(model; iteration_limit = ITER, print_level = 0)

@@ -3,293 +3,35 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-struct Graph{T}
-    # The root node of the policy graph.
-    root_node::T
-    # nodes[x] returns a vector of the children of node x and their
-    # probabilities.
-    nodes::Dict{T,Vector{Tuple{T,Float64}}}
+struct Graph
+    stages::Int
 end
 
-"""
-    Graph(root_node::T) where T
 
-Create an empty graph struture with the root node `root_node`.
-
-## Example
-
-```jldoctest
-julia> graph = MSUC.Graph(0)
-Root
- 0
-Nodes
- {}
-Arcs
- {}
-
-julia> graph = MSUC.Graph(:root)
-Root
- root
-Nodes
- {}
-Arcs
- {}
-
-julia> graph = MSUC.Graph((0, 0))
-Root
- (0, 0)
-Nodes
- {}
-Arcs
- {}
-```
-"""
-function Graph(root_node::T) where {T}
-    return Graph{T}(
-        root_node,
-        Dict{T,Vector{Tuple{T,Float64}}}(root_node => Tuple{T,Float64}[]),
-    )
-end
-
-# Helper utilities to sort the nodes for printing. This helps linear and
-# Markovian policy graphs where the nodes might be stored in an unusual ordering
-# in the dictionary.
-sort_nodes(nodes::Vector{Int}) = sort!(nodes)
-sort_nodes(nodes::Vector{Tuple{Int,Int}}) = sort!(nodes)
-sort_nodes(nodes::Vector{Tuple{Int,Float64}}) = sort!(nodes)
-sort_nodes(nodes::Vector{Symbol}) = sort!(nodes)
-sort_nodes(nodes) = nodes
+sort_nodes(nodes) = sort!(nodes)
 
 function Base.show(io::IO, graph::Graph)
-    println(io, "Root")
-    println(io, " ", graph.root_node)
-    println(io, "Nodes")
-    nodes = sort_nodes(collect(keys(graph.nodes)))
-    if first(nodes) != graph.root_node
-        splice!(nodes, findfirst(isequal(graph.root_node), nodes))
-        prepend!(nodes, [graph.root_node])
-    end
-    tree_nodes = filter(n -> n != graph.root_node, nodes)
-    if isempty(tree_nodes)
-        println(io, " {}")
-    else
-        for node in tree_nodes
-            println(io, " ", node)
-        end
+    println(io, "Root\n 0\nNodes")
+    for t in 1:graph.stages
+        println(io, " ", t)
     end
     print(io, "Arcs")
-    has_arc = false
-    for node in nodes
-        for (child, probability) in graph.nodes[node]
-            print(io, "\n ", node, " => ", child, " w.p. ", probability)
-            has_arc = true
-        end
-    end
-    if !has_arc
-        print(io, "\n {}")
+    for t in 0:(graph.stages-1)
+        print(io, "\n ", t, " => ", t + 1)
     end
     return
 end
 
-# Internal function used to validate the structure of a graph
-function _validate_graph(graph::Graph)
-    for (node, children) in graph.nodes
-        if length(children) > 0
-            probability = sum(child[2] for child in children)
-            if !(-1e-8 <= probability <= 1.0 + 1e-8)
-                error(
-                    "Probability on edges leaving node $(node) sum to " *
-                    "$(probability), but this must be in [0.0, 1.0]",
-                )
-            end
-        end
-    end
-    return
-end
-
-"""
-    add_node(graph::Graph{T}, node::T) where {T}
-
-Add a node to the graph `graph`.
-
-## Examples
-
-```jldoctest
-julia> graph = MSUC.Graph(:root);
-
-julia> MSUC.add_node(graph, :A)
-
-julia> graph
-Root
- root
-Nodes
- A
-Arcs
- {}
-```
-
-```jldoctest
-julia> graph = MSUC.Graph(0);
-
-julia> MSUC.add_node(graph, 2)
-
-julia> graph
-Root
- 0
-Nodes
- 2
-Arcs
- {}
-```
-"""
-function add_node(graph::Graph{T}, node::T) where {T}
-    if haskey(graph.nodes, node) || node == graph.root_node
-        error("Node $(node) already exists!")
-    end
-    graph.nodes[node] = Tuple{T,Float64}[]
-    return
-end
-
-function add_node(graph::Graph{T}, node) where {T}
-    return error("Unable to add node $(node). Nodes must be of type $(T).")
-end
-
-"""
-    add_edge(graph::Graph{T}, edge::Pair{T, T}, probability::Float64) where {T}
-
-Add an edge to the graph `graph`.
-
-## Examples
-
-```jldoctest
-julia> graph = MSUC.Graph(0);
-
-julia> MSUC.add_node(graph, 1)
-
-julia> MSUC.add_edge(graph, 0 => 1, 0.9)
-
-julia> graph
-Root
- 0
-Nodes
- 1
-Arcs
- 0 => 1 w.p. 0.9
-```
-
-```jldoctest
-julia> graph = MSUC.Graph(:root);
-
-julia> MSUC.add_node(graph, :A)
-
-julia> MSUC.add_edge(graph, :root => :A, 1.0)
-
-julia> graph
-Root
- root
-Nodes
- A
-Arcs
- root => A w.p. 1.0
-```
-"""
-function add_edge(
-    graph::Graph{T},
-    edge::Pair{T,T},
-    probability::Float64,
-) where {T}
-    (parent, child) = edge
-    if !(parent == graph.root_node || haskey(graph.nodes, parent))
-        error("Node $(parent) does not exist.")
-    elseif !haskey(graph.nodes, child)
-        error("Node $(child) does not exist.")
-    elseif child == graph.root_node
-        error("Cannot have an edge entering the root node.")
-    else
-        push!(graph.nodes[parent], (child, probability))
-    end
-    return
-end
-
-function Graph(
-    root_node::T,
-    nodes::Vector{T},
-    edges::Vector{Tuple{Pair{T,T},Float64}},
-) where {T}
-    graph = Graph(root_node)
-    add_node.(Ref(graph), nodes)
-    for (edge, probability) in edges
-        add_edge(graph, edge, probability)
-    end
-    return graph
-end
-
-"""
-    LinearGraph(stages::Int)
-
-Create a linear graph with `stages` number of nodes.
-
-## Examples
-
-```jldoctest
-julia> graph = MSUC.LinearGraph(3)
-Root
- 0
-Nodes
- 1
- 2
- 3
-Arcs
- 0 => 1 w.p. 1.0
- 1 => 2 w.p. 1.0
- 2 => 3 w.p. 1.0
-```
-"""
-function LinearGraph(stages::Int)
-    edges = Tuple{Pair{Int,Int},Float64}[]
-    for t in 1:stages
-        push!(edges, (t - 1 => t, 1.0))
-    end
-    return Graph(0, collect(1:stages), edges)
-end
-
-"""
-    Noise(support, probability)
-
-An atom of a discrete random variable at the point of support `support` and
-associated probability `probability`.
-"""
 struct Noise{T}
-    # The noise term.
     term::T
-    # The probability of sampling the noise term.
     probability::Float64
 end
 
 struct State{T}
-    # The incoming state variable.
     in::T
-    # The outgoing state variable.
     out::T
 end
 
-"""
-    IntervalCut
-
-Une coupe intervalle (39) :
-
-    cut(gamma, ytilde) = alpha + sum_{j,[a:b]} gamma_{j,a,b} ( tau_{j,a,b} + beta_{j,a,b} ytilde_{j,a,b} )
-
-Les champs portent les coefficients moyennes sur les aleas de (40) :
-`alpha` = alpha~_t (40a), `tau` = tau~_{j,a,b,t} (40c), `beta` = beta~_{j,a,b,t} (40d),
-indexes par (j, a, b). `constraint_ref` est la ligne d'epigraphe correspondante dans
-le sous-probleme ; elle est reecrite au planning courant a chaque passe avant, ce qui
-evite de porter les produits gamma * ytilde comme variables (cf. (41g)).
-
-`delta` est le coefficient de l'etat d'incertitude, delta~_t de (40b) : la coupe porte
-en plus le terme `delta' * zeta`. Il vaut identiquement zero quand `force = 0`, l'alea
-etant alors neutralise.
-"""
 mutable struct IntervalCut
     alpha::Float64
     tau::Dict{Tuple{Int64,Int64,Int64},Float64}
@@ -298,46 +40,24 @@ mutable struct IntervalCut
     constraint_ref::JuMP.ConstraintRef
 end
 
-mutable struct Node{T}
-    # The index of the node in the policy graph.
-    index::T
-    # The JuMP subproblem.
+mutable struct Node
+    index::Int
     subproblem::JuMP.Model
-    # A vector of the child nodes.
-    children::Vector{Noise{T}}
-    # A vector of the discrete stagewise-independent noise terms.
+    next_node::Union{Nothing,Int}
     noise_terms::Vector{Noise}
-    # A function parameterize(model::JuMP.Model, noise) that modifies the JuMP
-    # model based on the observation of the noise.
-    parameterize::Function  # TODO(odow): make this a concrete type?
-    # A list of the state variables in the model.
+    parameterize::Function
     states::Dict{Symbol,State{JuMP.VariableRef}}
-    # y_{j,t} : production physique, sous-ensemble de `states`
     states_power::Dict{Symbol,State{JuMP.VariableRef}}
-    # gamma_{j,a,b} : variables d'intervalle (Def. 1), indexees par (j, a, b)
     states_gamma::Dict{Tuple{Int,Int,Int},JuMP.VariableRef}
-    # zeta_t : etat d'incertitude ARMA (1g), dans l'ordre des composantes
     states_zeta::Vector{State{JuMP.VariableRef}}
-    # Stage objective
-    stage_objective::Any  # TODO(odow): make this a concrete type?
+    stage_objective::Any
     stage_objective_set::Bool
-    # Bellman function
-    bellman_function::Any  # TODO(odow): make this a concrete type?
-    # An over-loadable hook for the JuMP.optimize! function.
-    pre_optimize_hook::Union{Nothing,Function}
-    post_optimize_hook::Union{Nothing,Function}
-    # Approach for handling discrete variables.
+    bellman_function::Any
     has_integrality::Bool
-    # The user's optimizer. We use this in asynchronous mode.
     optimizer::Any
-    # An extension dictionary. This is a useful place for packages that extend
-    # MSUC.jl to stash things.
     ext::Dict{Symbol,Any}
-    # Lock for threading
     lock::ReentrantLock
-    # (lower, upper, is_integer)
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
-    # Approximation polyedrale (27) de la valeur future, une entree par coupe
     interval_cuts::Vector{IntervalCut}
     demand_constraint::Vector{JuMP.ConstraintRef}
     computation_time::Vector{Float64}
@@ -346,18 +66,8 @@ end
 function Base.show(io::IO, node::Node)
     println(io, "Node $(node.index)")
     println(io, "  # State variables : ", length(node.states))
-    println(io, "  # Children        : ", length(node.children))
+    println(io, "  # Next node       : ", something(node.next_node, "none"))
     println(io, "  # Noise terms     : ", length(node.noise_terms))
-    return
-end
-
-function pre_optimize_hook(f::Function, node::Node)
-    node.pre_optimize_hook = f
-    return
-end
-
-function post_optimize_hook(f::Function, node::Node)
-    node.post_optimize_hook = f
     return
 end
 
@@ -384,43 +94,28 @@ end
 ExtendedFormulation = Method("ExtendedFormulation")
 SDDPFormulation = Method("SDDP")
 
-mutable struct PolicyGraph{T}
-    # Must be MOI.MIN_SENSE or MOI.MAX_SENSE
+mutable struct PolicyGraph
     objective_sense::MOI.OptimizationSense
-    # Index of the root node.
-    root_node::T
-    # Children of the root node. child => probability.
-    root_children::Vector{Noise{T}}
-    # Starting value of the state variables.
+    root_node::Int
+    first_node::Int
     initial_root_state::Dict{Symbol,Float64}
-    # All nodes in the graph.
-    nodes::Dict{T,Node{T}}
-    # Storage for the most recent training results.
+    nodes::Dict{Int,Node}
     most_recent_training_results::Union{Nothing,TrainingResults}
-    # An extension dictionary. This is a useful place for packages that extend
-    # MSUC.jl to stash things.
     ext::Dict{Symbol,Any}
     timer_output::TimerOutputs.TimerOutput
     lock::ReentrantLock
 
     instance::Instance
     method::Method
-    # Amplitude de l'alea dans le bilan (1h) : force = 0 donne le probleme deterministe.
     force::Float64
 
-    function PolicyGraph(sense::Symbol, root_node::T, instance::Instance, method::Method, force::Float64) where {T}
-        if sense != :Min && sense != :Max
-            error(
-                "The optimization sense must be `:Min` or `:Max`. It is $(sense).",
-            )
-        end
-        optimization_sense = sense == :Min ? MOI.MIN_SENSE : MOI.MAX_SENSE
-        return new{T}(
-            optimization_sense,
-            root_node,
-            Noise{T}[],
+    function PolicyGraph(instance::Instance, method::Method, force::Float64)
+        return new(
+            MOI.MIN_SENSE,
+            0,
+            1,
             Dict{Symbol,Float64}(),
-            Dict{T,Node{T}}(),
+            Dict{Int,Node}(),
             nothing,
             Dict{Symbol,Any}(),
             TimerOutputs.TimerOutput(),
@@ -444,136 +139,33 @@ function Base.show(io::IO, graph::PolicyGraph)
     return
 end
 
-# So we can query nodes in the graph as graph[node].
-function Base.getindex(graph::PolicyGraph{T}, index::T) where {T}
+function Base.getindex(graph::PolicyGraph, index::Int)
     return graph.nodes[index]
 end
 
-# Work around different JuMP modes (Automatic / Manual / Direct).
-function construct_subproblem(optimizer_factory, direct_mode::Bool)
-    if direct_mode
-        model = JuMP.direct_model(MOI.instantiate(optimizer_factory))
-        set_silent(model)
-        return model
-    end
-    return JuMP.Model()
-end
-
-# Work around different JuMP modes (Automatic / Manual / Direct).
-function construct_subproblem(::Nothing, direct_mode::Bool)
-    if direct_mode
-        error(
-            "You must specify an optimizer in the form:\n" *
-            "    with_optimizer(Module.Opimizer, args...) if " *
-            "direct_mode=true.",
-        )
-    end
-    return JuMP.Model()
-end
-
-"""
-    PolicyGraph(
-        builder::Function,
-        graph::Graph{T};
-        sense::Symbol = :Min,
-        lower_bound = -Inf,
-        upper_bound = Inf,
-        optimizer = nothing,
-    ) where {T}
-
-Construct a policy graph based on the graph structure of `graph`. (See
-[`MSUC.Graph`](@ref) for details.)
-
-## Keyword arguments
-
- - `sense`: whether we are minimizing (`:Min`) or maximizing (`:Max`).
-
- - `lower_bound`: if mimimizing, a valid lower bound for the cost to go in all
-   subproblems.
-
- - `upper_bound`: if maximizing, a valid upper bound for the value to go in all
-   subproblems.
-
- - `optimizer`: the optimizer to use for each of the subproblems
-
-## Examples
-
-```julia
-function builder(subproblem::JuMP.Model, index)
-    # ... subproblem definition ...
-end
-
-model = PolicyGraph(
-    builder,
-    graph;
-    lower_bound = 0.0,
-    optimizer = HiGHS.Optimizer,
-)
-```
-
-Or, using the Julia `do ... end` syntax:
-
-```julia
-model = PolicyGraph(
-    graph;
-    lower_bound = 0.0,
-    optimizer = HiGHS.Optimizer,
-) do subproblem, index
-    # ... subproblem definitions ...
-end
-```
-"""
 function PolicyGraph(
     subproblem_builder::Function,
-    # masterproblem_builder::Function,
     instance::Instance,
     force::Float64,
-    graph::Graph{T},
+    graph::Graph,
     method::Method;
-    sense::Symbol = :Min,
     lower_bound = -Inf,
-    upper_bound = Inf,
     optimizer = nothing,
-    # These arguments are deprecated
-    bellman_function = nothing,
-    direct_mode::Bool = false,
-) where {T}
-    # Spend a one-off cost validating the graph.
-    _validate_graph(graph)
-    # Construct a basic policy graph. We will add to it in the remainder of this
-    # function.
-    policy_graph = PolicyGraph(sense, graph.root_node, instance, method, force)
-    # Create a Bellman function if one is not given.
-    if bellman_function === nothing
-        if sense == :Min && lower_bound === -Inf
-            error(
-                "You must specify a finite lower bound on the objective value" *
-                " using the `lower_bound = value` keyword argument.",
-            )
-        elseif sense == :Max && upper_bound === Inf
-            error(
-                "You must specify a finite upper bound on the objective value" *
-                " using the `upper_bound = value` keyword argument.",
-            )
-        else
-            bellman_function = BellmanFunction(;
-                lower_bound = lower_bound,
-                upper_bound = upper_bound,
-            )
-        end
+)
+    if lower_bound === -Inf
+        error(
+            "You must specify a finite lower bound on the objective value" *
+            " using the `lower_bound = value` keyword argument.",
+        )
     end
-    # Initialize nodes.
-    for (node_index, children) in graph.nodes
-
-        if node_index == graph.root_node
-            continue
-        end
-
-        subproblem = construct_subproblem(optimizer, direct_mode)
+    bellman_function = BellmanFunction(; lower_bound = lower_bound)
+    policy_graph = PolicyGraph(instance, method, force)
+    for node_index in 1:graph.stages
+        subproblem = JuMP.Model()
         node = Node(
             node_index,
             subproblem,
-            Noise{T}[],
+            node_index < graph.stages ? node_index + 1 : nothing,
             Noise[],
             (ω) -> nothing,
             Dict{Symbol,State{JuMP.VariableRef}}(),
@@ -582,33 +174,20 @@ function PolicyGraph(
             State{JuMP.VariableRef}[],
             0.0,
             false,
-            # Delay initializing the bellman function until later so that it can
-            # use information about the children and number of
-            # stagewise-independent noise realizations.
-            nothing,
-            # The optimize hook defaults to nothing.
-            nothing,
             nothing,
             false,
-            direct_mode ? nothing : optimizer,
-            # The extension dictionary.
+            optimizer,
             Dict{Symbol,Any}(),
             ReentrantLock(),
             Dict{Symbol,Tuple{Float64,Float64,Bool}}(),
             IntervalCut[],
-            JuMP.ConstraintRef[],  # demand_constraint
-            Float64[],  # computation_time
+            JuMP.ConstraintRef[],
+            Float64[],
         )
         subproblem.ext[:MSUC_policy_graph] = policy_graph
         policy_graph.nodes[node_index] = subproblem.ext[:MSUC_node] = node
         JuMP.set_objective_sense(subproblem, policy_graph.objective_sense)
 
-
-        # if node_index == graph.root_node
-        #     masterproblem_builder(instance, subproblem)
-        # else
-        #     subproblem_builder(instance, force, subproblem, node_index)
-        # end
         if method == ExtendedFormulation
             constraint, gamma_var = subproblem_builder(instance, force, subproblem, node_index)
 
@@ -627,8 +206,6 @@ function PolicyGraph(
             i in 1:MSUC.zeta_dimension(instance.arma)
         ]
 
-
-        # Add a dummy noise here so that all nodes have at least one noise term.
         if length(node.noise_terms) == 0
             push!(node.noise_terms, Noise(nothing, 1.0))
         end
@@ -637,31 +214,17 @@ function PolicyGraph(
             (JuMP.VariableRef, MOI.Integer) in ctypes ||
             (JuMP.VariableRef, MOI.ZeroOne) in ctypes
     end
-    # Loop back through and add the arcs/children.
-    for (node_index, children) in graph.nodes
-        if node_index == graph.root_node
-            continue
-        end
+    for node_index in 1:graph.stages
         node = policy_graph.nodes[node_index]
-        for (child, probability) in children
-            push!(node.children, Noise(child, probability))
-        end
-        # Intialize the bellman function. (See note in creation of Node above.)
         node.bellman_function =
             initialize_bellman_function(bellman_function, policy_graph, node)
     end
-    # Add root nodes
-    for (child, probability) in graph.nodes[graph.root_node]
-        push!(policy_graph.root_children, Noise(child, probability))
-        # We check the feasibility of the initial point here. It is a really
-        # tricky feasibility bug to diagnose otherwise. See #387 for details.
-        for (k, v) in policy_graph.initial_root_state
-            x_out = policy_graph[child].states[k].out
-            if JuMP.has_lower_bound(x_out) && JuMP.lower_bound(x_out) > v
-                error("Initial point $(v) violates lower bound on state $k")
-            elseif JuMP.has_upper_bound(x_out) && JuMP.upper_bound(x_out) < v
-                error("Initial point $(v) violates upper bound on state $k")
-            end
+    for (k, v) in policy_graph.initial_root_state
+        x_out = policy_graph[policy_graph.first_node].states[k].out
+        if JuMP.has_lower_bound(x_out) && JuMP.lower_bound(x_out) > v
+            error("Initial point $(v) violates lower bound on state $k")
+        elseif JuMP.has_upper_bound(x_out) && JuMP.upper_bound(x_out) < v
+            error("Initial point $(v) violates upper bound on state $k")
         end
     end
     domain = _get_incoming_domain(policy_graph)
@@ -673,7 +236,7 @@ function PolicyGraph(
     return policy_graph
 end
 
-function _get_incoming_domain(model::PolicyGraph{T}) where {T}
+function _get_incoming_domain(model::PolicyGraph)
     function _bounds(x)
         l, u = -Inf, Inf
         if has_lower_bound(x)
@@ -692,7 +255,7 @@ function _get_incoming_domain(model::PolicyGraph{T}) where {T}
         end
         return l, u, is_int
     end
-    outgoing_bounds = Dict{Tuple{T,Symbol},Any}(
+    outgoing_bounds = Dict{Tuple{Int,Symbol},Any}(
         (k, state_name) => nothing for (k, node) in model.nodes for
         (state_name, _) in node.states
     )
@@ -711,7 +274,7 @@ function _get_incoming_domain(model::PolicyGraph{T}) where {T}
             end
         end
     end
-    incoming_bounds = Dict{T,Dict{Symbol,Any}}()
+    incoming_bounds = Dict{Int,Dict{Symbol,Any}}()
     for (k, node) in model.nodes
         incoming_bounds[k] = Dict{Symbol,Any}(
             state_name => nothing for (state_name, _) in node.states
@@ -721,60 +284,31 @@ function _get_incoming_domain(model::PolicyGraph{T}) where {T}
         for (state_name, state) in parent.states
             domain_new = outgoing_bounds[(parent_name, state_name)]
             l_new, u_new, is_int_new = domain_new::Tuple{Float64,Float64,Bool}
-            for child in parent.children
-                domain = incoming_bounds[child.term][state_name]
-                incoming_bounds[child.term][state_name] = if domain === nothing
-                    (l_new, u_new, is_int_new)
-                else
-                    l, u, is_int = domain::Tuple{Float64,Float64,Bool}
-                    (min(l, l_new), max(u, u_new), is_int & is_int_new)
-                end
+            parent.next_node === nothing && continue
+            child = parent.next_node
+            domain = incoming_bounds[child][state_name]
+            incoming_bounds[child][state_name] = if domain === nothing
+                (l_new, u_new, is_int_new)
+            else
+                l, u, is_int = domain::Tuple{Float64,Float64,Bool}
+                (min(l, l_new), max(u, u_new), is_int & is_int_new)
             end
         end
     end
-    # The incoming state from the root node can be anything
     for (state_name, value) in model.initial_root_state
-        for child in model.root_children
-            incoming_bounds[child.term][state_name] = (-Inf, Inf, false)
-        end
+        incoming_bounds[model.first_node][state_name] = (-Inf, Inf, false)
     end
     return incoming_bounds
 end
 
-# Internal function: helper to get the node given a subproblem.
 function get_node(subproblem::JuMP.Model)
     return subproblem.ext[:MSUC_node]::Node
 end
 
-# Internal function: helper to get the policy graph given a subproblem.
 function get_policy_graph(subproblem::JuMP.Model)
     return subproblem.ext[:MSUC_policy_graph]::PolicyGraph
 end
 
-"""
-    parameterize(
-        modify::Function,
-        subproblem::JuMP.Model,
-        realizations::Vector{T},
-        probability::Vector{Float64} = fill(1.0 / length(realizations))
-    ) where {T}
-
-Add a parameterization function `modify` to `subproblem`. The `modify` function
-takes one argument and modifies `subproblem` based on the realization of the
-noise sampled from `realizations` with corresponding probabilities
-`probability`.
-
-In order to conduct an out-of-sample simulation, `modify` should accept
-arguments that are not in realizations (but still of type T).
-
-## Examples
-
-```julia
-MSUC.parameterize(subproblem, [1, 2, 3], [0.4, 0.3, 0.3]) do ω
-    JuMP.set_upper_bound(x, ω)
-end
-```
-"""
 function parameterize(
     modify::Function,
     subproblem::JuMP.Model,
@@ -795,20 +329,6 @@ function parameterize(
     return
 end
 
-"""
-    set_stage_objective(
-        subproblem::JuMP.Model,
-        stage_objective::Union{Real,JuMP.AbstractJuMPScalar},
-    )
-
-Set the stage-objective of `subproblem` to `stage_objective`.
-
-## Examples
-
-```julia
-MSUC.set_stage_objective(subproblem, 2x + 1)
-```
-"""
 function set_stage_objective(
     subproblem::JuMP.Model,
     stage_objective::Union{Real,JuMP.AbstractJuMPScalar},
@@ -826,17 +346,6 @@ function set_stage_objective(::JuMP.Model, f)
     )
 end
 
-"""
-    @stageobjective(subproblem, expr)
-
-Set the stage-objective of `subproblem` to `expr`.
-
-## Examples
-
-```julia
-@stageobjective(subproblem, 2x + y)
-```
-"""
 macro stageobjective(subproblem, expr)
     code = MutableArithmetics.rewrite_and_return(expr)
     return quote
@@ -844,16 +353,11 @@ macro stageobjective(subproblem, expr)
     end
 end
 
-function build_Φ(graph::PolicyGraph{T}) where {T}
-    Φ = Dict{Tuple{T,T},Float64}()
-    for (node_index_1, node_1) in graph.nodes
-        for child in node_1.children
-            Φ[(node_index_1, child.term)] = child.probability
-        end
-    end
-    for child in graph.root_children
-        Φ[(graph.root_node, child.term)] = child.probability
+function build_Φ(graph::PolicyGraph)
+    Φ = Dict{Tuple{Int,Int},Float64}()
+    Φ[(graph.root_node, graph.first_node)] = 1.0
+    for (index, node) in graph.nodes
+        node.next_node === nothing || (Φ[(index, node.next_node)] = 1.0)
     end
     return Φ
 end
-

@@ -29,8 +29,8 @@ opt = res[3]
 # --- 2. SDDP, formulation intervalle (Sect. 3) ----------------------------------
 function run_sddp(builder, method, label)
     model = MSUC.PolicyGraph(
-        builder, instance, FORCE, MSUC.LinearGraph(T + 1), method;
-        sense = :Min, lower_bound = 0.0, optimizer = optimizer,
+        builder, instance, FORCE, MSUC.Graph(T + 1), method;
+        lower_bound = 0.0, optimizer = optimizer,
     )
     t0 = time()
     MSUC.train(model; iteration_limit = ITERATIONS, print_level = 0)

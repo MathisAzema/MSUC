@@ -86,61 +86,19 @@ end
 
 @enum(CutType, SINGLE_CUT, MULTI_CUT)
 
-# Internal struct: this struct is just a cache for arguments until we can build
-# an actual instance of the type T at a later point.
 struct InstanceFactory{T}
     args::Any
     kwargs::Any
     InstanceFactory{T}(args...; kwargs...) where {T} = new{T}(args, kwargs)
 end
 
-"""
-    BellmanFunction
-
-A representation of the value function. MSUC.jl uses the following unique
-representation of the value function that is undocumented in the literature.
-
-It supports three types of state variables:
-
- 1) x - convex "resource" states
- 2) y - concave "objective" states
-
-In addition, we have three types of cuts:
-
- 1) Single-cuts (also called "average" cuts in the literature), which involve
-    the risk-adjusted expectation of the cost-to-go.
- 2) Multi-cuts, which use a different cost-to-go term for each realization w.
- 3) Risk-cuts, which correspond to the facets of the dual interpretation of a
-    convex risk measure.
-
-Therefore, ValueFunction returns a JuMP model of the following form:
-
-```
-V(x, b, y) =
-    min: μᵀb + νᵀy + θ
-    s.t. # "Single" / "Average" cuts
-         μᵀb(j) + νᵀy(j) + θ >= α(j) + xᵀβ(j),          ∀ j ∈ J
-         # "Multi" cuts
-         μᵀb(k) + νᵀy(k) + φ(w) >= α(k, w) + xᵀβ(k, w), ∀w ∈ Ω, k ∈ K
-         # "Risk-set" cuts
-         θ ≥ Σ{p(k, w) * φ(w)}_w - μᵀb(k) - νᵀy(k),     ∀ k ∈ K
-```
-"""
 mutable struct BellmanFunction
     cut_type::CutType
     global_theta::ConvexApproximation
     local_thetas::Vector{ConvexApproximation}
-    # Cuts defining the dual representation of the risk measure.
     risk_set_cuts::Set{Vector{Float64}}
 end
 
-"""
-    BellmanFunction(;
-        lower_bound = -Inf,
-        upper_bound = Inf,
-        cut_type::CutType = MULTI_CUT,
-    )
-"""
 function BellmanFunction(;
     lower_bound = -Inf,
     upper_bound = Inf,
@@ -159,9 +117,9 @@ end
 
 function initialize_bellman_function(
     factory::InstanceFactory{BellmanFunction},
-    model::PolicyGraph{T},
-    node::Node{T},
-) where {T}
+    model::PolicyGraph,
+    node::Node,
+)
     lower_bound, upper_bound, cut_type = -Inf, Inf, SINGLE_CUT
     if length(factory.args) > 0
         error(
@@ -184,14 +142,11 @@ function initialize_bellman_function(
     if lower_bound == -Inf && upper_bound == Inf
         error("You must specify a finite bound on the cost-to-go term.")
     end
-    if length(node.children) == 0
+    if node.next_node === nothing
         lower_bound = upper_bound = 0.0
     end
     Θᴳ = @variable(node.subproblem)
-    # lower_bound > -Inf && JuMP.set_lower_bound(Θᴳ, lower_bound)
-    # upper_bound < Inf && JuMP.set_upper_bound(Θᴳ, upper_bound)
 
-    # Coupe initiale nulle : V^{ext,0} = 0, de la forme (27).
     cstr = @constraint(node.subproblem, Θᴳ >= 0.0)
     thermal_units = model.instance.Thermalunits
     τ = Dict{Tuple{Int64,Int64,Int64},Float64}()
@@ -212,8 +167,8 @@ function initialize_bellman_function(
 end
 
 function refine_bellman_function(
-    model::PolicyGraph{T},
-    node::Node{T},
+    model::PolicyGraph,
+    node::Node,
     bellman_function::BellmanFunction,
     risk_measure::AbstractRiskMeasure,
     outgoing_state::Dict{Symbol,Float64},
@@ -221,7 +176,7 @@ function refine_bellman_function(
     noise_supports::Vector,
     nominal_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
-) where {T}
+)
     lock(node.lock)
     try
         return _refine_bellman_function_no_lock(
@@ -240,28 +195,9 @@ function refine_bellman_function(
     end
 end
 
-# Internal function: construit la coupe intervalle (39)-(40) au point d'essai et
-# l'ajoute au sous-probleme du noeud (Alg. 2, lignes 17-34).
-#
-# Pour chaque unite j et chaque intervalle [a:b] de T_j :
-#
-#   z_{j,a,b}   = c_{j,t} - nu_{n(j),t} + beta~^sigma_{j,a,b,t+1}          (Prop. 4)
-#   (h, beta)   = support local (49) si [a:b] est ACTIF a l'etape t+1,
-#                 (0, 0) sinon                                             (Prop. 4)
-#   tau_{j,a,b} = h + tau~^sigma_{j,a,b,t+1}                               (36)
-#
-# La propagation tau~^sigma a lieu dans TOUS les cas, y compris sur un intervalle
-# inactif : un intervalle qui demarre plus tard porte une valeur future non nulle.
-# L'omettre rend la borne invalide.
-#
-# alpha n'est pas calcule par (37) : il est retro-calcule depuis la valeur de Bellman
-# au point d'essai, de sorte que la coupe soit tendue par construction. Ce retro-calcul
-# suppose la dualite forte, donc des multiplicateurs OPTIMAUX a l'etat d'essai sur les
-# intervalles selectionnes (Prop. 4, cas gamma = 1) : c'est pourquoi le point de
-# linearisation y_prev y vaut l'etat reel et non la trajectoire de reference.
 function refine_bellman_function_extended(
-    model::PolicyGraph{T},
-    node::Node{T},
+    model::PolicyGraph,
+    node::Node,
     selected_intervals::Vector{Tuple{Int,Int,Int}},
     outgoing_state_power::Vector{Float64},
     outgoing_state_gamma::Dict{Tuple{Int,Int,Int},Float64},
@@ -270,7 +206,7 @@ function refine_bellman_function_extended(
     ν::Vector{Vector{Float64}},
     probability::Vector{Float64},
     objective_realizations::Vector{Float64},
-) where {T}
+)
     lock(node.lock)
     try
         instance = model.instance
@@ -281,17 +217,8 @@ function refine_bellman_function_extended(
         cuts = model[node.index+1].interval_cuts
         nscen = length(objective_realizations)
 
-        # tau~^sigma est lineaire en sigma : sa moyenne sur les aleas ne depend que de
-        # ces poids. Un seul parcours des coupes par intervalle au lieu de nscen.
         σ_mean = [sum(probability[i] * σ[i][k] for i in 1:nscen) for k in 1:length(cuts)]
 
-        # Coefficient de l'etat d'incertitude, eq. (10) puis (12) moyennees par (40b) :
-        #     lambda   = S_eta' D_t nu_bar + delta~^sigma_{t+1}
-        #     delta~_t = Psi' lambda
-        # Tout est lineaire en (nu, sigma), donc la moyenne sur les aleas ne demande que
-        # nu_bar et sigma_mean. Le facteur `force` est celui du bilan (1h) : a force = 0
-        # la premiere part s'annule et, par recurrence depuis delta = 0 au dernier
-        # etage, delta~ reste nul -- le cas deterministe est inchange.
         nz = MSUC.zeta_dimension(arma)
         nb = size(arma.S_eta, 1)
         ν_mean = [sum(probability[i] * ν[i][n] for i in 1:nscen) for n in 1:nb]
@@ -301,9 +228,6 @@ function refine_bellman_function_extended(
         end
         δ = [sum(arma.Psi[k, j] * λ[k] for k in 1:nz) for j in 1:nz]
 
-        # ytilde_{j,a,b,t} au point d'essai. A la racine c'est l'etat initial (17) ;
-        # ailleurs ytilde = u_{a,b,t} y_{j,t} (41g) et l'on renvoie y_{j,t} sans le
-        # facteur u_{a,b,t} : licite car beta = 0 sur tout intervalle inactif.
         trial_output(unit, a) =
             node.index == 1 ? initial_interval_output(unit, a) :
             outgoing_state_power[unit.name]
@@ -342,7 +266,6 @@ function refine_bellman_function_extended(
         theta = node.bellman_function.global_theta.theta
         ζ_expr = sum(δ[j] * node.states_zeta[j].out for j in 1:nz; init = 0.0)
         cstr = if node.index == 1
-            # ytilde_0 est une donnee (17) : la coupe ne depend plus que de gamma.
             @constraint(
                 node.subproblem,
                 theta >= α + ζ_expr + sum(
@@ -353,8 +276,6 @@ function refine_bellman_function_extended(
                 )
             )
         else
-            # ytilde_{j,a,b,t} = u_{a,b,t} y_{j,t} : la coupe s'ecrit sur la production
-            # physique, au planning courant. C'est la ligne d'epigraphe (41g).
             @constraint(
                 node.subproblem,
                 theta >= α + ζ_expr + sum(
@@ -371,8 +292,8 @@ function refine_bellman_function_extended(
 end
 
 function _refine_bellman_function_no_lock(
-    model::PolicyGraph{T},
-    node::Node{T},
+    model::PolicyGraph,
+    node::Node,
     bellman_function::BellmanFunction,
     risk_measure::AbstractRiskMeasure,
     outgoing_state::Dict{Symbol,Float64},
@@ -380,13 +301,11 @@ function _refine_bellman_function_no_lock(
     noise_supports::Vector,
     nominal_probability::Vector{Float64},
     objective_realizations::Vector{Float64},
-) where {T}
-    # Sanity checks.
+)
     @assert length(dual_variables) ==
             length(noise_supports) ==
             length(nominal_probability) ==
             length(objective_realizations)
-    # Preliminaries that are common to all cut types.
     risk_adjusted_probability = similar(nominal_probability)
     offset = adjust_probability(
         risk_measure,
@@ -396,7 +315,6 @@ function _refine_bellman_function_no_lock(
         objective_realizations,
         model.objective_sense == MOI.MIN_SENSE,
     )
-    # The meat of the function.
     if bellman_function.cut_type == SINGLE_CUT
         return _add_average_cut(
             node,
@@ -406,7 +324,7 @@ function _refine_bellman_function_no_lock(
             dual_variables,
             offset,
         )
-    else  # Add a multi-cut
+    else
         @assert bellman_function.cut_type == MULTI_CUT
         _add_locals_if_necessary(node, bellman_function, length(dual_variables))
         return _add_multi_cut(
@@ -430,8 +348,6 @@ function _add_average_cut(
 )
     N = length(risk_adjusted_probability)
     @assert N == length(objective_realizations) == length(dual_variables)
-    # Calculate the expected intercept and dual variables with respect to the
-    # risk-adjusted probability distribution.
     πᵏ = Dict(key => 0.0 for key in keys(outgoing_state))
     θᵏ = offset
     for i in 1:length(objective_realizations)
@@ -441,7 +357,6 @@ function _add_average_cut(
             πᵏ[key] += p * dual
         end
     end
-    # Coupe moyenne ajoutee au sous-probleme.
     _add_cut(node.bellman_function.global_theta, θᵏ, πᵏ, outgoing_state)
     return (theta = θᵏ, pi = πᵏ, x = outgoing_state)
 end
@@ -473,7 +388,6 @@ function _add_multi_cut(
             bellman_function.local_thetas[i].theta for i in 1:N
         ) + offset
     )
-    # TODO(odow): should we use `cut_expr` instead?
     ξ = copy(risk_adjusted_probability)
     if !(ξ in bellman_function.risk_set_cuts)
         push!(bellman_function.risk_set_cuts, ξ)
@@ -486,9 +400,6 @@ function _add_multi_cut(
     return
 end
 
-# If we are adding a multi-cut for the first time, then the local θ variables
-# won't have been added.
-# TODO(odow): a way to set different bounds for each variable in the multi-cut.
 function _add_locals_if_necessary(
     node::Node,
     bellman_function::BellmanFunction,
@@ -496,7 +407,7 @@ function _add_locals_if_necessary(
 )
     num_local_thetas = length(bellman_function.local_thetas)
     if num_local_thetas == N
-        return # Do nothing. Already initialized.
+        return
     elseif num_local_thetas > 0
         error(
             "Expected $(N) local θ variables but there were " *
@@ -526,4 +437,3 @@ function _add_locals_if_necessary(
     end
     return
 end
-
