@@ -44,7 +44,7 @@ function run(builder, method, label)
     MSUC.train(model; iteration_limit = ITER, print_level = 0)
     bounds = [l.bound for l in model.most_recent_training_results.log]
     k = findfirst(x -> (opt - x) / opt < TOL, bounds)
-    sim = MSUC.simulate_policy(model)
+    sim = MSUC.simulate(model)
 
     @printf("%-16s borne = %.4f   politique = %.4f   converge a l'iteration %s\n",
             label, bounds[end], sim.cost, k === nothing ? "> $ITER" : string(k))

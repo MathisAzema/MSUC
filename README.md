@@ -48,9 +48,8 @@ model = MSUC.PolicyGraph(
     MSUC.subproblem_builder_UC_extended,   # ou subproblem_builder_UC_def pour la 3-bin
     instance,
     1.0,                                   # `force` : amplitude de l'aléa (0 => déterministe)
-    MSUC.LinearGraph(T + 1),               # T+1 nœuds : racine + T étapes de dispatch
+    MSUC.Graph(T + 1),                     # T+1 nœuds : racine + T étapes de dispatch
     MSUC.ExtendedFormulation,              # ou MSUC.SDDPFormulation
-    sense = :Min,
     lower_bound = 0.0,
     optimizer = optimizer,
 )
@@ -96,8 +95,8 @@ opt = res[3]
 
 # 2. et 3. Les deux SDDP sur le même problème
 function run_sddp(builder, method, label)
-    model = MSUC.PolicyGraph(builder, instance, FORCE, MSUC.LinearGraph(T + 1), method;
-                             sense = :Min, lower_bound = 0.0, optimizer = optimizer)
+    model = MSUC.PolicyGraph(builder, instance, FORCE, MSUC.Graph(T + 1), method;
+                             lower_bound = 0.0, optimizer = optimizer)
     MSUC.train(model; iteration_limit = ITER, print_level = 0)
     log = model.most_recent_training_results.log
     @printf("SDDP %-11s borne = %.1f  (%.1f %% de l'optimum)\n",
@@ -171,7 +170,7 @@ Trois briques la rendent possible :
   multi-étapes. L'arbre a $\sum_{t=0}^{T} S^t$ nœuds, donc n'est tractable que pour
   $S$ et $T$ petits. Les lignes (44) n'y sont pas imposées — sur l'horizon complet elles
   sont impliquées par les rampes — ce qui rend la référence indépendante de (44) et (46).
-- **`simulate_policy(model)`** — coût espéré de la politique entraînée, donc un
+- **`simulate(model)`** — coût espéré de la politique entraînée, donc un
   **majorant** de l'optimum. L'engagement est figé (état sortant de la racine), les coupes
   intervalles réinstanciées à ce planning, puis chaque chemin est parcouru en résolvant les
   sous-problèmes d'étage. Le coût d'étage exclut la variable d'épigraphe : on mesure le coût
@@ -220,7 +219,7 @@ instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, 24;
 ```
 
 Les défauts sont les constantes `ARMA_SUPPORT_SIZE` et `ARMA_DISCRETIZATION` de
-[`src/UC/Struct/ARMA.jl`](src/UC/Struct/ARMA.jl). Le nombre d'aléas par étape vaut
+[`src/functions/instance/arma_process.jl`](src/functions/instance/arma_process.jl). Le nombre d'aléas par étape vaut
 exactement `S` : une seule innovation scalaire est tirée et appliquée à tous les nœuds
 (`common_innovation = true`), sans quoi il faudrait $S^{|\mathcal N|}$ combinaisons.
 
@@ -257,7 +256,7 @@ C'est la table de référence pour lire le code.
 
 | Article | Code | Où |
 |---|---|---|
-| $\mathcal J$ — groupes | `instance.Thermalunits` | `UC/Struct/Instance.jl` |
+| $\mathcal J$ — groupes | `instance.Thermalunits` | `struct_functions/instance/instance.jl` |
 | $\mathcal N$ — nœuds du réseau | `instance.Next`, `instance.Demandbus` | idem |
 | $\mathcal L$ — lignes | `instance.Lines` | idem |
 | $T$ — horizon | `instance.TimeHorizon` | idem |
@@ -266,20 +265,21 @@ C'est la table de référence pour lire le code.
 | $R^U_j,\ R^D_j$ | `unit.DeltaRampUp`, `unit.DeltaRampDown` | |
 | $S^U_j,\ S^D_j$ | `unit.MinPower` (ce modèle pose $S^U = S^D = \underline P$) | |
 | $y_{j,0}$ | `unit.InitialPower` | |
-| $\xi_t$ — aléa | `forecast_error_support(instance)` | `UC/builder.jl` |
+| $\xi_t$ — aléa | `forecast_error_support(instance)` | `functions/model/build_subproblems.jl` |
 | $p_{t,\xi}$ | `probability` | |
 
 ### Variables
 
 | Article | Code |
 |---|---|
-| $x_j = (u_j, v_j, w_j)$ | `is_on`, `start_up`, `start_down` (variables d'état) |
-| $y_{j,t}$ | `power[j]` (variable d'état), `node.states_power` |
-| $\gamma_{j,a,b}$ | `gamma[j,a,b]`, `node.states_gamma` |
+| $x_j = (u_j, v_j, w_j)$ | variables binaires `u`, `v`, `w` de la racine (`RootVariables`) ; **paramètres** `StageParameters` aux étapes de dispatch, fixés par `set_schedule!` ; valeurs lues dans `Schedule` |
+| $y_{j,t}$ | `power[j]` (état), `node.power` |
+| $\zeta_t$ | `ζ` (état), `node.zeta` |
+| $\gamma_{j,a,b}$ | `RootVariables.gamma[j,a,b]` à la racine ; `Schedule.selected` (intervalles choisis) ensuite |
 | $\tilde y_{j,a,b,t}$ | jamais matérialisé : identité $\tilde y = u_{a,b,t}\, y_{j,t}$, cf. (41g) |
 | $f_{n,m,t},\ \theta_{n,t}$ | `flow`, `θ` |
 
-### Section 4 — modèle capacité + rampes (`UC/Unit/Thermal_unit.jl`)
+### Section 4 — modèle capacité + rampes (`functions/instance/thermal_unit.jl`)
 
 | Article | Code |
 |---|---|
@@ -292,15 +292,17 @@ C'est la table de référence pour lire le code.
 | $q_{j,a,b,t}$ — éq. (49) | `reference_output(unit, a, b, t, T)` |
 | $\hat Q_{j,a,b,t}$ et son support (48)–(49) | `local_support(unit, a, b, t, T, y_prev, z)` → `(h, β)` |
 
-### Coupes (`plugins/bellman_functions.jl`)
+### Coupes (`struct_functions/cuts/cuts.jl`, `functions/cuts/cuts.jl`, `functions/cuts/refine_cuts.jl`)
 
 | Article | Code |
 |---|---|
-| coupe (39) | `IntervalCut` |
-| $\tilde\alpha_t$ — (40a) | `IntervalCut.alpha` |
-| $\tilde\tau_{j,a,b,t}$ — (40c) | `IntervalCut.tau[(j,a,b)]` |
-| $\tilde\beta_{j,a,b,t}$ — (40d) | `IntervalCut.beta[(j,a,b)]` |
-| $V^{\text{ext}}_{t}$ — (27) | `node.interval_cuts` |
+| coupe 3-bin (12) | `BinCut` : `alpha`, `tau` (sur le vecteur plat $x$), `beta` (sur $y$), `delta` (sur $\zeta$) |
+| coupe intervalle (41) | `IntervalCut` |
+| $\tilde\alpha_t$ — (39a) | `IntervalCut.alpha` |
+| $\tilde\tau_{j,a,b,t}$ | `IntervalCut.tau[(j,a,b)]` |
+| $\tilde\beta_{j,a,b,t}$ | `IntervalCut.beta[(j,a,b)]` |
+| $V^{\text{ext}}_{t}$ | `node.cuts` |
+| coupe au planning courant | `instantiate(cut, schedule, N)` → $(A, b)$ tels que $\theta \ge A + \delta^\top\zeta + b^\top y$ |
 | $\hat z_{j,a,b,\xi}$ — Prop. 4 | `z` |
 | $(\hat h, \hat\beta)$ — (34), (49) | valeur de retour de `local_support` |
 
@@ -320,19 +322,20 @@ C'est la table de référence pour lire le code.
 
 | Alg. 2 | Code |
 |---|---|
-| l. 4–5 — résoudre (26), stocker $(\gamma^k, x^k)$ et $L^k_{\text{ext}}$ | `forward_pass`, nœud 1 ; `lower_bound` |
-| l. 9 — résoudre (41) à chaque étape | `solve_subproblem_extended` |
+| l. 4–5 — résoudre (19), stocker $(\gamma^k, x^k)$ et $L^k_{\text{ext}}$ | `forward_pass`, nœud 1 ; `extract_schedule` ; `lower_bound` |
+| l. 9 — résoudre le sous-problème d'étape | `solve_subproblem` (planning fixé par `set_schedule!`) |
 | l. 10 — état d'intervalle | identité $\tilde y = u_{a,b,t} y_{j,t}$, pas de variable dédiée |
-| l. 15–16 — duaux $(\hat\nu, \hat\sigma)$ | `get_dual_solution_extended` |
-| l. 17 — $\hat z_{j,a,b,\xi}$ | `refine_bellman_function_extended` |
+| l. 15–16 — duaux $(\hat\nu, \hat\sigma)$ | `get_dual_solution` → `StageDuals` |
+| l. 17 — $\hat z_{j,a,b,\xi}$ | `compute_coefficients_extended` |
 | l. 19–28 — support local | `local_support` |
 | l. 29, (36) — $\hat\tau = \hat h + \tilde\tau^\sigma$ | `τ_ab` |
 | l. 33–34, (39)–(40) — moyenne et ajout | `IntervalCut(α, τ, β, cstr)` |
 
-**Le point le plus subtil.** Les coupes sont stockées avec leurs coefficients *par intervalle*,
-puis la ligne d'épigraphe est **réécrite** au planning $\gamma$ courant à chaque passe avant
-(`set_normalized_rhs` / `set_normalized_coefficient` dans `plugins/forward_passes.jl`). C'est
-ainsi qu'on obtient (41g) sans porter les produits $\gamma \cdot \tilde y$ comme variables.
+**Le point le plus subtil.** Les coupes sont stockées avec leurs coefficients *par intervalle*
+(*par composante de x* en 3-bin), puis la ligne d'épigraphe est **réécrite** au planning
+courant à chaque passe avant (`set_schedule!` → `instantiate_cut!`, par `set_normalized_rhs` /
+`set_normalized_coefficient`). C'est ainsi qu'on obtient (41g) sans porter les produits
+$\gamma \cdot \tilde y$ comme variables.
 
 **Le piège à ne pas réintroduire.** La Prop. 4 annule $\hat h$ et $\hat\beta$ sur un intervalle
 inactif, mais l'éq. (36) ajoute ensuite $\tilde\tau^\sigma$ : la **propagation des coupes futures
@@ -354,8 +357,8 @@ r = MSUC.bin_extensive_neutral(instance; silent=true, force=0.0, S=1, batch=1,
 opt = r[3]          # 1 850 053.2 sur Data/T-Ramp/10_0_1_w.nc4
 
 model = MSUC.PolicyGraph(MSUC.subproblem_builder_UC_extended, instance, 0.0,
-                         MSUC.LinearGraph(25), MSUC.ExtendedFormulation;
-                         sense=:Min, lower_bound=0.0, optimizer=optimizer)
+                         MSUC.Graph(25), MSUC.ExtendedFormulation;
+                         lower_bound=0.0, optimizer=optimizer)
 MSUC.train(model; iteration_limit = 10)
 ```
 
@@ -377,31 +380,51 @@ Référence (instance `10_0_1_w.nc4`, optimum exact **1 850 053,2**) :
 
 ## Organisation du dépôt
 
+Le code est rangé en deux dossiers parallèles, avec les mêmes sous-dossiers : `functions/` contient
+les fonctions, `struct_functions/` les structures dont les fichiers de `functions/` ont besoin
+(même nom de fichier). `MSUC.jl` inclut d'abord toutes les structures, puis les fonctions.
+
 ```
 src/
-  MSUC.jl                      module principal
-  UC/
-    Struct/Instance.jl         ThermalUnit, Line, Instance
-    Struct/parsing.jl          parse_nc4 (SMS++), parse_IEEE (118-bus)
-    Unit/Thermal_unit.jl       Section 4 : T_j, p, R^U, R^D, q, local_support
-    Unit/Line.jl               réseau
-    builder.jl                 sous-problèmes d'étape des deux formulations
-    extensive_formulation.jl   formulation extensive 3-bin (vérité terrain)
-  plugins/
-    bellman_functions.jl       génération des coupes intervalles (Sect. 3.3)
-    forward_passes.jl          passe avant + réinstanciation des coupes
-    duality_handlers.jl        récupération de (σ, ν) et ContinuousConicDuality
-    risk_measures.jl           mesures de risque (hérité SDDP.jl)
-    sampling_schemes.jl        échantillonnage des scénarios (hérité)
-    stopping_rules.jl          critères d'arrêt (hérité)
-    backward_sampling_schemes.jl, parallel_schemes.jl, headers.jl  (hérités)
-  algorithm.jl                 boucle SDDP, passe arrière
-  user_interface.jl            PolicyGraph, Node, IntervalCut
-  print.jl, JuMP.jl            journal et surcharges JuMP
+  MSUC.jl                          module, imports, constantes de coût
+  functions/
+    algorithm/                     la boucle SDDP (Algorithme 2)
+      train.jl                       train, master_loop
+      one_iteration.jl               une itération : racine, passe avant, passe arrière, borne
+      solve_first_stage_problem.jl   problème racine (MIP) : planning x^k et borne inférieure
+      forward_pass.jl                passe avant (étapes de dispatch)
+      backward_pass.jl               passe arrière, solve_next_node
+      solve_subproblem.jl            résolution d'un sous-problème d'étape, reprise numérique
+    cuts/                          coupes de Benders
+      refine_cuts.jl                 génération des coupes 3-bin et intervalle
+      cuts.jl                        instantiate, add_cut!, ligne d'épigraphe de la racine
+      duals.jl                       duaux d'un sous-problème (StageDuals)
+    model/                         construction du modèle SDDP
+      build_policy_graph.jl          PolicyGraph, @stageobjective, parameterize
+      build_subproblems.jl           points d'entrée des deux formulations, états (y, ζ)
+      build_root_problem.jl          problème racine : engagement et variables γ
+      build_stage_problem.jl         problème d'étage : capacité/rampes, réseau, bilan, ARMA
+      bellman_function.jl            variable θ et coupe initiale de chaque nœud
+      schedule.jl                    extract_schedule, set_schedule!, paramètres du planning
+      state_variable.jl              extension JuMP `State`
+    instance/                      données et physique des unités
+      parse_instance.jl              parse_nc4 (SMS++)
+      arma_process.jl                ARMA et discrétisation de l'innovation
+      thermal_unit.jl                Section 4 : T_j, p, R^U, R^D, q, local_support
+      unit_constraints.jl            contraintes partagées (engagement, capacité/rampes, lignes)
+    reference/                     solutions exactes de référence
+      extensive_formulation.jl       extensive 3-bin deux-étages (vérité terrain, force = 0)
+      multistage_extensive.jl        équivalent déterministe de l'arbre (optimum multi-étapes)
+    tools/                         outils
+      sampling.jl                    tirage des trajectoires et des aléas
+      simulate.jl                    simulate : résout la racine puis les trajectoires
+      print_log.jl                   journal et rapport numérique
+  struct_functions/                mêmes sous-dossiers : Instance, ThermalUnit, ARMAProcess, Schedule,
+                                   Node, PolicyGraph, BinCut, IntervalCut, Options, Log, ...
 Data/
-  T-Ramp/                      41 instances SMS++ (.nc4)
-  IEEE/118_syst/               instance IEEE 118-bus
-  Uncertainty/                 scénarios de demande nette
+  T-Ramp/                          41 instances SMS++ (.nc4)
+  IEEE/118_syst/                   données IEEE 118-bus (pas de parseur pour l'instant)
+  Uncertainty/                     scénarios de demande nette (formulation deux-étages seulement)
 ```
 
 Le **Benders deux-étages** de l'article [12] (`benders_callback`, `add_cut_SP`, l'heuristique
@@ -422,7 +445,7 @@ Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignabl
 | `objective_state` | objectif dépendant d'un prix exogène markovien, avec interpolation et terme $\mu^\top y$ | positionné seulement par `add_objective_state`, que les builders n'appellent jamais |
 | cycles | horizon infini : `terminated_due_to_cycle`, `starting_states`, `cycle_discretization_delta` | un chemin ne boucle pas |
 | persistance de politique | `write_cuts_to_file` / `read_cuts_from_file` : sauver une politique entraînée pour la recharger sans réentraîner | ne sérialisent que les coupes génériques, **pas** les `IntervalCut` ; le dump était vide en formulation étendue, et `read_` jamais appelée |
-| handlers SDDiP | `LagrangianDuality`, `StrengthenedConicDuality`, `BanditDuality`, `FixedDiscreteDuality` et `local_improvement_search.jl` : duaux de sous-problèmes **entiers** | §1 du papier — seule la racine est non convexe, chaque étage est un LP, donc `ContinuousConicDuality` est exacte |
+| handlers de dualité (SDDiP, `ContinuousConicDuality`) et relaxation d'intégrité | `LagrangianDuality`, `StrengthenedConicDuality`, `BanditDuality`, `FixedDiscreteDuality`, `local_improvement_search.jl`, et la relaxation des variables entières avant la passe arrière | §1 du papier — seule la racine est non convexe, chaque étage est un LP : les duaux LP sont exacts, d'où `solve_subproblem(...; compute_duals = true)` |
 
 > **`Plots` n'est plus une dépendance du projet.** Si vos notebooks font `using Plots`,
 > rajoutez-le : `julia --project=. -e 'using Pkg; Pkg.add("Plots")'`.
@@ -433,18 +456,15 @@ Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignabl
 
 | Article | État |
 |---|---|
-| Processus ARMA $\zeta_t = \Psi\zeta_{t-1} + E\xi_t$ — (1g) | **absent**. L'aléa est i.i.d. entre étapes ; tout le volet $\delta/\lambda$ des coupes (10), (12), (37), (40b) n'existe pas. |
 | §3.4 — dominance par étape et par itération | vide dans l'article |
-| Étude numérique IEEE 118-bus | `parse_IEEE` réparé mais non validé de bout en bout |
+| Étude numérique IEEE 118-bus | **pas de parseur** : `parse_IEEE` a été supprimé (commit `bab96ca`). Restauré dans un script de test avec la correction `S, = size(...)` qui écrasait l'argument `S`, le chemin réseau est validé sur T = 4 (borne ≤ optimum exact ≤ politique, deux formulations). La demande nette n'inclut pas l'éolien. |
 | Horizon $T \neq 24$ | le builder et le parsing prennent `T`, mais les instances fournies sont à 24 pas |
 
 Autres limites connues :
 
 - **Pas de graine aléatoire** : les runs stochastiques ne sont pas reproductibles.
-- **Coût en $O(k)$ par intervalle et par aléa** dans le calcul de $\hat z$ (`plugins/bellman_functions.jl`),
+- **Coût en $O(k)$ par intervalle et par aléa** dans le calcul de $\hat z$ (`functions/cuts/refine_cuts.jl`),
   donc entraînement en $O(k^2)$. Le terme $\tilde\tau^\sigma$ est déjà factorisé via `σ_mean` ;
   reste $\hat z$, qui se ramènerait à un produit matrice-vecteur en indexant les intervalles de
   façon dense.
 - **Pas de tests automatisés.**
-
-Le suivi détaillé des corrections et des points ouverts est dans [`CORRECTIONS.md`](CORRECTIONS.md).
