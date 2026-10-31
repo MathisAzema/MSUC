@@ -13,8 +13,11 @@ d'alea. Avec `schedule`, le probleme racine n'est pas resolu : on simule la poli
 trajectoires `S^T` ne depasse pas `max_paths`, elles sont toutes enumerees et le cout espere est
 EXACT ; sinon on tire `samples` trajectoires avec la graine `seed`.
 
-Renvoie `(cost, commitment_cost, dispatch_cost, exhaustive, npaths, costs, weights)`. `cost` est le
-cout espere de la politique, donc un majorant de l'optimum (valeur exacte si `exhaustive`).
+Renvoie `(cost, commitment_cost, dispatch_cost, exhaustive, npaths, costs, weights, stderr, ci95)`.
+`cost` est le cout espere de la politique, donc un majorant de l'optimum (valeur exacte si
+`exhaustive`). `stderr` est l'erreur standard de `cost` et `ci95 = (bas, haut)` son intervalle de
+confiance a 95 % (approximation normale, `cost ± 1.96 stderr`) ; tous deux sont nuls si `exhaustive`,
+puisque le cout espere est alors exact.
 """
 function simulate(
     model::PolicyGraph;
@@ -68,13 +71,17 @@ function simulate(
         push!(costs, c)
     end
     dispatch_cost = sum(w * c for (w, c) in zip(weights, costs))
+    cost = commitment_cost + dispatch_cost
+    stderr = exhaustive ? 0.0 : Statistics.std(costs) / sqrt(length(costs))
     return (
-        cost = commitment_cost + dispatch_cost,
+        cost = cost,
         commitment_cost = commitment_cost,
         dispatch_cost = dispatch_cost,
         exhaustive = exhaustive,
         npaths = length(paths),
         costs = costs,
         weights = weights,
+        stderr = stderr,
+        ci95 = (cost - 1.96 * stderr, cost + 1.96 * stderr),
     )
 end

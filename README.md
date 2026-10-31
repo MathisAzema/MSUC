@@ -262,7 +262,7 @@ Chaque run écrit, dans `results_sms/<méthode>_T<T>_S<S>_sigma<σ>_passes<p>_ga
 | `schedules.csv` | une ligne par itération : intervalles sélectionnés par le MIP racine (`selected`) et composantes non nulles de $x=(u,v,w)$ (`x_nonzero`), listes séparées par des points-virgules |
 | `used_components.csv` | composantes de $x$ utiles à au moins un planning (voir ci-dessous) |
 | `cuts.csv` | coupes d'étape restreintes à ces composantes, sans en-tête, une ligne par coupe dans l'ordre de création : nœud, $\alpha$, $\delta$, $\tau$, $\beta$ |
-| `simulation_<N>.csv` | un résumé par instant : dernière itération terminée, sa borne, nombre de coupes d'étape, coût espéré de la politique, coût d'engagement, erreur standard |
+| `simulation_<N>.csv` | un résumé par instant : dernière itération terminée, sa borne, nombre de coupes d'étape, coût espéré de la politique, coût d'engagement, erreur standard et intervalle de confiance à 95 % (`ci95_low`, `ci95_high` : coût espéré $\pm\,1{,}96$ erreur standard ; nul si les trajectoires sont énumérées, le coût est alors exact) |
 | `simulation_<t>_<N>.csv` | coût de dispatch de chaque trajectoire à l'instant `t` |
 
 Les phases de `phases.csv` sont `solve_first_stage_problem` (le MIP racine), `set_schedule`,

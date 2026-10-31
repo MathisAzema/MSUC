@@ -73,7 +73,8 @@
 #                                coupe, dans l'ordre de creation : noeud, alpha, delta, tau, beta
 #   simulation_<N>.csv           resume de `run_simulate` : une ligne par instant (derniere iteration
 #                                terminee a cet instant, sa borne, nombre de coupes d'etape, cout espere de
-#                                la politique, cout d'engagement, erreur standard, ...)
+#                                la politique, cout d'engagement, erreur standard et intervalle de
+#                                confiance a 95 % `ci95_low`, `ci95_high` : cout espere +- 1.96 erreur standard)
 #   simulation_<t>_<N>.csv       cout de dispatch de chaque trajectoire a l'instant t
 #
 # Les phases de `phases.csv` sont : solve_first_stage_problem (MIP racine), set_schedule (planning
