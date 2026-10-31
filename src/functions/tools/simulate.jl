@@ -4,18 +4,21 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 """
-    simulate(model; samples = 1000, max_paths = 4096, seed = 1234)
+    simulate(model; schedule = nothing, samples = 1000, max_paths = 4096, seed = 1234)
 
 Simule la politique apres `train` : resout le probleme racine avec les coupes finales, fixe le
 planning x^k obtenu (`set_schedule!`), puis resout les etapes de dispatch le long de trajectoires
-d'alea. Quand le nombre de trajectoires `S^T` ne depasse pas `max_paths`, elles sont toutes
-enumerees et le cout espere est EXACT ; sinon on tire `samples` trajectoires avec la graine `seed`.
+d'alea. Avec `schedule`, le probleme racine n'est pas resolu : on simule la politique de ce planning
+(par exemple celui que l'algorithme avait choisi a une iteration donnee). Quand le nombre de
+trajectoires `S^T` ne depasse pas `max_paths`, elles sont toutes enumerees et le cout espere est
+EXACT ; sinon on tire `samples` trajectoires avec la graine `seed`.
 
 Renvoie `(cost, commitment_cost, dispatch_cost, exhaustive, npaths, costs, weights)`. `cost` est le
 cout espere de la politique, donc un majorant de l'optimum (valeur exacte si `exhaustive`).
 """
 function simulate(
     model::PolicyGraph;
+    schedule::Union{Nothing,Schedule} = nothing,
     samples::Int = 1000,
     max_paths::Int = 4096,
     seed::Int = 1234,
@@ -24,11 +27,16 @@ function simulate(
     S = length(model[2].noise_terms)
 
     # Probleme racine : planning de la politique et son cout d'engagement.
-    root = model[model.first_node]
     state = initial_state(model.instance)
-    solve_first_stage_problem(model, state)
-    commitment_cost = stage_objective_value(root, root.stage_objective)
-    set_schedule!(model, extract_schedule(model))
+    if schedule === nothing
+        root = model[model.first_node]
+        solve_first_stage_problem(model, state)
+        commitment_cost = stage_objective_value(root, root.stage_objective)
+        schedule = extract_schedule(model)
+    else
+        commitment_cost = schedule_commitment_cost(model.instance, schedule)
+    end
+    set_schedule!(model, schedule)
 
     exhaustive = float(S)^T <= max_paths
     paths, weights = if exhaustive

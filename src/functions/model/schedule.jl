@@ -111,3 +111,18 @@ function set_schedule!(model::PolicyGraph, schedule::Schedule)
     end
     return
 end
+
+"""
+    schedule_commitment_cost(instance, schedule)
+
+Cout d'engagement (objectif du probleme racine) d'un planning : cout a vide, de demarrage et d'arret
+sur tout l'horizon. `schedule.u` est indexe de t = 0 a T, `v` et `w` de t = 1 a T.
+"""
+function schedule_commitment_cost(instance::Instance, schedule::Schedule)
+    return sum(
+        unit.ConstTerm * schedule.u[unit.name, t+1] +
+        unit.StartUpCost * schedule.v[unit.name, t] +
+        unit.StartDownCost * schedule.w[unit.name, t] for unit in instance.Thermalunits for
+        t in 1:instance.TimeHorizon
+    )
+end

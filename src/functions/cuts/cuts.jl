@@ -69,7 +69,9 @@ end
     add_cut!(model, node, cut)
 
 Ajoute `cut` aux coupes du noeud : cree sa ligne d'epigraphe, ecrite sur les variables de
-decision a la racine et reduite au planning courant aux etapes de dispatch.
+decision a la racine et reduite au planning courant aux etapes de dispatch. Tant qu'aucun planning
+n'est fixe (modele neuf dont on recharge des coupes), la ligne n'est pas instanciee : le prochain
+`set_schedule!` s'en charge.
 """
 function add_cut!(model::PolicyGraph, node::Node, cut::AbstractCut)
     subproblem = node.subproblem
@@ -85,7 +87,7 @@ function add_cut!(model::PolicyGraph, node::Node, cut::AbstractCut)
         )
     else
         cut.constraint_ref = @constraint(subproblem, θ - ζ_term >= 0.0)
-        instantiate_cut!(
+        model.schedule === nothing || instantiate_cut!(
             cut,
             [s.out for s in node.power],
             model.schedule,

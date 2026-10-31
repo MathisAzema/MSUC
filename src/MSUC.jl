@@ -66,5 +66,9 @@ include("functions/algorithm/one_iteration.jl")
 include("functions/algorithm/train.jl")
 include("functions/tools/simulate.jl")
 include("functions/tools/print_log.jl")
+include("functions/run/model.jl")
+include("functions/run/record.jl")
+include("functions/run/policy.jl")
+include("functions/run/jobs.jl")
 
 end

@@ -23,11 +23,12 @@ const ARMA_PHI = [0.67]
 const ARMA_THETA = [0.117]
 
 """
-Variance de l'innovation, PSCC eq. (40) : `xi_t ~ N(0, 2.9e-4 * sigma)`.
+Variance de base de l'innovation, PSCC eq. (40) : `xi_t ~ N(0, 2.9e-4)`.
 
-Le second argument de `N(.,.)` est lu comme une VARIANCE : pour sigma = 1 l'ecart-type
-de l'innovation vaut sqrt(2.9e-4) ~ 1.7 %, ordre de grandeur d'une erreur de prevision
-de demande a un jour. `sigma` echelonne la variance (donc l'ecart-type en sqrt(sigma)).
+Le second argument de `N(.,.)` est lu comme une VARIANCE : l'ecart-type de l'innovation vaut
+sqrt(2.9e-4) ~ 1.7 %, ordre de grandeur d'une erreur de prevision de demande a un jour. Le parametre
+`sigma` multiplie l'ECART-TYPE : la variance vaut `2.9e-4 * sigma^2`. (Dans PSCC, le parametre
+`sigma` multiplie la variance : c'est le carre de celui d'ici.)
 """
 const ARMA_INNOVATION_VARIANCE = 2.9e-4
 
@@ -152,9 +153,11 @@ de reseau repartie au prorata des charges (Zou, Ahmed & Sun, 2018). L'etat `zeta
 dimension `p + q`, quel que soit le reseau, et le nombre d'aleas par etape vaut exactement `S`
 (sinon il faudrait `S^|N|` combinaisons).
 
-`sigma` est le parametre d'echelle de PSCC eq. (40) : la variance de l'innovation vaut
-`2.9e-4 * sigma`. `sigma = 1` correspond a l'erreur de prevision de demande seule, des
-valeurs plus grandes a l'incertitude additionnelle de la production eolienne.
+`sigma` multiplie l'ecart-type de l'innovation : sa variance vaut `2.9e-4 * sigma^2` (PSCC eq. (40)
+multiplie la variance par son propre parametre, qui est donc ici `sigma^2`). `sigma = 1` correspond a
+l'erreur de prevision de demande seule, des valeurs plus grandes a l'incertitude additionnelle de la
+production eolienne, et `sigma = 0` au probleme deterministe. Multiplier `sigma` par `c` a le meme effet
+que `force = c` dans `PolicyGraph`.
 
 `S` est la taille du support de l'innovation et `discretization` son schema
 (`:gauss_hermite` ou `:equiprobable`).
@@ -164,7 +167,7 @@ function ARMAProcess(
     sigma::Float64 = 1.0,
     Phi::Vector{Float64} = ARMA_PHI,
     Theta::Vector{Float64} = ARMA_THETA,
-    variance::Float64 = ARMA_INNOVATION_VARIANCE * sigma,
+    variance::Float64 = ARMA_INNOVATION_VARIANCE * sigma^2,
     S::Int = ARMA_SUPPORT_SIZE,
     discretization::Symbol = ARMA_DISCRETIZATION,
     match_variance::Bool = true,

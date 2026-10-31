@@ -182,7 +182,8 @@ Trois briques la rendent possible :
 - **`simulate(model)`** — coût espéré de la politique entraînée, donc un
   **majorant** de l'optimum. L'engagement est figé (état sortant de la racine), les coupes
   intervalles réinstanciées à ce planning, puis chaque chemin est parcouru en résolvant les
-  sous-problèmes d'étage. Le coût d'étage exclut la variable d'épigraphe : on mesure le coût
+  sous-problèmes d'étage. Avec `schedule = ...`, le planning donné est fixé directement, sans résoudre le
+  MIP racine. Le coût d'étage exclut la variable d'épigraphe : on mesure le coût
   réellement encouru, pas l'approximation de la valeur future. Énumère les $S^T$ chemins
   quand c'est tractable (coût espéré **exact**, aucune erreur d'échantillonnage), sinon tire
   `samples` chemins avec une graine.
@@ -191,12 +192,101 @@ Trois briques la rendent possible :
 
 ---
 
+## Campagnes d'expériences SMS++ (`runSMS.jl`)
+
+[`runSMS.jl`](runSMS.jl) entraîne puis simule la politique sur les instances de `Data/T-Ramp`, un run par
+cœur (`Distributed`). Le script ne contient que la mise en place des workers et les deux points d'entrée
+`run_train` et `run_simulate` ; le travail d'un run (`train_job`, `simulate_job`, écriture et relecture de la
+politique) est dans [`src/functions/run/`](src/functions/run/). Depuis la racine du dépôt :
+
+```julia
+include("runSMS.jl")                      # NBWORKERS=2 julia ... pour un essai (10 workers par défaut)
+
+size_list = [10, 50]                      # nombre de groupes de l'instance
+id_list   = 1:5                           # identifiant (Data/T-Ramp/<n>_0_<id>_w.nc4)
+methods   = ["interval", "bin3"]          # coupes intervalle ou 3-bin
+
+# 1. Entraînement : un run de 3 600 s par combinaison (taille, identifiant, méthode, S, sigma, ...)
+run_train(size_list, id_list, methods, [3600];
+          S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
+
+# 2. Politique telle qu'elle était à 60, 600 et 3 600 s, simulée sur 1 000 trajectoires
+run_simulate(size_list, id_list, methods, [3600], [60, 600, 3600], 1000;
+             S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
+```
+
+Les tailles disponibles sont 10, 20, 50, 75, 100, 150 et 200 ; les identifiants vont de 1 à 5, sauf pour
+200 groupes (1 à 11). Une combinaison (taille, identifiant) sans fichier est ignorée avec un avertissement,
+ce qui permet par exemple `size_list = [10, 200]` avec `id_list = 1:11`.
+
+Les options `S_list`, `sigma_list`, `mip_gap_list` et `passes_per_mip_list` (valeurs par défaut `[5]`, `[1.0]`,
+`[nothing]` et `[1]`) donnent un run par élément de leur produit cartésien avec les instances, les méthodes
+et les temps ; `T` (24) est un scalaire. L'amplitude de l'aléa est réglée par `sigma`, qui multiplie
+l'écart-type de l'innovation de l'ARMA (variance $2{,}9\cdot10^{-4}\sigma^2$) : il joue exactement le rôle du
+paramètre `force` de `PolicyGraph`, fixé à 1 dans les runs, et `sigma = 0` redonne le problème déterministe. La graine est fixée à 1 pour tous les runs
+(`MSUC.SEED`), entraînement et simulation. Pour `run_simulate`, les listes doivent contenir les valeurs de
+l'entraînement (elles peuvent n'en être qu'un sous-ensemble).
+
+`run_simulate` s'appelle après l'entraînement, éventuellement dans une autre session, avec d'autres
+instants ou un autre nombre de trajectoires. À un instant donné, la politique rejouée est celle de la
+dernière itération `k` terminée : son planning $x^k$ (celui du MIP racine) et les coupes d'étape qui
+existaient quand il a été calculé, c'est-à-dire celles jusqu'à l'itération `k-1`. C'est la politique que
+simule la passe avant de l'itération `k`, et la borne `bound` de cette itération repose sur ces mêmes
+coupes. Un instant antérieur à la fin de la première itération est ignoré. `run_simulate` reconstruit
+un modèle neuf, y recharge ces coupes d'étape (les instants sont traités par ordre croissant, sans rien
+recharger), fixe le planning enregistré (`simulate(model; schedule = ...)`) puis simule `N` trajectoires :
+le MIP racine n'est jamais re-résolu. Si `S^T ≤ 4096` les trajectoires sont toutes énumérées et le coût est exact. Les options
+(`T`, `S`, `sigma`, `mip_gap`, `passes_per_mip`) doivent être celles de l'entraînement.
+
+**L'entraînement n'est pas modifié** : `train` est appelé tel quel. On relève seulement, après chaque
+itération, le planning du MIP racine et les temps par phase ; les coupes restreintes décrites ci-dessous
+sont écrites une fois l'entraînement terminé.
+
+**Pourquoi les coupes enregistrées sont petites, sans perte.** Évaluer une coupe en un planning ne demande
+que ses coefficients sur les composantes que ce planning sélectionne : les intervalles choisis en
+formulation intervalle, les composantes non nulles de $(u, v, w)$ en 3-bin. On ne garde donc, pour chaque
+coupe, que ses coefficients sur les composantes sélectionnées par au moins un planning de
+l'entraînement, soit 75 intervalles sur 2 025 après 53 itérations sur `10_0_1_w`. Chaque passe ajoute une
+coupe à chaque nœud d'étape, ce qui donne les coupes qui existaient à chaque itération sans rien relever
+de plus. Les coupes de la racine ne sont pas enregistrées, puisque le MIP racine n'est pas re-résolu. Sur `10_0_1_w` (`T = 24`) la politique
+rejouée est identique, au bit près, à celle obtenue avec les coupes complètes.
+
+Chaque run écrit, dans `results_sms/<méthode>_T<T>_S<S>_sigma<σ>_passes<p>_gap<g>/<instance>/time_<t>/` :
+
+| Fichier | Contenu |
+|---|---|
+| `log.csv` | une ligne par itération : `bound` (borne inférieure), `time` (s depuis le début), `total_solves` |
+| `phases.csv` | une ligne par itération : temps **cumulé** (s) de chaque phase, une colonne par phase ; le temps d'une phase entre deux instants est une différence de deux lignes |
+| `timers.csv` | bilan final : phase, nombre d'appels, temps |
+| `config.csv` | paramètres du run, nombre d'itérations, temps total, dernière borne |
+| `schedules.csv` | une ligne par itération : intervalles sélectionnés par le MIP racine (`selected`) et composantes non nulles de $x=(u,v,w)$ (`x_nonzero`), listes séparées par des points-virgules |
+| `used_components.csv` | composantes de $x$ utiles à au moins un planning (voir ci-dessous) |
+| `cuts.csv` | coupes d'étape restreintes à ces composantes, sans en-tête, une ligne par coupe dans l'ordre de création : nœud, $\alpha$, $\delta$, $\tau$, $\beta$ |
+| `simulation_<N>.csv` | un résumé par instant : dernière itération terminée, sa borne, nombre de coupes d'étape, coût espéré de la politique, coût d'engagement, erreur standard |
+| `simulation_<t>_<N>.csv` | coût de dispatch de chaque trajectoire à l'instant `t` |
+
+Les phases de `phases.csv` sont `solve_first_stage_problem` (le MIP racine), `set_schedule`,
+`forward_pass` et `backward_pass`, avec leurs sous-phases (`backward_pass/compute_coefficients`,
+`backward_pass/solve_subproblem`, `backward_pass/add_cut`, ...).
+
+`GurobiThreads` (1 par défaut) est le nombre de fils de Gurobi par run : gardez
+`Nbworkers × GurobiThreads` inférieur au nombre de cœurs physiques, le temps étant la grandeur mesurée.
+Sur `10_0_1_w` (`T = 24`), `cuts.csv` pèse environ 1,9 ko par coupe en formulation intervalle (contre 21 ko
+pour les coupes complètes, en binaire) et 3,3 ko en 3-bin, soit 2 à 3 Mo après une vingtaine de secondes. Il
+croît avec le nombre de composantes utiles, donc avec la taille de l'instance et la durée du run.
+`results_sms/` est ignoré par git.
+
+---
+
 ## Incertitude : processus ARMA
 
 L'erreur relative de prévision de demande nette suit le processus ARMA de la §2.1, avec les
 paramètres calibrés de l'article PSCC, éq. (40) :
 
-$$\eta_t = 0{,}67\,\eta_{t-1} + \xi_t + 0{,}117\,\xi_{t-1}, \qquad \xi_t \sim \mathcal N(0,\ 2{,}9\cdot10^{-4}\sigma)$$
+$$\eta_t = 0{,}67\,\eta_{t-1} + \xi_t + 0{,}117\,\xi_{t-1}, \qquad \xi_t \sim \mathcal N(0,\ 2{,}9\cdot10^{-4}\sigma^2)$$
+
+Ici $\sigma$ multiplie l'**écart-type** de l'innovation (le paramètre $\sigma$ de PSCC multiplie la variance : c'est
+le carré de celui-ci) ; $\sigma = 1$ est le cas de base et $\sigma = 0$ le problème déterministe.
 
 Un **seul** processus pilote tous les nœuds du réseau : l'erreur relative $\eta_t$ est la même
 partout (la demande du nœud $n$ vaut $d_{n,t}\,(1+\eta_t)$, comme une charge nette de réseau répartie au
@@ -221,7 +311,7 @@ paramètre du parsing :
 
 ```julia
 instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, 24;
-                          sigma          = 1.0,              # σ de l'éq. (40)
+                          sigma          = 1.0,              # multiplie l'écart-type de l'innovation
                           S              = 5,                # taille du support
                           discretization = :gauss_hermite)   # ou :equiprobable
 ```
@@ -249,11 +339,12 @@ d'incertitude $\zeta$ est donc de dimension $p+q$ (2 pour l'ARMA(1,1)), quel que
 > Le schéma équiprobable brut **sous-estime la variance** (0,897 à $S=5$) : la dispersion
 > intra-strate est perdue. Les nœuds sont donc renormalisés par défaut
 > (`match_variance = true`) pour que la variance discrète vaille exactement
-> $2{,}9\cdot10^{-4}\sigma$. Sans effet sur Gauss-Hermite, déjà exacte.
+> $2{,}9\cdot10^{-4}\sigma^2$. Sans effet sur Gauss-Hermite, déjà exacte.
 
 `force` (argument de `PolicyGraph`) multiplie $\eta_t$ dans le bilan (1h) : `force = 0`
 neutralise l'aléa et, comme $\tilde\delta \equiv 0$ par récurrence, redonne **exactement**
-le problème déterministe — c'est ce qui rend le protocole de validation reproductible.
+le problème déterministe — c'est ce qui rend le protocole de validation reproductible. `sigma` a le même
+effet que `force` : multiplier l'écart-type de l'innovation par $c$ revient à prendre `force` $= c$.
 
 ---
 
@@ -422,7 +513,7 @@ Référence (instance `10_0_1_w.nc4`, optimum exact **1 850 053,2**) :
 
 > ⚠️ En stochastique (`force > 0`), la passe avant tire ses scénarios dans le générateur aléatoire
 > global : sans `Random.seed!(...)` avant `train`, deux exécutions donnent des bornes différentes
-> (l'exemple toy fixe la graine). `simulate` a sa propre graine (`seed`). Pour une comparaison A/B de
+> (l'exemple toy et `runSMS.jl` fixent la graine). `simulate` a sa propre graine (`seed`). Pour une comparaison A/B de
 > code, `force = 0` reste le plus simple.
 
 ---
@@ -461,6 +552,11 @@ src/
       arma_process.jl                facteur ARMA commun et discrétisation de l'innovation
       thermal_unit.jl                Section 4 : T_j, p, R^U, R^D, q, local_support
       unit_constraints.jl            contraintes partagées (engagement, capacité/rampes, lignes)
+    run/                           campagnes d'expériences (voir `runSMS.jl`)
+      model.jl                       METHODS, dossier de résultats d'un run, modèle neuf
+      record.jl                      relevé des temps par phase et des plannings pendant l'entraînement
+      policy.jl                      écriture et relecture de la politique (plannings, coupes restreintes)
+      jobs.jl                        train_job, simulate_job, save_run
     reference/                     solutions exactes de référence
       multistage_extensive.jl        équivalent déterministe de l'arbre (optimum multi-étapes)
     tools/                         outils
@@ -472,6 +568,7 @@ src/
 examples/
   toy_convergence.jl               toy T = 4 : encadrement borne ≤ optimum exact ≤ politique
   compare_formulations.jl          extensive / intervalle / 3-bin sur un problème déterministe
+runSMS.jl                          campagne SMS++ : `run_train` et `run_simulate`, répartis sur des workers (le travail d'un run est dans `src/functions/run/`)
 validation.ipynb                   notebook : entraînement, simulation, courbes de borne et de temps du MIP racine
 Data/
   T-Ramp/                          41 instances SMS++ (.nc4)
