@@ -56,10 +56,15 @@ model = MSUC.PolicyGraph(
 
 MSUC.train(model; iteration_limit = 20)              # au moins un critere : iteration_limit et/ou time_limit
 MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2)   # ecart d'optimalite du MIP racine (defaut du solveur : 1e-4)
+MSUC.train(model; iteration_limit = 20, passes_per_mip = 5)   # 5 passes avant/arriere (LP) par resolution du MIP racine (defaut : 1)
 ```
 
 `mip_gap` agit sur le MIP racine, poste dominant du temps d'entraînement : un écart plus large l'accélère
 sans invalider la borne inférieure, qui reste la borne duale du MIP (voir `train`).
+
+`passes_per_mip` fait plusieurs passes avant/arrière à planning fixé (donc des LP seulement) avant de
+re-résoudre le MIP racine : avec 1, c'est l'algorithme usuel. Les coupes restent valides, et seule celle de la
+dernière passe est ajoutée à la racine. Une « itération » est alors un cycle complet (un MIP puis les passes).
 
 La colonne `bound` du journal est la borne inférieure, issue du problème racine (26) résolu
 avec l'approximation courante (Algorithme 2, ligne 5).

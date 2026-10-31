@@ -27,6 +27,11 @@ end
 Entraine la politique (algorithme 2). Il faut au moins un critere d'arret : `iteration_limit`
 (nombre d'iterations) et/ou `time_limit` (temps total, en secondes).
 
+`passes_per_mip` (1 par defaut) est le nombre de passes avant/arriere faites, planning fixe, entre deux
+resolutions du MIP racine : avec 1, c'est l'algorithme usuel ; avec 10, on affine les coupes par 10 passes
+(des LP) avant de re-resoudre le MIP. Une « iteration » (`iteration_limit`, une ligne du journal) est un cycle
+complet : une resolution du MIP racine suivie de `passes_per_mip` passes.
+
 `mip_gap` fixe l'ecart d'optimalite relatif du MIP racine (par exemple `1e-2`) ; par defaut, celui du
 solveur. Un ecart plus large accelere nettement l'entrainement (le MIP racine en est le poste
 dominant) sans invalider la borne inferieure, qui reste la borne duale du MIP.
@@ -36,6 +41,7 @@ function train(
     iteration_limit::Union{Int,Nothing} = nothing,
     time_limit::Union{Real,Nothing} = nothing,
     mip_gap::Union{Real,Nothing} = nothing,
+    passes_per_mip::Int = 1,
     print_level::Int = 1,
     log_file::String = "MSUC.log",
     log_frequency::Union{Nothing,Int} = nothing,
@@ -52,6 +58,9 @@ function train(
                 "`train` needs a stopping criterion: pass `iteration_limit` and/or `time_limit`.",
             ),
         )
+    end
+    if passes_per_mip < 1
+        throw(ArgumentError("`passes_per_mip` must be at least 1. Got $passes_per_mip."))
     end
     if mip_gap !== nothing
         JuMP.set_optimizer_attribute(
@@ -140,6 +149,7 @@ function train(
         initial_state(model.instance);
         iteration_limit,
         time_limit = time_limit === nothing ? nothing : Float64(time_limit),
+        passes_per_mip,
         print_level,
         start_time = time(),
         log,

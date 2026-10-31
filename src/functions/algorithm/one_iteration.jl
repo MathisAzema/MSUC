@@ -7,8 +7,14 @@
     one_iteration(model, options)
 
 Une iteration de l'algorithme 2 : probleme racine, fixation du planning x^k pour les etapes de
-dispatch, passe avant, passe arriere ; puis mise a jour de la borne inferieure (maximum courant
-des bornes duales, donc valide et monotone), du journal et des criteres d'arret.
+dispatch, puis `options.passes_per_mip` passes avant/arriere (une seule par defaut) ; puis mise a jour
+de la borne inferieure (maximum courant des bornes duales, donc valide et monotone), du journal et
+des criteres d'arret.
+
+Avec plusieurs passes, le planning x^k reste fixe : les passes ne resolvent que des LP et affinent les
+coupes de chaque etape avant de resoudre de nouveau le MIP racine, qui est le poste le plus couteux.
+Les coupes sont valides pour tout planning ; pour ne pas gonfler le MIP, seule la coupe de la derniere
+passe est ajoutee a la racine.
 """
 function one_iteration(model::PolicyGraph, options::Options)
     model.ext[:numerical_issue] = false
@@ -20,16 +26,19 @@ function one_iteration(model::PolicyGraph, options::Options)
     TimerOutputs.@timeit model.timer_output "set_schedule" begin
         set_schedule!(model, extract_schedule(model))
     end
-    TimerOutputs.@timeit model.timer_output "forward_pass" begin
-        forward_trajectory = forward_pass(model, options)
-        options.forward_pass_callback(forward_trajectory)
-    end
-    TimerOutputs.@timeit model.timer_output "backward_pass" begin
-        backward_pass(
-            model,
-            forward_trajectory.sampled_states_power,
-            forward_trajectory.sampled_states_zeta,
-        )
+    for pass in 1:options.passes_per_mip
+        TimerOutputs.@timeit model.timer_output "forward_pass" begin
+            forward_trajectory = forward_pass(model, options)
+            options.forward_pass_callback(forward_trajectory)
+        end
+        TimerOutputs.@timeit model.timer_output "backward_pass" begin
+            backward_pass(
+                model,
+                forward_trajectory.sampled_states_power,
+                forward_trajectory.sampled_states_zeta;
+                root_cut = pass == options.passes_per_mip,
+            )
+        end
     end
     bound = max(get(model.ext, :best_bound, -Inf), lower_bound)
     model.ext[:best_bound] = bound

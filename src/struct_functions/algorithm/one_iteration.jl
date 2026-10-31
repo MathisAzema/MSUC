@@ -8,6 +8,7 @@ struct Options
     Φ::Dict{Tuple{Int,Int},Float64}
     iteration_limit::Union{Int,Nothing}
     time_limit::Union{Float64,Nothing}
+    passes_per_mip::Int
     print_level::Int
     start_time::Float64
     log::Vector{Log}
@@ -21,6 +22,7 @@ struct Options
         initial_state::NamedTuple;
         iteration_limit::Union{Int,Nothing} = nothing,
         time_limit::Union{Float64,Nothing} = nothing,
+        passes_per_mip::Int = 1,
         print_level::Int = 0,
         start_time::Float64 = 0.0,
         log::Vector{Log} = Log[],
@@ -34,6 +36,7 @@ struct Options
             build_Φ(model),
             iteration_limit,
             time_limit,
+            passes_per_mip,
             print_level,
             start_time,
             log,
