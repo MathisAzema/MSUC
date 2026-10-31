@@ -5,11 +5,6 @@
 
 const _RULE = "-------------------------------------------------------------------"
 
-function print_helper(f, io, args...)
-    f(stdout, args...)
-    return f(io, args...)
-end
-
 function print_banner(io)
     println(io, _RULE)
     println(io, "         MSUC.jl (c) Oscar Dowson and contributors, 2017-25")
@@ -289,8 +284,7 @@ end
 function log_iteration(options; force_if_needed::Bool = false)
     force_if_needed &= options.last_log_iteration[] != length(options.log)
     if force_if_needed || _should_log(options, options.log_frequency)
-        print_helper(print_iteration, options.log_file_handle, options.log[end])
-        flush(options.log_file_handle)
+        print_iteration(stdout, options.log[end])
         options.last_log_iteration[] = length(options.log)
     end
     return

@@ -12,7 +12,6 @@ struct Options
     print_level::Int
     start_time::Float64
     log::Vector{Log}
-    log_file_handle::Any
     log_frequency::Union{Int,Function}
     forward_pass_callback::Any
     post_iteration_callback::Any
@@ -26,7 +25,6 @@ struct Options
         print_level::Int = 0,
         start_time::Float64 = 0.0,
         log::Vector{Log} = Log[],
-        log_file_handle = IOBuffer(),
         log_frequency::Union{Int,Function} = 1,
         forward_pass_callback = x -> nothing,
         post_iteration_callback = result -> nothing,
@@ -40,7 +38,6 @@ struct Options
             print_level,
             start_time,
             log,
-            log_file_handle,
             log_frequency,
             forward_pass_callback,
             post_iteration_callback,

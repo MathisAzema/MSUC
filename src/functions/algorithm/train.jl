@@ -43,7 +43,6 @@ function train(
     mip_gap::Union{Real,Nothing} = nothing,
     passes_per_mip::Int = 1,
     print_level::Int = 1,
-    log_file::String = "MSUC.log",
     log_frequency::Union{Nothing,Int} = nothing,
     log_every_seconds::Float64 = log_frequency === nothing ? -1.0 : 0.0,
     log_every_iteration::Bool = false,
@@ -119,14 +118,12 @@ function train(
         """)
     end
     TimerOutputs.reset_timer!(model.timer_output)
-    log_file_handle = open(log_file, "a")
     log = Log[]
 
     if print_level > 0
-        print_helper(print_banner, log_file_handle)
-        print_helper(
-            print_problem_statistics,
-            log_file_handle,
+        print_banner(stdout)
+        print_problem_statistics(
+            stdout,
             model,
             model.most_recent_training_results !== nothing,
         )
@@ -139,10 +136,10 @@ function train(
                 print = print_level > 0,
             ),
         )
-        print_helper(print, log_file_handle, report)
+        print(report)
     end
     if print_level > 0
-        print_helper(print_iteration_header, log_file_handle)
+        print_iteration_header(stdout)
     end
     options = Options(
         model,
@@ -153,7 +150,6 @@ function train(
         print_level,
         start_time = time(),
         log,
-        log_file_handle,
         log_frequency = log_frequency_f,
         forward_pass_callback,
         post_iteration_callback,
@@ -165,7 +161,6 @@ function train(
         if ex isa InterruptException
             status = :interrupted
         else
-            close(log_file_handle)
             throw(ex)
         end
     end
@@ -173,16 +168,11 @@ function train(
     model.most_recent_training_results = training_results
     if print_level > 0
         log_iteration(options; force_if_needed = true)
-        print_helper(print_footer, log_file_handle, training_results)
+        print_footer(stdout, training_results)
         if print_level > 1
-            print_helper(
-                TimerOutputs.print_timer,
-                log_file_handle,
-                model.timer_output,
-            )
-            print_helper(println, log_file_handle)
+            TimerOutputs.print_timer(stdout, model.timer_output)
+            println()
         end
     end
-    close(log_file_handle)
     return
 end

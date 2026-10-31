@@ -66,6 +66,10 @@ sans invalider la borne inférieure, qui reste la borne duale du MIP (voir `trai
 re-résoudre le MIP racine : avec 1, c'est l'algorithme usuel. Les coupes restent valides, et seule celle de la
 dernière passe est ajoutée à la racine. Une « itération » est alors un cycle complet (un MIP puis les passes).
 
+`train` affiche son journal (une ligne par itération) uniquement dans le terminal, sans écrire de fichier ;
+`print_level = 0` le coupe. Pour l'exploiter dans le code, `model.most_recent_training_results.log` contient
+une entrée par itération (`bound`, `time`, `total_solves`, ...).
+
 La colonne `bound` du journal est la borne inférieure, issue du problème racine (26) résolu
 avec l'approximation courante (Algorithme 2, ligne 5).
 
@@ -73,7 +77,7 @@ avec l'approximation courante (Algorithme 2, ligne 5).
 > (`objective_bound`), pas la valeur de l'incumbent : avec un `MIPGap` non nul, l'incumbent
 > *majore* l'optimum du MIP et n'est donc pas une borne inférieure valide. La trajectoire de
 > la passe avant utilise en revanche la solution incumbent — n'importe quel planning
-> admissible convient pour engendrer des coupes. Voir `root_outer_bound`.
+> admissible convient pour engendrer des coupes. Voir `solve_first_stage_problem`.
 >
 > La borne duale est valide à chaque itération mais **pas monotone** (le branch-and-bound
 > peut s'arrêter à un point moins avancé qu'à l'itération précédente). Comme chaque borne
@@ -119,17 +123,20 @@ b_3bin = run_sddp(MSUC.subproblem_builder_UC_def,      MSUC.SDDPFormulation,    
 @assert b_ext[end] <= opt && b_3bin[end] <= opt
 ```
 
-Sortie obtenue sur `10_0_1_w.nc4` (10 unités, 1968 intervalles, optimum exact **1 850 053,2**) :
+Sortie obtenue sur `10_0_1_w.nc4` (10 unités, 2025 intervalles, optimum exact **1 850 053,2**) :
 
 | itération | intervalle (39) | % opt. | 3-bin (13) | % opt. |
 |---|---|---|---|---|
 | 1 | 58 914 | 3,2 | 58 914 | 3,2 |
-| 4 | 383 739 | 20,7 | 82 955 | 4,5 |
-| 5 | 1 795 493 | 97,1 | 85 452 | 4,6 |
-| 10 | **1 820 387** | **98,4** | 101 084 | 5,5 |
+| 4 | 389 064 | 21,0 | 349 193 | 18,9 |
+| 7 | 1 116 737 | 60,4 | 351 265 | 19,0 |
+| 9 | 1 808 431 | 97,8 | 352 061 | 19,0 |
+| 10 | **1 809 147** | **97,8** | 352 376 | 19,0 |
 
-C'est la thèse de l'article : les coupes intervalles atteignent 98 % de l'optimum en 5 itérations
-là où la 3-bin plafonne à 5 %.
+C'est la thèse de l'article : les coupes intervalles atteignent 98 % de l'optimum en 9 itérations,
+là où la 3-bin n'a pas dépassé 19 % après 10. Les trajectoires dépendent des solutions du MIP racine
+(duaux dégénérés) : lisez ces chiffres comme un ordre de grandeur, pas comme une valeur à reproduire
+à la décimale.
 
 
 ### Exemple jouet : encadrement complet de l'optimum
@@ -150,17 +157,17 @@ Optimum multi-étapes exact = **235 205,1131** (arbre de 31 nœuds) :
 | itération | intervalle (39) | % opt. | 3-bin (13) | % opt. |
 |---|---|---|---|---|
 | 1 | 43 262,46 | 18,4 | 43 262,46 | 18,4 |
-| 3 | 220 124,06 | 93,6 | 47 397,96 | 20,2 |
-| **6** | **235 205,11** | **100,0** | 224 640,38 | 95,5 |
-| **15** | 235 205,11 | 100,0 | **235 205,11** | **100,0** |
+| 3 | 218 866,32 | 93,1 | 50 665,85 | 21,5 |
+| **8** | **235 205,11** | **100,0** | 230 534,80 | 98,0 |
+| **20** | 235 205,11 | 100,0 | **235 205,11** | **100,0** |
 
 | | borne | politique | encadrement |
 |---|---|---|---|
-| intervalle (39) | 235 205,1131 | 235 205,1131 | $-5\cdot10^{-16}$ |
-| 3-bin (13) | 235 205,1131 | 235 205,1131 | $0$ |
+| intervalle (39) | 235 205,1131 | 235 205,1131 | $-3{,}7\cdot10^{-16}$ |
+| 3-bin (13) | 235 205,1131 | 235 205,1131 | $5\cdot10^{-16}$ |
 
 Les trois quantités coïncident à la précision machine, pour les deux formulations — la
-formulation intervalle en **6 itérations contre 15**. C'est la vérification la plus
+formulation intervalle en **8 itérations contre 20**. C'est la vérification la plus
 complète du dépôt : elle couvre la validité des coupes, l'équivalence de la
 **Proposition 3**, le processus ARMA, l'état $\zeta$ et les coefficients $\tilde\delta$.
 
@@ -191,13 +198,16 @@ paramètres calibrés de l'article PSCC, éq. (40) :
 
 $$\eta_t = 0{,}67\,\eta_{t-1} + \xi_t + 0{,}117\,\xi_{t-1}, \qquad \xi_t \sim \mathcal N(0,\ 2{,}9\cdot10^{-4}\sigma)$$
 
-appliqué **indépendamment à chaque nœud**. Le processus est rendu markovien par
-l'augmentation d'état de la §2.1 : $\zeta_t = (\eta_t, \xi_t)$ pour un ARMA(1,1), avec
+Un **seul** processus pilote tous les nœuds du réseau : l'erreur relative $\eta_t$ est la même
+partout (la demande du nœud $n$ vaut $d_{n,t}\,(1+\eta_t)$, comme une charge nette de réseau répartie au
+prorata des charges). Le processus est rendu markovien par l'augmentation d'état de la §2.1 :
+$\zeta_t = (\eta_t, \xi_t)$ pour un ARMA(1,1), donc de **dimension $p+q = 2$ quel que soit le réseau**
+(118 nœuds compris), avec
 
 $$\zeta_t = \Psi\,\zeta_{t-1} + E\,\xi_t, \qquad \eta_t = S_\eta\,\zeta_t$$
 
-$\zeta$ est une **variable d'état** du graphe, déclarée à tous les nœuds, et les coupes
-portent le terme $\tilde\delta_t^\top\zeta$ des éq. (10), (12) et (40b).
+où $S_\eta$ ne fait que recopier $\eta_t$ sur les nœuds. $\zeta$ est une **variable d'état** du graphe,
+déclarée à tous les nœuds, et les coupes portent le terme $\tilde\delta_t^\top\zeta$ des éq. (10), (12) et (40b).
 
 > ⚠️ **Collision de notation entre les deux articles.** Ce que PSCC (40) note $\eta_t$ est
 > l'**innovation**, notre $\xi_t$ ; ce que PSCC note $\varepsilon_t$ est l'**erreur**, notre
@@ -247,6 +257,41 @@ le problème déterministe — c'est ce qui rend le protocole de validation repr
 
 ---
 
+## Instance IEEE 118-bus
+
+```julia
+instance = MSUC.parse_IEEE("118_syst", optimizer, 24; S = 5)   # sigma, discretization : comme parse_nc4
+model = MSUC.PolicyGraph(MSUC.subproblem_builder_UC_extended, instance, 1.0, MSUC.Graph(25),
+                         MSUC.ExtendedFormulation; lower_bound = 0.0, optimizer = optimizer)
+MSUC.train(model; iteration_limit = 50, mip_gap = 1e-2)
+```
+
+`parse_IEEE` (dans [`parse_instance.jl`](src/functions/instance/parse_instance.jl)) lit
+`Data/IEEE/<dossier>` : 54 groupes thermiques, 118 nœuds, réseau en flux DC (chaque ligne dans les
+deux sens, capacité et réactance du fichier), horizon `T ≤ 24`.
+
+- **Demande** : charge maximale de chaque nœud (`maximum_load.csv`) × profil horaire
+  (`load_distribution_profile.csv`, en %). L'éolien n'est **pas** modélisé : la demande nette est la
+  charge.
+- **Incertitude** : le facteur ARMA(1,1) commun décrit plus haut, donc un état $\zeta$ de dimension 2
+  et exactement `S` aléas par étape. Les paramètres sont ceux de PSCC (40), appliqués tels quels à ce réseau ;
+  $\sigma$ est le même à toutes les heures.
+
+Validé comme le toy, à `T = 4`, `S = 2` (12 itérations, `mip_gap = 1e-3`), face à l'optimum multi-étapes
+**exact** de l'arbre (`multistage_extensive`, 146 328,4058) :
+
+| | borne | % opt. | politique | borne ≤ opt. ≤ politique |
+|---|---|---|---|---|
+| intervalle (39) | 143 449 | 98,0 | 149 273 | oui |
+| 3-bin (13) | 3 136 | 2,1 | 363 518 | oui |
+
+Les deux encadrements sont valides ; en revanche la 3-bin reste très en dessous de l'optimum sur ce
+réseau, là où les coupes intervalles en sont à 98 %. À `T = 24`, `S = 5` l'entraînement tourne
+(quelques secondes par itération avec `mip_gap = 1e-2`), mais aucun optimum exact n'existe pour
+comparer : la validation de cette taille repose sur le test à `T = 4`.
+
+---
+
 ## Correspondance article ↔ code
 
 C'est la table de référence pour lire le code.
@@ -264,8 +309,9 @@ C'est la table de référence pour lire le code.
 | $R^U_j,\ R^D_j$ | `unit.DeltaRampUp`, `unit.DeltaRampDown` | |
 | $S^U_j,\ S^D_j$ | `unit.MinPower` (ce modèle pose $S^U = S^D = \underline P$) | |
 | $y_{j,0}$ | `unit.InitialPower` | |
-| $\xi_t$ — aléa | `forecast_error_support(instance)` | `functions/model/build_subproblems.jl` |
-| $p_{t,\xi}$ | `probability` | |
+| $\xi_t$ — aléa (support fini) | `instance.arma.support` | `struct_functions/instance/arma_process.jl` |
+| $p_{t,\xi}$ | `instance.arma.probability` | idem |
+| $\Psi,\ E,\ S_\eta$ — (1g) ; $\zeta_0$ | `instance.arma.Psi`, `.E`, `.S_eta` ; `.zeta0` | idem |
 
 ### Variables
 
@@ -322,19 +368,21 @@ C'est la table de référence pour lire le code.
 
 | Alg. 2 | Code |
 |---|---|
-| l. 4–5 — résoudre (19), stocker $(\gamma^k, x^k)$ et $L^k_{\text{ext}}$ | `forward_pass`, nœud 1 ; `extract_schedule` ; `lower_bound` |
+| l. 4–5 — résoudre (19), stocker $(\gamma^k, x^k)$ et $L^k_{\text{ext}}$ | `solve_first_stage_problem` (MIP racine, borne duale) ; `extract_schedule` ; `set_schedule!` — appelés dans `one_iteration` |
+| l. 6–11 — passe avant | `forward_pass` |
 | l. 9 — résoudre le sous-problème d'étape | `solve_subproblem` (planning fixé par `set_schedule!`) |
 | l. 10 — état d'intervalle | identité $\tilde y = u_{a,b,t} y_{j,t}$, pas de variable dédiée |
+| l. 12–20 — passe arrière | `backward_pass` → `solve_next_node` → `refine_bellman_function` |
 | l. 15–16 — duaux $(\hat\nu, \hat\sigma)$ | `get_dual_solution` → `StageDuals` |
 | l. 17 — $\hat z_{j,a,b,\xi}$ | `compute_coefficients_extended` |
 | l. 19–28 — support local | `local_support` |
-| l. 29, (36) — $\hat\tau = \hat h + \tilde\tau^\sigma$ | `τ_ab` |
-| l. 33–34, (39)–(40) — moyenne et ajout | `IntervalCut(α, τ, β, cstr)` |
+| l. 29, (36) — $\hat\tau = \hat h + \tilde\tau^\sigma$ | `interval_coefficients` → `τ_ab` |
+| l. 33–34, (39)–(40) — moyenne et ajout | `IntervalCut(α, τ, β, δ, nothing)`, puis `add_cut!` |
 
 **Le point le plus subtil.** Les coupes sont stockées avec leurs coefficients *par intervalle*
 (*par composante de x* en 3-bin), puis la ligne d'épigraphe est **réécrite** au planning
-courant à chaque passe avant (`set_schedule!` → `instantiate_cut!`, par `set_normalized_rhs` /
-`set_normalized_coefficient`). C'est ainsi qu'on obtient (41g) sans porter les produits
+courant à chaque résolution du MIP racine (`set_schedule!`, appelée dans `one_iteration` →
+`instantiate_cut!`, par `set_normalized_rhs` / `set_normalized_coefficient`). C'est ainsi qu'on obtient (41g) sans porter les produits
 $\gamma \cdot \tilde y$ comme variables.
 
 **Le piège à ne pas réintroduire.** La Prop. 4 annule $\hat h$ et $\hat\beta$ sur un intervalle
@@ -366,15 +414,16 @@ Référence (instance `10_0_1_w.nc4`, optimum exact **1 850 053,2**) :
 
 | itération | 1 | 4 | 6 | 8 | 10 |
 |---|---|---|---|---|---|
-| borne | 58 914 | 383 739 | 1 803 230 | 1 807 036 | **1 820 387** (98,4 %) |
+| borne | 58 914 | 389 064 | 433 010 | 1 428 974 | **1 809 147** (97,8 %) |
 
 > ⚠️ **Ne comparez pas** la borne étendue à celle de la 3-bin pour juger de la validité : tant
 > que la 3-bin n'a pas convergé, l'étendue est légitimement bien plus haute — c'est exactement
 > ce que l'article prédit. Seule la comparaison à un optimum exact est concluante.
 
-> ⚠️ En stochastique (`force > 0`) les tirages ne sont **pas** reproductibles (pas de graine),
-> donc deux exécutions donnent des bornes différentes. Utilisez `force = 0` pour toute
-> comparaison A/B de code.
+> ⚠️ En stochastique (`force > 0`), la passe avant tire ses scénarios dans le générateur aléatoire
+> global : sans `Random.seed!(...)` avant `train`, deux exécutions donnent des bornes différentes
+> (l'exemple toy fixe la graine). `simulate` a sa propre graine (`seed`). Pour une comparaison A/B de
+> code, `force = 0` reste le plus simple.
 
 ---
 
@@ -408,8 +457,8 @@ src/
       schedule.jl                    extract_schedule, set_schedule!, paramètres du planning
       state_variable.jl              extension JuMP `State`
     instance/                      données et physique des unités
-      parse_instance.jl              parse_nc4 (SMS++)
-      arma_process.jl                ARMA et discrétisation de l'innovation
+      parse_instance.jl              parse_nc4 (SMS++), parse_IEEE (118 nœuds)
+      arma_process.jl                facteur ARMA commun et discrétisation de l'innovation
       thermal_unit.jl                Section 4 : T_j, p, R^U, R^D, q, local_support
       unit_constraints.jl            contraintes partagées (engagement, capacité/rampes, lignes)
     reference/                     solutions exactes de référence
@@ -420,6 +469,10 @@ src/
       print_log.jl                   journal et rapport numérique
   struct_functions/                mêmes sous-dossiers : Instance, ThermalUnit, ARMAProcess, Schedule,
                                    Node, PolicyGraph, BinCut, IntervalCut, Options, Log, ...
+examples/
+  toy_convergence.jl               toy T = 4 : encadrement borne ≤ optimum exact ≤ politique
+  compare_formulations.jl          extensive / intervalle / 3-bin sur un problème déterministe
+validation.ipynb                   notebook : entraînement, simulation, courbes de borne et de temps du MIP racine
 Data/
   T-Ramp/                          41 instances SMS++ (.nc4)
   IEEE/118_syst/                   données IEEE 118-bus (lues par `parse_IEEE`)
@@ -435,7 +488,7 @@ Le code mort hérité de SDDP.jl a été supprimé : `Inner.jl`, `Experimental.j
 `deterministic_equivalent.jl`, `modeling_aids.jl` et tout `visualization/`. Les dépendances
 correspondantes (`HTTP`, `SHA`, `XLSX`, `RecipesBase`, `Plots`) sont sorties de `Project.toml`.
 
-Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignables** avec un
+Cinq fonctionnalités de SDDP.jl ont également été retirées, **inatteignables** avec un
 `LinearGraph` :
 
 | | à quoi ça servait | pourquoi inatteignable |
@@ -445,6 +498,9 @@ Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignabl
 | cycles | horizon infini : `terminated_due_to_cycle`, `starting_states`, `cycle_discretization_delta` | un chemin ne boucle pas |
 | persistance de politique | `write_cuts_to_file` / `read_cuts_from_file` : sauver une politique entraînée pour la recharger sans réentraîner | ne sérialisent que les coupes génériques, **pas** les `IntervalCut` ; le dump était vide en formulation étendue, et `read_` jamais appelée |
 | handlers de dualité (SDDiP, `ContinuousConicDuality`) et relaxation d'intégrité | `LagrangianDuality`, `StrengthenedConicDuality`, `BanditDuality`, `FixedDiscreteDuality`, `local_improvement_search.jl`, et la relaxation des variables entières avant la passe arrière | §1 du papier — seule la racine est non convexe, chaque étage est un LP : les duaux LP sont exacts, d'où `solve_subproblem(...; compute_duals = true)` |
+
+`train` a aussi été réduit à l'essentiel : le multi-cut, les règles d'arrêt autres que `iteration_limit` et
+`time_limit`, les schémas d'échantillonnage, le cache de la passe arrière et le fichier de journal ont été retirés.
 
 > **`Plots` n'est plus une dépendance du projet.** Si vos notebooks font `using Plots`,
 > rajoutez-le : `julia --project=. -e 'using Pkg; Pkg.add("Plots")'`.
@@ -456,12 +512,12 @@ Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignabl
 | Article | État |
 |---|---|
 | §3.4 — dominance par étape et par itération | vide dans l'article |
-| Étude numérique IEEE 118-bus | `parse_IEEE("118_syst", optimizer, T; S, sigma)` (dans `functions/instance/parse_instance.jl`) : 54 groupes, réseau DC, demande = charge maximale de chaque nœud × profil horaire (l'éolien n'est pas modélisé). Un seul ARMA(1,1) de l'erreur relative pilote tous les nœuds : même ratio prévision/réalisé partout, comme dans Zou, Ahmed & Sun (2018). Validé à T = 4 (borne ≤ optimum exact ≤ politique, deux formulations) ; fonctionne à T = 24. L'état d'incertitude `ζ` est de dimension 2. |
 | Horizon $T \neq 24$ | le builder et le parsing prennent `T`, mais les instances fournies sont à 24 pas |
 
 Autres limites connues :
 
-- **Pas de graine aléatoire** : les runs stochastiques ne sont pas reproductibles.
+- **Pas d'option de graine dans `train`** : fixer `Random.seed!(...)` avant l'appel pour reproduire un run stochastique.
+- **IEEE** : éolien non modélisé, $\sigma$ constant sur les 24 heures, pas d'optimum exact à `T = 24` pour valider.
 - **Coût du calcul des coupes en $O(k)$** : les coefficients $\tilde\tau$ et $\tilde\beta$ sont stockés
   en vecteurs plats sur les intervalles et les sommes sur les $k$ coupes stockées se font par
   vecteurs entiers (`compute_coefficients_extended`), ce qui reste linéaire en $k$ par itération
