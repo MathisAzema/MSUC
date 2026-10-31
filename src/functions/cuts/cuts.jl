@@ -24,9 +24,9 @@ end
 function instantiate(cut::IntervalCut, schedule::Schedule, N::Int)
     A = cut.alpha
     b = zeros(N)
-    for key in schedule.selected
-        A += cut.tau[key]
-        b[key[1]] += cut.beta[key]
+    for (id, j) in zip(schedule.selected, schedule.selected_units)
+        A += cut.tau[id]
+        b[j] += cut.beta[id]
     end
     return A, b
 end
@@ -55,10 +55,12 @@ end
 # Formulation intervalle a la racine : V(gamma, y~_0, zeta_0), ou y~_{j,a,b,0} vaut (17).
 function root_term(cut::IntervalCut, node::Node, instance::Instance)
     expr = JuMP.AffExpr(0.0)
-    for unit in instance.Thermalunits, (a, b) in unit.intervals
-        key = (unit.name, a, b)
-        coef = cut.tau[key] + cut.beta[key] * initial_interval_output(unit, a)
-        coef != 0.0 && JuMP.add_to_expression!(expr, coef, node.planning.gamma[key])
+    idx = instance.intervals
+    for id in eachindex(cut.tau)
+        j, a = idx.unit[id], idx.a[id]
+        coef = cut.tau[id] + cut.beta[id] * initial_interval_output(instance.Thermalunits[j], a)
+        coef != 0.0 &&
+            JuMP.add_to_expression!(expr, coef, node.planning.gamma[(j, a, idx.b[id])])
     end
     return expr
 end

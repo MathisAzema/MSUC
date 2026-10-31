@@ -46,26 +46,27 @@ end
     Schedule
 
 Planning x^k = (u, v, w) lu a la racine, arrondi a {0, 1}. `u[i, t+1]` vaut u_{i,t}
-(t in 0:T), `v[i, t]` et `w[i, t]` valent v_{i,t} et w_{i,t} (t in 1:T). `selected` liste
-les intervalles [a:b] choisis (gamma = 1), vide en 3-bin. `x` est le vecteur plat
+(t in 0:T), `v[i, t]` et `w[i, t]` valent v_{i,t} et w_{i,t} (t in 1:T). `selected` liste les
+identifiants (`IntervalIndex`) des intervalles [a:b] choisis (gamma = 1) et `selected_units` leur
+unite, dans l'ordre (unite, a, b) ; vides en 3-bin. `x` est le vecteur plat
 (u, v, w) : sa i-eme coordonnee est celle de `u_index`, `v_index`, `w_index`.
 """
 struct Schedule
     u::Matrix{Float64}
     v::Matrix{Float64}
     w::Matrix{Float64}
-    selected::Vector{Tuple{Int,Int,Int}}
-    selected_set::Set{Tuple{Int,Int,Int}}
+    selected::Vector{Int}
+    selected_units::Vector{Int}
     x::Vector{Float64}
 end
 
-function Schedule(u, v, w, selected)
+function Schedule(u, v, w, selected, selected_units)
     return Schedule(
         u,
         v,
         w,
         selected,
-        Set(selected),
+        selected_units,
         vcat(vec(u), vec(v), vec(w)),
     )
 end

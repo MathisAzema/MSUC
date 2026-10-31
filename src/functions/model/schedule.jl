@@ -87,8 +87,9 @@ function extract_schedule(model::PolicyGraph)
     u = [round(JuMP.value(root.u[i, t])) for i in 1:N, t in 0:T]
     v = [round(JuMP.value(root.v[i, t])) for i in 1:N, t in 1:T]
     w = [round(JuMP.value(root.w[i, t])) for i in 1:N, t in 1:T]
-    selected = sort!([k for (k, var) in root.gamma if JuMP.value(var) > 0.5])
-    return Schedule(u, v, w, selected)
+    keys = sort!([k for (k, var) in root.gamma if JuMP.value(var) > 0.5])
+    selected = [instance.intervals.id[k] for k in keys]
+    return Schedule(u, v, w, selected, [k[1] for k in keys])
 end
 
 """

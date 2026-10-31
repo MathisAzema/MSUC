@@ -21,10 +21,21 @@ function termination_status(model::PolicyGraph)
     return model.most_recent_training_results.status
 end
 
+"""
+    train(model; iteration_limit, time_limit, mip_gap, ...)
+
+Entraine la politique (algorithme 2). Il faut au moins un critere d'arret : `iteration_limit`
+(nombre d'iterations) et/ou `time_limit` (temps total, en secondes).
+
+`mip_gap` fixe l'ecart d'optimalite relatif du MIP racine (par exemple `1e-2`) ; par defaut, celui du
+solveur. Un ecart plus large accelere nettement l'entrainement (le MIP racine en est le poste
+dominant) sans invalider la borne inferieure, qui reste la borne duale du MIP.
+"""
 function train(
     model::PolicyGraph;
     iteration_limit::Union{Int,Nothing} = nothing,
     time_limit::Union{Real,Nothing} = nothing,
+    mip_gap::Union{Real,Nothing} = nothing,
     print_level::Int = 1,
     log_file::String = "MSUC.log",
     log_frequency::Union{Nothing,Int} = nothing,
@@ -40,6 +51,13 @@ function train(
             ArgumentError(
                 "`train` needs a stopping criterion: pass `iteration_limit` and/or `time_limit`.",
             ),
+        )
+    end
+    if mip_gap !== nothing
+        JuMP.set_optimizer_attribute(
+            model[model.first_node].subproblem,
+            MOI.RelativeGapTolerance(),
+            Float64(mip_gap),
         )
     end
     log_frequency = something(log_frequency, 1)

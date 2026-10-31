@@ -19,8 +19,8 @@ end
 
 mutable struct IntervalCut <: AbstractCut
     alpha::Float64
-    tau::Dict{Tuple{Int64,Int64,Int64},Float64}
-    beta::Dict{Tuple{Int64,Int64,Int64},Float64}
+    tau::Vector{Float64}   # un coefficient par intervalle (identifiant de `IntervalIndex`)
+    beta::Vector{Float64}
     delta::Vector{Float64}
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
 end

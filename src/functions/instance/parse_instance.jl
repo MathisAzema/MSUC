@@ -73,5 +73,5 @@ function parse_nc4(name_instance, optimizer, T=24; sigma::Float64=1.0, S::Int=AR
     end
     push!(Training_set, [day for day in Nb_total_scenario_training+1:Nb_total_scenario_training+Nb_total_scenario_test])
     WGscenario=[hcat(WGscenariob...)]
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, Lines, Next, Demandbus, BusWind, WGscenario, Training_set, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, IntervalIndex(Thermal_units), Lines, Next, Demandbus, BusWind, WGscenario, Training_set, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
 end

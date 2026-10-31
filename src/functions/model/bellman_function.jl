@@ -12,13 +12,8 @@ function _trivial_cut(model::PolicyGraph, row)
     instance = model.instance
     nz = zeta_dimension(instance.arma)
     if model.method == ExtendedFormulation
-        τ = Dict{Tuple{Int64,Int64,Int64},Float64}()
-        β = Dict{Tuple{Int64,Int64,Int64},Float64}()
-        for unit in instance.Thermalunits, (a, b) in unit.intervals
-            τ[(unit.name, a, b)] = 0.0
-            β[(unit.name, a, b)] = 0.0
-        end
-        return IntervalCut(0.0, τ, β, zeros(nz), row)
+        nid = length(instance.intervals.unit)
+        return IntervalCut(0.0, zeros(nid), zeros(nid), zeros(nz), row)
     end
     return BinCut(
         0.0,
