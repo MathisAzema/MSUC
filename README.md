@@ -95,12 +95,11 @@ const GRB_ENV = Gurobi.Env()
 optimizer = () -> Gurobi.Optimizer(GRB_ENV)
 
 T, FORCE, ITER = 24, 0.0, 10
-instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T)
+instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T; S = 1)   # S = 1 : aléa déterministe
 
 # 1. Formulation extensive : optimum exact du problème déterministe
-res = MSUC.bin_extensive_neutral(instance; silent = true, force = FORCE, S = 1,
-                                 batch = 1, gap = 1e-6, timelimit = 300)
-opt = res[3]
+res = MSUC.multistage_extensive(instance; force = FORCE, gap = 1e-6, timelimit = 300)
+opt = res[1]
 
 # 2. et 3. Les deux SDDP sur le même problème
 function run_sddp(builder, method, label)
@@ -131,11 +130,6 @@ Sortie obtenue sur `10_0_1_w.nc4` (10 unités, 1968 intervalles, optimum exact *
 
 C'est la thèse de l'article : les coupes intervalles atteignent 98 % de l'optimum en 5 itérations
 là où la 3-bin plafonne à 5 %.
-
-> ⚠️ **L'aléa n'est pas paramétré de la même façon** dans `bin_extensive_neutral`
-> (demande nette `= Demandbus - force * WGscenario`, soustraction éolienne absolue) et dans les
-> builders SDDP (`= Demandbus * (1 + force * ξ)`, erreur relative). Les deux ne coïncident qu'en
-> `force = 0` — seul régime où la comparaison à l'optimum exact est licite.
 
 
 ### Exemple jouet : encadrement complet de l'optimum
@@ -174,10 +168,9 @@ Trois briques la rendent possible :
 
 - **`multistage_extensive(instance; force)`** — équivalent déterministe de l'arbre de
   scénarios, donc l'optimum **exact** du problème multi-étapes (1) avec la
-  non-anticipativité (1j). À ne pas confondre avec `bin_extensive_neutral`, qui est
-  **deux-étages** : son dispatch voit toute la trajectoire d'un coup, elle *minore* le
-  multi-étapes. L'arbre a $\sum_{t=0}^{T} S^t$ nœuds, donc n'est tractable que pour
-  $S$ et $T$ petits. Les lignes (44) n'y sont pas imposées — sur l'horizon complet elles
+  non-anticipativité (1j). L'arbre a $\sum_{t=0}^{T} S^t$ nœuds, donc n'est tractable que pour
+  $S$ et $T$ petits ; avec une instance construite en `S = 1`, l'aléa est déterministe et on obtient
+  l'optimum exact du problème déterministe. Les lignes (44) n'y sont pas imposées — sur l'horizon complet elles
   sont impliquées par les rampes — ce qui rend la référence indépendante de (44) et (46).
 - **`simulate(model)`** — coût espéré de la politique entraînée, donc un
   **majorant** de l'optimum. L'engagement est figé (état sortant de la racine), les coupes
@@ -188,10 +181,6 @@ Trois briques la rendent possible :
   `samples` chemins avec une graine.
 - **`scenario_tree(instance, T)`** — l'arbre lui-même. La récursion (1g) y est évaluée
   numériquement, donc $\zeta$ n'est pas une variable du programme étendu.
-
-> ⚠️ La comparaison à `bin_extensive_neutral` (deux-étages) ne vaut qu'en `force = 0`, où
-> les deux modèles d'aléa coïncident. En stochastique, la référence est
-> `multistage_extensive`.
 
 ---
 
@@ -229,8 +218,9 @@ instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, 24;
 
 Les défauts sont les constantes `ARMA_SUPPORT_SIZE` et `ARMA_DISCRETIZATION` de
 [`src/functions/instance/arma_process.jl`](src/functions/instance/arma_process.jl). Le nombre d'aléas par étape vaut
-exactement `S` : une seule innovation scalaire est tirée et appliquée à tous les nœuds
-(`common_innovation = true`), sans quoi il faudrait $S^{|\mathcal N|}$ combinaisons.
+exactement `S` : un seul facteur ARMA scalaire pilote la demande de tous les nœuds (même erreur relative
+partout, `S_eta` la recopie sur les nœuds), sans quoi il faudrait $S^{|\mathcal N|}$ combinaisons. L'état
+d'incertitude $\zeta$ est donc de dimension $p+q$ (2 pour l'ARMA(1,1)), quel que soit le réseau.
 
 **Les deux schémas**, tous deux de moyenne et variance exactes :
 
@@ -362,9 +352,9 @@ la formulation extensive. La borne SDDP doit alors rester **sous** cet optimum, 
 converger dessus. C'est le seul test qui tranche.
 
 ```julia
-r = MSUC.bin_extensive_neutral(instance; silent=true, force=0.0, S=1, batch=1,
-                               gap=1e-6, timelimit=120)
-opt = r[3]          # 1 850 053.2 sur Data/T-Ramp/10_0_1_w.nc4
+# instance = MSUC.parse_nc4(...; S = 1)  (aléa déterministe)
+r = MSUC.multistage_extensive(instance; force=0.0, gap=1e-6, timelimit=120)
+opt = r[1]          # 1 850 053.2 sur Data/T-Ramp/10_0_1_w.nc4
 
 model = MSUC.PolicyGraph(MSUC.subproblem_builder_UC_extended, instance, 0.0,
                          MSUC.Graph(25), MSUC.ExtendedFormulation;
@@ -423,7 +413,6 @@ src/
       thermal_unit.jl                Section 4 : T_j, p, R^U, R^D, q, local_support
       unit_constraints.jl            contraintes partagées (engagement, capacité/rampes, lignes)
     reference/                     solutions exactes de référence
-      extensive_formulation.jl       extensive 3-bin deux-étages (vérité terrain, force = 0)
       multistage_extensive.jl        équivalent déterministe de l'arbre (optimum multi-étapes)
     tools/                         outils
       sampling.jl                    tirage des trajectoires et des aléas
@@ -433,13 +422,13 @@ src/
                                    Node, PolicyGraph, BinCut, IntervalCut, Options, Log, ...
 Data/
   T-Ramp/                          41 instances SMS++ (.nc4)
-  IEEE/118_syst/                   données IEEE 118-bus (pas de parseur pour l'instant)
-  Uncertainty/                     scénarios de demande nette (formulation deux-étages seulement)
+  IEEE/118_syst/                   données IEEE 118-bus (lues par `parse_IEEE`)
+  Uncertainty/                     anciens scénarios de demande nette, plus lus par le code
 ```
 
 Le **Benders deux-étages** de l'article [12] (`benders_callback`, `add_cut_SP`, l'heuristique
 duale, les options `UCOptions`) a été retiré : c'est un autre algorithme, hors du périmètre de
-ce papier. Seule `bin_extensive_neutral` a été conservée, car elle fournit la vérité terrain.
+ce papier. La référence exacte est `multistage_extensive`, aussi bien en déterministe (`S = 1`) qu'en stochastique.
 
 Le code mort hérité de SDDP.jl a été supprimé : `Inner.jl`, `Experimental.jl`, `MSPFormat.jl`,
 `biobjective.jl`, `binary_expansion.jl`, `cyclic.jl`, `alternative_forward.jl`,
@@ -467,7 +456,7 @@ Trois fonctionnalités de SDDP.jl ont également été retirées, **inatteignabl
 | Article | État |
 |---|---|
 | §3.4 — dominance par étape et par itération | vide dans l'article |
-| Étude numérique IEEE 118-bus | **pas de parseur** : `parse_IEEE` a été supprimé (commit `bab96ca`). Restauré dans un script de test avec la correction `S, = size(...)` qui écrasait l'argument `S`, le chemin réseau est validé sur T = 4 (borne ≤ optimum exact ≤ politique, deux formulations). La demande nette n'inclut pas l'éolien. |
+| Étude numérique IEEE 118-bus | `parse_IEEE("118_syst", optimizer, T; S, sigma)` (dans `functions/instance/parse_instance.jl`) : 54 groupes, réseau DC, demande = charge maximale de chaque nœud × profil horaire (l'éolien n'est pas modélisé). Un seul ARMA(1,1) de l'erreur relative pilote tous les nœuds : même ratio prévision/réalisé partout, comme dans Zou, Ahmed & Sun (2018). Validé à T = 4 (borne ≤ optimum exact ≤ politique, deux formulations) ; fonctionne à T = 24. L'état d'incertitude `ζ` est de dimension 2. |
 | Horizon $T \neq 24$ | le builder et le parsing prennent `T`, mais les instances fournies sont à 24 pas |
 
 Autres limites connues :

@@ -58,18 +58,6 @@ function set_intervals(MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaR
 end
 
 """
-    set_intervals_t(t, MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
-
-Sous-ensemble de T_j actif a l'etape t, c.-a-d. les [a:b] tels que u_{a,b,t} = 1.
-Derive de `set_intervals` par filtrage, ce qui garantit l'inclusion T_j(t) subset T_j
-dont depend l'indexation des variables gamma dans le builder.
-"""
-function set_intervals_t(t, MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
-    all = set_intervals(MinUpTime, InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
-    return [ab for ab in all if is_on_interval(ab[1], ab[2], t)]
-end
-
-"""
     p_lower(unit, a, b, t)
 
 Borne basse locale de (45a) : MinPower * u_{a,b,t}.

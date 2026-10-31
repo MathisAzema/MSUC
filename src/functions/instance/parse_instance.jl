@@ -1,20 +1,13 @@
 """
-    read_data_forecast(file)
+    parse_nc4(name_instance, optimizer, T = 24; sigma, S, discretization)
 
-Lit un fichier CSV de scenarios de demande nette (sans en-tete).
+Instance SMS++ de la T-Ramp (`.nc4`) : un seul noeud, sans reseau, demande nette nominale lue dans
+le fichier. L'incertitude est le processus ARMA de l'erreur relative (`ARMAProcess`).
 """
-function read_data_forecast(file)
-    return CSV.read(file, DataFrame; delim=",", header=0)
-end
-
 function parse_nc4(name_instance, optimizer, T=24; sigma::Float64=1.0, S::Int=ARMA_SUPPORT_SIZE, discretization::Symbol=ARMA_DISCRETIZATION)
-    """
-    Parse the SMS++ instances
-    """
     data=Dataset(name_instance)
     Blocks=keys(data.group)
     data_block=data.group[Blocks[1]]
-    # TimeHorizon= data_block.dim["TimeHorizon"]
     TimeHorizon= T
     demand=data_block["ActivePowerDemand"].var[:]
     N=size(keys(data_block.group))[1]-1
@@ -38,40 +31,79 @@ function parse_nc4(name_instance, optimizer, T=24; sigma::Float64=1.0, S::Int=AR
                 MinUpTime=last(unit)["MinUpTime"].var[1]  
                 MinDownTime=last(unit)["MinDownTime"].var[1]
                 intervals=set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
-                intervals_t=[set_intervals_t(t, Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T) for t in 1:T]
-
-                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals, intervals_t)
+                unit=ThermalUnit(unit_name, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, StartUpCost, StartDownCost, LinearTerm, ConstTerm, InitialPower, InitUpDownTime, Int64(MinUpTime), Int64(MinDownTime), intervals)
                 Thermal_units[unit_name]=unit
             end
         end
     end
-    Buses=1:1
-    Next=[[]]
-    Lines=Dict()
+    Lines=Dict{Tuple{Int64,Int64},Line}()
+    Next=[Int64[]]
     Demandbus=[demand]
-    BusWind=[1]
+    return Instance(name_instance, TimeHorizon, N, Thermal_units, IntervalIndex(Thermal_units), Lines, Next, Demandbus, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
+end
 
-    training_file = "Data/Uncertainty/training_set.csv"
-    table = read_data_forecast(training_file)
-    Nb_total_scenario_training=table[end,end]
-    Smax=100
-    Num_batch=Int(floor(Nb_total_scenario_training/Smax))
-    WGscenariob=[]
-    for batch in 1:Num_batch
-        for day in 1:Smax
-            push!(WGscenariob,-table[(batch-1)*Smax*24+(day-1)*24+1:(batch-1)*Smax*24+day*24,1].*demand)
-        end
+"""
+    parse_IEEE(folder, optimizer, T = 24; sigma, S, discretization)
+
+Instance IEEE 118 noeuds (`Data/IEEE/<folder>`, par exemple `"118_syst"`) : 54 groupes, reseau en
+flux DC (chaque ligne dans les deux sens), horizon de `T <= 24` heures.
+
+Demande nette nominale du noeud b a l'heure t : charge maximale du noeud × profil horaire (l'eolien
+n'est pas modelise). L'incertitude est un unique processus ARMA de l'erreur RELATIVE, commun a tous
+les noeuds : le ratio prevision/realise est le meme partout, c'est-a-dire une charge nette de reseau
+repartie sur les noeuds au prorata des charges, comme dans l'etude IEEE 118 de Zou, Ahmed & Sun
+(2018). L'etat d'incertitude `zeta` est donc de dimension 2 (ARMA(1,1)), et non 2 × 118.
+"""
+function parse_IEEE(
+    folder,
+    optimizer,
+    T = 24;
+    sigma::Float64 = 1.0,
+    S::Int = ARMA_SUPPORT_SIZE,
+    discretization::Symbol = ARMA_DISCRETIZATION,
+)
+    dir = joinpath(@__DIR__, "..", "..", "..", "Data", "IEEE", folder)
+    generators = CSV.read(joinpath(dir, "generators.csv"), DataFrame; header = false)
+    N = Int(generators[end, 1])
+    units = Vector{ThermalUnit}(undef, N)
+    for i in 1:N
+        Bus, ConstTerm, LinearTerm = generators[i, 2], generators[i, 3], generators[i, 4]
+        MaxPower, MinPower = generators[i, 5], generators[i, 6]
+        DeltaRampUp = DeltaRampDown = generators[i, 7]
+        StartUpCost = StartDownCost = generators[i, 10]
+        MinUpTime = MinDownTime = generators[i, 15]
+        InitialPower = generators[i, 12]
+        InitUpDownTime =
+            MinUpTime * (InitialPower >= 1e-3) - MinUpTime * (InitialPower <= 1e-3)
+        intervals = set_intervals(Int64(MinUpTime), InitUpDownTime, InitialPower, MinPower, DeltaRampDown, T)
+        units[i] = ThermalUnit(
+            i, Bus, MinPower, MaxPower, DeltaRampUp, DeltaRampDown, StartUpCost, StartDownCost,
+            LinearTerm, ConstTerm, InitialPower, Int64(InitUpDownTime), Int64(MinUpTime),
+            Int64(MinDownTime), intervals,
+        )
     end
-    Training_set=[[(batch-1)*Smax+day for day in 1:Smax] for batch in 1:Num_batch]
-    Nb_total_scenario_training=Num_batch*Smax
-    
-    test_file = "Data/Uncertainty/test_set.csv"
-    table = read_data_forecast(test_file)
-    Nb_total_scenario_test=table[end,end]
-    for day in 1:Nb_total_scenario_test
-        push!(WGscenariob,-table[(day-1)*24+1:day*24,1].*demand)
+
+    max_load = CSV.read(joinpath(dir, "maximum_load.csv"), DataFrame; header = false)
+    nbus = Int(max_load[end, 1])
+    profile =
+        CSV.read(joinpath(dir, "load_distribution_profile.csv"), DataFrame; header = false)[:, 2] / 100
+    T <= length(profile) ||
+        error("le profil de charge couvre $(length(profile)) heures, T = $T est trop grand")
+    Demandbus = [max_load[b, 2] * profile[1:T] for b in 1:nbus]
+
+    lines = CSV.read(joinpath(dir, "lines.csv"), DataFrame; header = false)
+    Lines = Dict{Tuple{Int64,Int64},Line}()
+    Next = [Int64[] for _ in 1:nbus]
+    for i in 1:Int(lines[end, 1])
+        b1, b2, reactance, capacity = Int(lines[i, 2]), Int(lines[i, 3]), lines[i, 4], lines[i, 5]
+        Lines[(b1, b2)] = Line(b1, b2, capacity, 1 / reactance)
+        Lines[(b2, b1)] = Line(b2, b1, capacity, 1 / reactance)
+        push!(Next[b1], b2)
+        push!(Next[b2], b1)
     end
-    push!(Training_set, [day for day in Nb_total_scenario_training+1:Nb_total_scenario_training+Nb_total_scenario_test])
-    WGscenario=[hcat(WGscenariob...)]
-    return Instance(name_instance, TimeHorizon, N, Thermal_units, IntervalIndex(Thermal_units), Lines, Next, Demandbus, BusWind, WGscenario, Training_set, ARMAProcess(length(Demandbus); sigma=sigma, S=S, discretization=discretization), optimizer)
+
+    arma = ARMAProcess(nbus; sigma = sigma, S = S, discretization = discretization)
+    return Instance(
+        "IEEE$N", T, N, units, IntervalIndex(units), Lines, Next, Demandbus, arma, optimizer,
+    )
 end

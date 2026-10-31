@@ -6,8 +6,9 @@
 #  sum_{t=0}^{T} S^t noeuds, donc n'est tractable que pour S et T petits : avec
 #  S = 2 et T = 4, 31 noeuds.
 #
-#  A ne pas confondre avec `bin_extensive_neutral`, qui est DEUX-ETAGES : son
-#  dispatch voit toute la trajectoire d'un coup, elle MINORE donc le multi-etapes.
+#  Avec une instance construite en S = 1 (`parse_nc4(...; S = 1)`), l'aleas est
+#  deterministe : l'arbre se reduit a un chemin et c'est l'optimum exact du
+#  probleme deterministe.
 # =============================================================================
 
 """
@@ -45,6 +46,16 @@ function scenario_tree(instance::Instance, T::Int)
         end
     end
     return parent, innovation, probability, eta
+end
+
+# Contraintes du premier etage (engagement) du modele 3-bin : u, v, w et leur cout fixe.
+function thermal_unit_commit_constraints(model, instance)
+    is_on = model[:is_on]
+    start_up = model[:start_up]
+    start_down = model[:start_down]
+    add_commitment_constraints!(model, instance, is_on, start_up, start_down)
+    @constraint(model, model[:thermal_fixed_cost] >= commitment_cost(instance, is_on, start_up, start_down))
+    return
 end
 
 """

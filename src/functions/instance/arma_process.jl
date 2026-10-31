@@ -3,9 +3,9 @@
 #
 #  Notation du papier MSUC :
 #     eta_t = sum_i Phi_i eta_{t-i} + xi_t + sum_k Theta_k xi_{t-k}
-#  avec eta_t l'erreur RELATIVE par noeud et xi_t l'innovation, a support fini
+#  avec eta_t l'erreur RELATIVE (commune a tous les noeuds) et xi_t l'innovation, a support fini
 #  (Hypothese 1). Le processus devient markovien apres augmentation de l'etat :
-#     zeta_t = (eta_t, .., eta_{t-p+1}, xi_t, .., xi_{t-q+1})  in R^{(p+q)|N|}
+#     zeta_t = (eta_t, .., eta_{t-p+1}, xi_t, .., xi_{t-q+1})  in R^{p+q}
 #     zeta_t = Psi zeta_{t-1} + E xi_t                          (1g)
 #     eta_t  = S_eta zeta_t
 #
@@ -142,18 +142,22 @@ function innovation_support(
 end
 
 """
-    ARMAProcess(nbus; sigma, Phi, Theta, S, common_innovation)
+    ARMAProcess(nbus; sigma, Phi, Theta, S, discretization)
 
 Construit le processus et ses matrices compagnons pour `nbus` noeuds.
+
+Un SEUL facteur ARMA(p,q) scalaire pilote la demande de tous les noeuds : l'erreur relative `eta_t`
+est la meme partout (`S_eta` ne fait que la recopier sur les `nbus` noeuds), comme une charge nette
+de reseau repartie au prorata des charges (Zou, Ahmed & Sun, 2018). L'etat `zeta` est donc de
+dimension `p + q`, quel que soit le reseau, et le nombre d'aleas par etape vaut exactement `S`
+(sinon il faudrait `S^|N|` combinaisons).
 
 `sigma` est le parametre d'echelle de PSCC eq. (40) : la variance de l'innovation vaut
 `2.9e-4 * sigma`. `sigma = 1` correspond a l'erreur de prevision de demande seule, des
 valeurs plus grandes a l'incertitude additionnelle de la production eolienne.
 
 `S` est la taille du support de l'innovation et `discretization` son schema
-(`:gauss_hermite` ou `:equiprobable`). Avec `common_innovation = true` une seule
-innovation scalaire est tiree et appliquee a tous les noeuds, ce qui garde le nombre
-d'aleas par etape egal a `S` ; sinon il faudrait `S^|N|` combinaisons, impraticable.
+(`:gauss_hermite` ou `:equiprobable`).
 """
 function ARMAProcess(
     nbus::Int;
@@ -164,35 +168,29 @@ function ARMAProcess(
     S::Int = ARMA_SUPPORT_SIZE,
     discretization::Symbol = ARMA_DISCRETIZATION,
     match_variance::Bool = true,
-    common_innovation::Bool = true,
 )
     p, q = length(Phi), length(Theta)
-    n = (p + q) * nbus
-    blk(i) = ((i-1)*nbus+1):(i*nbus)          # bloc i de zeta
-    Id = Matrix{Float64}(LinearAlgebra.I, nbus, nbus)
+    n = p + q
 
     Psi = zeros(n, n)
-    # Ligne bloc 1 : eta_t = sum Phi_i eta_{t-i} + sum Theta_k xi_{t-k}  (+ xi_t via E)
-    for i in 1:p
-        Psi[blk(1), blk(i)] .= Phi[i] .* Id
-    end
-    for k in 1:q
-        Psi[blk(1), blk(p+k)] .= Theta[k] .* Id
-    end
-    # Lignes blocs 2..p et p+2..p+q : decalages des retards
+    # Ligne 1 : eta_t = sum Phi_i eta_{t-i} + sum Theta_k xi_{t-k}  (+ xi_t via E)
+    Psi[1, 1:p] .= Phi
+    Psi[1, (p+1):(p+q)] .= Theta
+    # Lignes 2..p et p+2..p+q : decalages des retards
     for i in 2:p
-        Psi[blk(i), blk(i-1)] .= Id
+        Psi[i, i-1] = 1.0
     end
     for k in 2:q
-        Psi[blk(p+k), blk(p+k-1)] .= Id
+        Psi[p+k, p+k-1] = 1.0
     end
-    # E : l'innovation entre dans eta_t et est stockee dans le bloc p+1
-    E = zeros(n, nbus)
-    E[blk(1), :] .= Id
-    q >= 1 && (E[blk(p+1), :] .= Id)
+    # E : l'innovation entre dans eta_t et est stockee dans la composante p+1
+    E = zeros(n, 1)
+    E[1, 1] = 1.0
+    q >= 1 && (E[p+1, 1] = 1.0)
 
+    # eta_t, recopie sur tous les noeuds
     S_eta = zeros(nbus, n)
-    S_eta[:, blk(1)] .= Id
+    S_eta[:, 1] .= 1.0
 
     nodes, weights = innovation_support(
         S,
@@ -200,13 +198,8 @@ function ARMAProcess(
         discretization = discretization,
         match_variance = match_variance,
     )
-    support = if common_innovation
-        [fill(z, nbus) for z in nodes]
-    else
-        nbus == 1 ? [[z] for z in nodes] :
-        error("common_innovation = false demanderait S^|N| aleas par etape")
-    end
-    return ARMAProcess(Phi, Theta, Psi, E, S_eta, support, weights, zeros(n))
+    support = [[z] for z in nodes]
+    return ARMAProcess(Psi, E, S_eta, support, weights, zeros(n))
 end
 
 "Dimension de l'etat d'incertitude zeta_t."

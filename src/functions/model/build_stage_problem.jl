@@ -41,7 +41,7 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
     Buses = 1:size(Next)[1]
     arma = instance.arma
     nz = MSUC.zeta_dimension(arma)
-    nb = length(Buses)
+    ni = size(arma.E, 2)             # dimension de l'innovation
 
     @variables(subproblem, begin
         power_shedding[b in Buses] >= 0
@@ -51,9 +51,9 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
     end)
     # Innovation xi_t a support fini (Hypothese 2) et recursion ARMA (1f) :
     #     zeta_t = Psi zeta_{t-1} + E xi_t
-    @variable(subproblem, ξ[n = 1:nb])
+    @variable(subproblem, ξ[n = 1:ni])
     MSUC.parameterize(subproblem, arma.support, arma.probability) do ω
-        for n in 1:nb
+        for n in 1:ni
             JuMP.fix(ξ[n], ω[n])
         end
     end
@@ -62,7 +62,7 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
         [i in 1:nz],
         ζ[i].out ==
         sum(arma.Psi[i, k] * ζ[k].in for k in 1:nz) +
-        sum(arma.E[i, n] * ξ[n] for n in 1:nb)
+        sum(arma.E[i, n] * ξ[n] for n in 1:ni)
     )
     # (1c)-(1e) : flux DC et capacites de ligne.
     for line in values(instance.Lines)

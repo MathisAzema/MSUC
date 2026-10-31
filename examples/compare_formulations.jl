@@ -13,18 +13,15 @@ INSTANCE   = "Data/T-Ramp/10_0_1_w.nc4"
 ITERATIONS = 10
 FORCE      = 0.0          # 0 => deterministe : l'optimum exact est atteignable
 
-instance = MSUC.parse_nc4(INSTANCE, optimizer, T)
+instance = MSUC.parse_nc4(INSTANCE, optimizer, T; S = 1)     # S = 1 : aleas deterministe
 @printf("instance %s : %d unites, %d intervalles, T = %d\n\n",
         basename(INSTANCE), instance.N,
         sum(length(u.intervals) for u in instance.Thermalunits), T)
 
 # --- 1. Formulation extensive : optimum exact du probleme deterministe ----------
-res = MSUC.bin_extensive_neutral(
-    instance; silent = true, force = FORCE, S = 1, batch = 1,
-    gap = 1e-6, timelimit = 300,
-)
-opt = res[3]
-@printf("Formulation extensive   optimum = %.1f   (%.1f s)\n", opt, res[2])
+res = MSUC.multistage_extensive(instance; force = FORCE, gap = 1e-6, timelimit = 300)
+opt = res[1]
+@printf("Formulation extensive   optimum = %.1f   (%.1f s)\n", opt, res[3])
 
 # --- 2. SDDP, formulation intervalle (Sect. 3) ----------------------------------
 function run_sddp(builder, method, label)

@@ -14,7 +14,6 @@ struct ThermalUnit
     MinUpTime::Int64  
     MinDownTime::Int64
     intervals::Vector{Vector{Int64}}
-    intervals_t::Vector{Vector{Vector{Int64}}}
 end
 
 struct Line
@@ -60,9 +59,6 @@ struct Instance
     Lines::Dict{Tuple{Int64, Int64}, Line}
     Next::Vector{Vector{Int64}}
     Demandbus::Vector{Vector{Float64}}
-    BusWind::Vector{Int64}
-    WGscenario::Vector{Matrix{Float64}}
-    Training_set::Vector{Vector{Int64}}
     # Processus ARMA de l'erreur de prevision (Sect. 2.1, eq. 1g)
     arma::ARMAProcess
     optimizer::Any
