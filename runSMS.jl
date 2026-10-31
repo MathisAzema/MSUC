@@ -106,10 +106,11 @@ addprocs(Nbworkers)
 @everywhere using MSUC
 @everywhere using Gurobi
 
+# Un environnement Gurobi par worker, enregistre dans le package : les jobs le relisent localement,
+# `pmap` n'a rien a envoyer (sinon Distributed tenterait de copier l'environnement du master).
 @everywhere const GRB_ENV = Gurobi.Env()
-@everywhere const GUROBI_THREADS = $GurobiThreads
-@everywhere Gurobi.GRBsetintparam(GRB_ENV, "Threads", GUROBI_THREADS)
-@everywhere optimizer = () -> Gurobi.Optimizer(GRB_ENV)
+@everywhere Gurobi.GRBsetintparam(GRB_ENV, "Threads", $GurobiThreads)
+@everywhere MSUC.set_run_optimizer!(() -> Gurobi.Optimizer(GRB_ENV))
 
 """
     run_train(size_list, id_list, methods, time_max_list; T, S_list, sigma_list, mip_gap_list,
@@ -136,7 +137,7 @@ function run_train(
         T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
     )
     pmap(combos; on_error = e -> (@warn("job d'entrainement en echec", exception = e); nothing)) do (instance, method, time_max, settings)
-        MSUC.train_job(instance, method, time_max, settings, optimizer)
+        MSUC.train_job(instance, method, time_max, settings)
         MSUC.release_memory()
     end
     return
@@ -170,7 +171,7 @@ function run_simulate(
     )
     pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
         folder = MSUC.results_folder(instance, method, time_max, settings)
-        MSUC.simulate_job(folder, instance, method, time_list, N, settings, optimizer)
+        MSUC.simulate_job(folder, instance, method, time_list, N, settings)
         MSUC.release_memory()
     end
     return

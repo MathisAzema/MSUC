@@ -52,6 +52,21 @@ function run_combos(
     ]
 end
 
+# Fabrique d'optimiseur d'un run, enregistree dans chaque processus (`set_run_optimizer!`, appelee sur
+# chaque worker par `runSMS.jl`). Les jobs la relisent ici au lieu de la recevoir de `pmap`, qui
+# enverrait sinon l'environnement Gurobi du processus principal aux workers.
+const RUN_OPTIMIZER = Ref{Any}(nothing)
+
+set_run_optimizer!(factory) = (RUN_OPTIMIZER[] = factory; nothing)
+
+function run_optimizer()
+    RUN_OPTIMIZER[] === nothing && error(
+        "aucun optimiseur enregistre : appeler `MSUC.set_run_optimizer!(() -> Gurobi.Optimizer(env))` " *
+        "sur chaque processus (voir runSMS.jl)",
+    )
+    return RUN_OPTIMIZER[]
+end
+
 # Un modele neuf (sans coupe) : meme construction a l'entrainement et a la simulation.
 function build_model(instance_name, method, settings, optimizer)
     builder, formulation = METHODS[method]

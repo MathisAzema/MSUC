@@ -64,11 +64,11 @@ end
 
 # Entraine un modele (`train` est appele tel quel, avec un releve apres chaque iteration), puis
 # ecrit dans `results_folder(...)` la borne, les temps par phase, les plannings et les coupes.
-function train_job(instance_name, method, time_max, settings, optimizer)
+function train_job(instance_name, method, time_max, settings)
     folder = results_folder(instance_name, method, time_max, settings)
     mkpath(folder)
 
-    model = build_model(instance_name, method, settings, optimizer)
+    model = build_model(instance_name, method, settings, run_optimizer())
     record, snapshots, schedules = make_recorder(model)
 
     Random.seed!(SEED)
@@ -100,10 +100,10 @@ end
 # politique de la derniere iteration k terminee (`time` <= instant), c'est-a-dire le planning x^k et les
 # coupes d'etape jusqu'a l'iteration k-1, simulee sur `N` trajectoires d'alea. Un instant anterieur a la
 # fin de la premiere iteration n'a pas de politique et est ignore. Le modele est construit une seule fois.
-function simulate_job(folder, instance_name, method, time_list, N, settings, optimizer)
+function simulate_job(folder, instance_name, method, time_list, N, settings)
     log = CSV.read(joinpath(folder, "log.csv"), DataFrame)
 
-    model = build_model(instance_name, method, settings, optimizer)
+    model = build_model(instance_name, method, settings, run_optimizer())
     data = read_policy(folder, model)
 
     loaded = zeros(Int, length(model.nodes))

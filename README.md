@@ -553,7 +553,7 @@ src/
       thermal_unit.jl                Section 4 : T_j, p, R^U, R^D, q, local_support
       unit_constraints.jl            contraintes partagées (engagement, capacité/rampes, lignes)
     run/                           campagnes d'expériences (voir `runSMS.jl`)
-      model.jl                       METHODS, dossier de résultats d'un run, modèle neuf
+      model.jl                       METHODS, dossier de résultats d'un run, optimiseur enregistré par worker, modèle neuf
       record.jl                      relevé des temps par phase et des plannings pendant l'entraînement
       policy.jl                      écriture et relecture de la politique (plannings, coupes restreintes)
       jobs.jl                        train_job, simulate_job, save_run
