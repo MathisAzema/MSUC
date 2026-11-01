@@ -472,7 +472,7 @@ C'est la table de référence pour lire le code.
 | l. 15–16 — duaux $(\hat\nu, \hat\sigma)$ | `get_dual_solution` → `StageDuals` |
 | l. 17 — $\hat z_{j,a,b,\xi}$ | `compute_coefficients_extended` |
 | l. 19–28 — support local | `local_support` |
-| l. 29, (36) — $\hat\tau = \hat h + \tilde\tau^\sigma$ | `interval_coefficients` → `τ_ab` |
+| l. 29, (36) — $\hat\tau = \hat h + \tilde\tau^\sigma$ | `compute_coefficients_extended` : `_weighted_sum` (propagation $\tilde\tau^\sigma$, tous les intervalles) puis boucle sur les intervalles actifs (valeur locale $\hat h$) → `τ[id]` |
 | l. 33–34, (39)–(40) — moyenne et ajout | `IntervalCut(α, τ, β, δ, nothing)`, puis `add_cut!` |
 
 **Le point le plus subtil.** Les coupes sont stockées avec leurs coefficients *par intervalle*

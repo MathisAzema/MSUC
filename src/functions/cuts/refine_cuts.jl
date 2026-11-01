@@ -61,38 +61,24 @@ function compute_coefficients_3bin(model::PolicyGraph, node::Node, items, y_k, �
     return α, τ, β, δ
 end
 
-"""
-    interval_coefficients(unit, a, b, t, horizon, y_prev, τ_prop, z, probability) -> (τ_ab, β_ab)
-
-Coefficients de la coupe intervalle pour l'intervalle [a:b] de `unit` (Prop. 4), actif a l'etape
-t+1.
-  * τ_ab = `τ_prop` (propagation des coupes du noeud suivant, ponderees par leurs multiplicateurs
-    moyens)  +  Σ_ξ p_ξ h_ξ  (valeur locale).
-  * β_ab = Σ_ξ p_ξ β_ξ  (pente locale en y).
-Pour chaque alea ξ, `(h_ξ, β_ξ)` est le support affine du probleme local `local_support` en
-`z[ξ]` = c_j - ν_ξ + Σ_k σ_ξ,k β_k(a,b), evalue au point de linearisation `y_prev` : la production
-courante si l'intervalle est choisi, `linearization_point` (regle (55)) sinon. Pour un intervalle inactif a
-l'etape t+1, le probleme local est nul : seule la propagation subsiste (`τ_prop`, β_ab = 0).
-"""
-function interval_coefficients(unit, a, b, t, horizon, y_prev, τ_prop, z, probability)
-    τ_ab = τ_prop
-    β_ab = 0.0
-    for i in eachindex(probability)
-        h, β_z = local_support(unit, a, b, t + 1, horizon, y_prev, z[i])
-        τ_ab += probability[i] * h
-        β_ab += probability[i] * β_z
-    end
-    return τ_ab, β_ab
-end
-
 # Somme ponderee `Σ_k weights[k] * cut.field` des coefficients des coupes (un vecteur sur les
-# intervalles) : c'est la propagation des coupes du noeud suivant.
-function _weighted_sum(cuts, weights, field::Symbol)
-    total = zeros(length(getfield(cuts[1], field)))
+# intervalles), ecrite dans `total` : c'est la propagation des coupes du noeud suivant. Les coupes de
+# poids nul sont ignorees (le resultat est identique) : les poids sont les multiplicateurs des coupes du
+# noeud suivant, nuls pour toutes celles qui ne sont pas saturees, soit environ 95 % d'entre elles.
+# `getfield(cut, field)` n'est pas inferable : son type est affirme, sans quoi le resultat est `Any` et
+# toute la boucle de `compute_coefficients_extended` qui l'utilise passe par du dispatch dynamique.
+function _weighted_sum!(total::Vector{Float64}, cuts, weights, field::Symbol)
+    fill!(total, 0.0)
     for (k, cut) in enumerate(cuts)
-        total .+= weights[k] .* getfield(cut, field)
+        iszero(weights[k]) && continue
+        total .+= weights[k] .* getfield(cut, field)::Vector{Float64}
     end
     return total
+end
+
+function _weighted_sum(cuts, weights, field::Symbol)
+    n = length(getfield(cuts[1], field)::Vector{Float64})
+    return _weighted_sum!(zeros(n), cuts, weights, field)
 end
 
 # Coefficients (α, τ, β, δ) de la coupe intervalle (Prop. 4) : τ et β sont des vecteurs sur les
@@ -120,32 +106,38 @@ function compute_coefficients_extended(model::PolicyGraph, node::Node, items, y_
         σ_mean .+= probability[i] .* items.duals[i].σ
     end
 
-    # Propagation : τ_prop = Σ_k σ̄_k τ_k ; et z_ξ = c_j - ν_ξ + Σ_k σ_ξ,k β_k pour chaque alea.
+    # Propagation : τ_prop = Σ_k σ̄_k τ_k. Un intervalle inactif a l'etape t+1 n'a pas de probleme local :
+    # il garde τ_prop et β = 0.
     τ = _weighted_sum(cuts, σ_mean, :tau)
-    z = zeros(nscen, nid)
-    for i in 1:nscen
-        d = items.duals[i]
-        z[i, :] .= _weighted_sum(cuts, d.σ, :beta)
-        for id in 1:nid
-            unit = units[idx.unit[id]]
-            z[i, id] = unit.LinearTerm - d.ν[unit.Bus] + z[i, id]
-        end
-    end
-
-    # Partie locale, pour les seuls intervalles actifs a l'etape t+1.
     β = zeros(nid)
+
+    # Partie locale, pour les seuls intervalles actifs a l'etape t+1 : point de linearisation de chacun,
+    # la production courante si l'intervalle est choisi, `linearization_point` (regle (55)) sinon.
     is_selected = falses(nid)
     is_selected[schedule.selected] .= true
-    for id in 1:nid
-        a, b = idx.a[id], idx.b[id]
-        is_on_interval(a, b, t + 1) || continue
+    active = [id for id in 1:nid if is_on_interval(idx.a[id], idx.b[id], t + 1)]
+    y_prev = zeros(length(active))
+    for (n, id) in enumerate(active)
         unit = units[idx.unit[id]]
-        y_prev =
+        y_prev[n] =
             is_selected[id] ? y_k[unit.name] :
-            linearization_point(unit, a, b, t, horizon, y_k[unit.name])
-        τ[id], β[id] = interval_coefficients(
-            unit, a, b, t, horizon, y_prev, τ[id], view(z, :, id), probability,
-        )
+            linearization_point(unit, idx.a[id], idx.b[id], t, horizon, y_k[unit.name])
+    end
+
+    # Pour chaque alea ξ : z_ξ = c_j - ν_ξ + Σ_k σ_ξ,k β_k(a,b), puis le support affine du probleme local
+    # en `y_prev` (`local_support`), pondere par p_ξ : τ_ab = τ_prop + Σ_ξ p_ξ h_ξ et β_ab = Σ_ξ p_ξ β_ξ.
+    # Un seul vecteur `σβ` sert pour tous les aleas, sans matrice intermediaire.
+    σβ = zeros(nid)
+    for i in 1:nscen
+        d = items.duals[i]
+        _weighted_sum!(σβ, cuts, d.σ, :beta)
+        for (n, id) in enumerate(active)
+            unit = units[idx.unit[id]]
+            z = unit.LinearTerm - d.ν[unit.Bus] + σβ[id]
+            h, β_z = local_support(unit, idx.a[id], idx.b[id], t + 1, horizon, y_prev[n], z)
+            τ[id] += probability[i] * h
+            β[id] += probability[i] * β_z
+        end
     end
 
     value = sum(probability[i] * items.objectives[i] for i in 1:nscen)
