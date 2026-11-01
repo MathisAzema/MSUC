@@ -111,17 +111,18 @@ function compute_coefficients_extended(model::PolicyGraph, node::Node, items, y_
     τ = _weighted_sum(cuts, σ_mean, :tau)
     β = zeros(nid)
 
-    # Partie locale, pour les seuls intervalles actifs a l'etape t+1 : point de linearisation de chacun,
-    # la production courante si l'intervalle est choisi, `linearization_point` (regle (55)) sinon.
+    # Partie locale, pour les seuls intervalles actifs a l'etape t+1 : point de linearisation ỹ de chacun
+    # (`linearization_point`), la production courante si l'intervalle est choisi (γ = 1) et la production
+    # maximale atteignable ȳ sinon (γ = 0).
     is_selected = falses(nid)
     is_selected[schedule.selected] .= true
     active = [id for id in 1:nid if is_on_interval(idx.a[id], idx.b[id], t + 1)]
     y_prev = zeros(length(active))
     for (n, id) in enumerate(active)
         unit = units[idx.unit[id]]
-        y_prev[n] =
-            is_selected[id] ? y_k[unit.name] :
-            linearization_point(unit, idx.a[id], idx.b[id], t, horizon, y_k[unit.name])
+        y_prev[n] = linearization_point(
+            unit, idx.a[id], idx.b[id], t, horizon, y_k[unit.name], is_selected[id],
+        )
     end
 
     # Pour chaque alea ξ : z_ξ = c_j - ν_ξ + Σ_k σ_ξ,k β_k(a,b), puis le support affine du probleme local

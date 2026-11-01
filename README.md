@@ -431,7 +431,7 @@ C'est la table de référence pour lire le code.
 | $R^D_{j,a,b,t}$ — membre droit de (45c) | `ramp_down(unit, a, b, t)` |
 | $\tilde y_{j,a,b,0}$ — éq. (17) | `initial_interval_output(unit, a)` |
 | $q_{j,a,b,t}$ — éq. (49) | `reference_output(unit, a, b, t, T)` |
-| $\tilde y^k_{j,a,b,t}$ — règle (55) | `linearization_point(unit, a, b, t, T, y)` |
+| $\tilde y^k_{j,a,b,t}$ — $y_{j,t}$ si $\gamma_{a,b}=1$, $\bar y_{j,a,b,t}$ si $\gamma_{a,b}=0$ | `linearization_point(unit, a, b, t, T, y, selected)` |
 | $\hat Q_{j,a,b,t}$ et son support (48)–(49) | `local_support(unit, a, b, t, T, y_prev, z)` → `(h, β)` |
 
 ### Coupes (`struct_functions/cuts/cuts.jl`, `functions/cuts/cuts.jl`, `functions/cuts/refine_cuts.jl`)

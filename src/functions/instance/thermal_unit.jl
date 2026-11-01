@@ -8,7 +8,7 @@
 #    R^U_{j,a,b,t}       membre de droite de (45b)                 -> ramp_up
 #    R^D_{j,a,b,t}       membre de droite de (45c)                 -> ramp_down
 #    q_{j,a,b,t}         trajectoire de reference, eq. (49)        -> reference_output
-#    ytilde^k            point de linearisation, regle (55)        -> linearization_point
+#    ytilde^k            point de linearisation (y si gamma = 1, ybar si gamma = 0)   -> linearization_point
 #    ytilde_{j,a,b,0}    etat initial par intervalle, eq. (17)     -> initial_interval_output
 #    Qhat_{j,a,b,t}      valeur locale (48) et support (49)        -> local_support
 #
@@ -144,26 +144,16 @@ function reference_output(unit, a, b, t, T)
 end
 
 """
-    linearization_point(unit, a, b, t, T, y)
+    linearization_point(unit, a, b, t, T, y, selected)
 
-Production ỹ^k de l'intervalle [a:b] a l'etape t ou l'on linearise le probleme local, regle (55)
-de l'article : la production visitee `y` si elle est localement atteignable pour cet intervalle,
-c'est-a-dire dans
-    [P_min u_{a,b,t}, ȳ_{a,b,t}]                                   si a >= 1,
-    [u_{a,b,t} max{P_min, y_{j,0} - R^D t}, ȳ_{a,b,t}]             si a <= 0,
-sinon la production maximale atteignable ȳ (`reference_output`). Un support local est valide en
-n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
-intervalle serait choisi. A utiliser pour les intervalles NON choisis ; un intervalle choisi est
-linearise en `y` (la coupe doit etre serree au point visite).
+Production ỹ^k_{j,a,b,t} de l'intervalle [a:b] a l'etape t ou l'on linearise le probleme local : la
+production visitee `y` si l'intervalle est choisi (γ = 1), car la coupe doit etre serree au point visite,
+et la production maximale atteignable ȳ (`reference_output`) sinon (γ = 0). Un support local est valide
+en n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
+intervalle serait choisi.
 """
-function linearization_point(unit, a, b, t, T, y; tol = 1e-8)
-    ybar = reference_output(unit, a, b, t, T)
-    lower =
-        !is_on_interval(a, b, t) ? 0.0 :
-        a >= 1 ? unit.MinPower :
-        max(unit.MinPower, unit.InitialPower - unit.DeltaRampDown * t)
-    return lower - tol <= y <= ybar + tol ? y : ybar
-end
+linearization_point(unit, a, b, t, T, y, selected::Bool) =
+    selected ? y : reference_output(unit, a, b, t, T)
 
 """
     local_support(unit, a, b, t, T, y_prev, z) -> (h, beta)
