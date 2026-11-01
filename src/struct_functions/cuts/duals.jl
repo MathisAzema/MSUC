@@ -8,7 +8,8 @@
 
 Multiplicateurs d'un sous-probleme d'etape, dans les notations du papier :
 `σ` duaux des lignes d'epigraphe, `ν` du bilan par noeud, `β` et `δ` des etats entrants y et
-zeta, `τ` des parametres du planning (3-bin ; vide en formulation intervalle).
+zeta, `τ` des parametres du planning. En formulation intervalle, `β` et `τ` sont vides (3-bin
+seulement) : les pentes en y et en x y sont calculees en forme close.
 """
 struct StageDuals
     σ::Vector{Float64}

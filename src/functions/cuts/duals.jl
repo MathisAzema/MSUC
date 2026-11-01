@@ -27,7 +27,10 @@ end
 """
     get_dual_solution(node)
 
-Multiplicateurs du sous-probleme d'etape `node`, resolu au point courant (`StageDuals`).
+Multiplicateurs du sous-probleme d'etape `node`, resolu au point courant (`StageDuals`). En
+formulation intervalle, les pentes en y (`β`) et en x (`τ`) sont calculees en forme close
+(`local_support`) et non lues dans les duaux : ces deux champs restent vides, ce qui evite un appel
+`JuMP.dual` (environ 0,4 µs) par unite et par resolution.
 """
 function get_dual_solution(node::Node)
     if !_has_dual_solution(node)
@@ -35,13 +38,15 @@ function get_dual_solution(node::Node)
         attempt_numerical_recovery(model, node; require_dual = true)
     end
     model = get_policy_graph(node.subproblem)
+    extended = model.method == ExtendedFormulation
+    β = extended ? Float64[] : [JuMP.dual(JuMP.FixRef(s.in)) for s in node.power]
     τ =
-        model.method == ExtendedFormulation ? Float64[] :
+        extended ? Float64[] :
         commitment_duals(node.planning, model.instance, node.index - 1)
     return StageDuals(
         [JuMP.dual(cut.constraint_ref) for cut in node.cuts],
         JuMP.dual.(node.demand_constraint),
-        [JuMP.dual(JuMP.FixRef(s.in)) for s in node.power],
+        β,
         [JuMP.dual(JuMP.FixRef(s.in)) for s in node.zeta],
         τ,
     )
