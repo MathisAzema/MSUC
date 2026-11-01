@@ -15,16 +15,26 @@ function flatten_timer(to::TimerOutputs.TimerOutput)
     return phases
 end
 
-# Fonction a passer a `train(; post_iteration_callback)` : apres chaque iteration, releve les temps
-# cumules par phase et le planning x^k de l'iteration (celui du MIP racine). Elle ne touche pas au
-# deroulement de l'algorithme.
+# Deux fonctions a passer a `train` et ce qu'elles remplissent. Aucune ne touche au deroulement de
+# l'algorithme.
+#   - `record_pass` (`forward_pass_callback`) : apres chaque passe avant, garde les etats echantillonnes
+#     de la trajectoire, `(sampled_states_power, sampled_states_zeta)`, c'est-a-dire (y, zeta) a la
+#     sortie de chaque noeud, le noeud 1 (racine) etant l'etat initial ;
+#   - `record` (`post_iteration_callback`) : apres chaque iteration, releve les temps cumules par phase,
+#     le planning x^k de l'iteration (celui du MIP racine) et les trajectoires de ses passes.
+# `states[k][p]` est la trajectoire de la passe p de l'iteration k.
 function make_recorder(model)
     snapshots = Dict{String,Tuple{Int,Float64}}[]
     schedules = Schedule[]
+    states = Vector{NamedTuple}[]
+    trajectories = NamedTuple[]
+    record_pass(trajectory) = (push!(trajectories, trajectory); nothing)
     function record(result)
         push!(snapshots, flatten_timer(model.timer_output))
         push!(schedules, model.schedule)
+        push!(states, copy(trajectories))
+        empty!(trajectories)
         return
     end
-    return record, snapshots, schedules
+    return record, record_pass, snapshots, schedules, states
 end

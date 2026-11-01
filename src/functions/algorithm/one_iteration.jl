@@ -19,7 +19,7 @@ passe est ajoutee a la racine.
 function one_iteration(model::PolicyGraph, options::Options)
     model.ext[:numerical_issue] = false
     TimerOutputs.@timeit model.timer_output "solve_first_stage_problem" begin
-        lower_bound = solve_first_stage_problem(model, options.initial_state)
+        lower_bound, incumbent = solve_first_stage_problem(model, options.initial_state)
     end
     # Le planning x^k lu a la racine est fixe pour toute l'iteration : parametres des etapes de
     # dispatch, puis second membre et pentes des coupes stockees (qui dependent de x^k).
@@ -47,6 +47,7 @@ function one_iteration(model::PolicyGraph, options::Options)
         Log(
             length(options.log) + 1,
             bound,
+            incumbent,
             time() - options.start_time,
             model.ext[:total_solves],
             model.ext[:numerical_issue],

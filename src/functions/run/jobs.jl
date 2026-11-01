@@ -10,13 +10,38 @@ function release_memory()
     return
 end
 
-function save_run(folder, model, snapshots, schedules, passes, config)
+# Etats echantillonnes par les passes avant : une ligne par (iteration, passe, noeud), avec la production
+# `power_<unite>` et l'etat d'incertitude `zeta_<i>` a la sortie du noeud (le noeud 1 est l'etat initial).
+function write_states(folder, states)
+    trajectories = [(k, p, t) for k in eachindex(states) for (p, t) in enumerate(states[k])]
+    nodes = length(trajectories[1][3].sampled_states_power)
+    # une trajectoire = une matrice (noeuds x composantes de l'etat)
+    as_matrix(vectors) = permutedims(reduce(hcat, vectors))
+    power = reduce(vcat, [as_matrix(t.sampled_states_power) for (_, _, t) in trajectories])
+    zeta = reduce(vcat, [as_matrix(t.sampled_states_zeta) for (_, _, t) in trajectories])
+    table = DataFrame(
+        iteration = repeat([k for (k, _, _) in trajectories], inner = nodes),
+        pass = repeat([p for (_, p, _) in trajectories], inner = nodes),
+        node = repeat(1:nodes, length(trajectories)),
+    )
+    for i in axes(power, 2)
+        table[!, "power_$i"] = power[:, i]
+    end
+    for i in axes(zeta, 2)
+        table[!, "zeta_$i"] = zeta[:, i]
+    end
+    CSV.write(joinpath(folder, "states.csv"), table)
+    return
+end
+
+function save_run(folder, model, snapshots, schedules, states, passes, config)
     log = model.most_recent_training_results.log
     CSV.write(
         joinpath(folder, "log.csv"),
         DataFrame(
             iteration = [l.iteration for l in log],
             bound = [l.bound for l in log],
+            incumbent = [l.incumbent for l in log],
             time = [l.time for l in log],
             total_solves = [l.total_solves for l in log],
         ),
@@ -48,6 +73,11 @@ function save_run(folder, model, snapshots, schedules, passes, config)
             error("noeud $i : $(length(model[i].cuts) - 1) coupes, $expected attendues")
     end
 
+    # Une trajectoire par passe : `passes` par iteration.
+    all(length(s) == passes for s in states) && length(states) == length(log) ||
+        error("etats echantillonnes : $passes trajectoires par iteration attendues")
+
+    write_states(folder, states)
     write_policy(folder, model, schedules)
 
     config = merge(
@@ -69,7 +99,7 @@ function train_job(instance_name, method, time_max, settings)
     mkpath(folder)
 
     model = build_model(instance_name, method, settings, run_optimizer())
-    record, snapshots, schedules = make_recorder(model)
+    record, record_pass, snapshots, schedules, states = make_recorder(model)
 
     Random.seed!(SEED)
     train(
@@ -79,6 +109,7 @@ function train_job(instance_name, method, time_max, settings)
         passes_per_mip = settings.passes_per_mip,
         print_level = 0,
         run_numerical_stability_report = false,
+        forward_pass_callback = record_pass,
         post_iteration_callback = record,
     )
 
@@ -92,7 +123,7 @@ function train_job(instance_name, method, time_max, settings)
         mip_gap = something(settings.mip_gap, missing),
         passes_per_mip = settings.passes_per_mip,
     )
-    save_run(folder, model, snapshots, schedules, settings.passes_per_mip, config)
+    save_run(folder, model, snapshots, schedules, states, settings.passes_per_mip, config)
     return
 end
 

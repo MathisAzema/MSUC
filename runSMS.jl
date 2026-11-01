@@ -58,8 +58,13 @@
 # Fichiers ecrits dans results_sms/<methode>_T<T>_S<S>_sigma<s>_passes<p>_gap<g>/<instance>/time_<t>/ :
 #
 #   config.csv                   parametres du run, nombre d'iterations, temps total, derniere borne
-#   log.csv                      une ligne par iteration : iteration, bound, time, total_solves
-#                                (`bound` = borne inferieure ; `time` = secondes depuis le debut)
+#   log.csv                      une ligne par iteration : iteration, bound, incumbent, time, total_solves
+#                                (`bound` = borne inferieure ; `incumbent` = valeur de l'incumbent du MIP
+#                                racine, egale a `bound` si le MIP est resolu a l'optimalite et plus grande
+#                                sinon ; `time` = secondes depuis le debut)
+#   states.csv                   etats echantillonnes par les passes avant : une ligne par (iteration, passe,
+#                                noeud), colonnes `power_<unite>` et `zeta_<i>` = etat (y, zeta) a la sortie du
+#                                noeud ; le noeud 1 est l'etat initial. `passes_per_mip` passes par iteration
 #   phases.csv                   une ligne par iteration : temps CUMULE (s) passe dans chaque phase,
 #                                une colonne par phase. Les phases imbriquees portent le chemin de leur
 #                                parent, par exemple `backward_pass/compute_coefficients`. Le temps d'une

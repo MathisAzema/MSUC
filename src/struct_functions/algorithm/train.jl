@@ -6,6 +6,7 @@
 struct Log
     iteration::Int
     bound::Float64
+    incumbent::Float64
     time::Float64
     total_solves::Int
     serious_numerical_issue::Bool

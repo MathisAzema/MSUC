@@ -68,10 +68,12 @@ dernière passe est ajoutée à la racine. Une « itération » est alors un cyc
 
 `train` affiche son journal (une ligne par itération) uniquement dans le terminal, sans écrire de fichier ;
 `print_level = 0` le coupe. Pour l'exploiter dans le code, `model.most_recent_training_results.log` contient
-une entrée par itération (`bound`, `time`, `total_solves`, ...).
+une entrée par itération (`bound`, `incumbent`, `time`, `total_solves`, ...).
 
 La colonne `bound` du journal est la borne inférieure, issue du problème racine (26) résolu
-avec l'approximation courante (Algorithme 2, ligne 5).
+avec l'approximation courante (Algorithme 2, ligne 5). La colonne `incumbent` est la valeur de l'objectif
+du planning $x^k$ retenu par ce MIP : avec un `mip_gap` non nul elle est supérieure à `bound` (d'au plus
+`mip_gap` en relatif) et n'est pas une borne.
 
 > Le problème racine est un **MIP**. La borne publiée est sa borne **duale**
 > (`objective_bound`), pas la valeur de l'incumbent : avec un `MIPGap` non nul, l'incumbent
@@ -255,7 +257,8 @@ Chaque run écrit, dans `results_sms/<méthode>_T<T>_S<S>_sigma<σ>_passes<p>_ga
 
 | Fichier | Contenu |
 |---|---|
-| `log.csv` | une ligne par itération : `bound` (borne inférieure), `time` (s depuis le début), `total_solves` |
+| `log.csv` | une ligne par itération : `bound` (borne inférieure), `incumbent` (valeur de l'incumbent du MIP racine : égale à `bound` si le MIP est résolu à l'optimalité, plus grande sinon), `time` (s depuis le début), `total_solves` |
+| `states.csv` | états échantillonnés par les passes avant : une ligne par (itération, passe, nœud), colonnes `power_<unité>` et `zeta_<i>` = état $(y,\zeta)$ à la sortie du nœud ; le nœud 1 est l'état initial ; `passes_per_mip` passes par itération |
 | `phases.csv` | une ligne par itération : temps **cumulé** (s) de chaque phase, une colonne par phase ; le temps d'une phase entre deux instants est une différence de deux lignes |
 | `timers.csv` | bilan final : phase, nombre d'appels, temps |
 | `config.csv` | paramètres du run, nombre d'itérations, temps total, dernière borne |
@@ -274,6 +277,8 @@ Les phases de `phases.csv` sont `solve_first_stage_problem` (le MIP racine), `se
 Sur `10_0_1_w` (`T = 24`), `cuts.csv` pèse environ 1,9 ko par coupe en formulation intervalle (contre 21 ko
 pour les coupes complètes, en binaire) et 3,3 ko en 3-bin, soit 2 à 3 Mo après une vingtaine de secondes. Il
 croît avec le nombre de composantes utiles, donc avec la taille de l'instance et la durée du run.
+`states.csv` pèse environ 100 octets par ligne pour 10 unités (une ligne par itération, passe et nœud, donc
+`passes_per_mip × (T+1)` lignes par itération) et croît proportionnellement au nombre d'unités.
 `results_sms/` est ignoré par git.
 
 ---
@@ -570,6 +575,7 @@ examples/
   compare_formulations.jl          extensive / intervalle / 3-bin sur un problème déterministe
 runSMS.jl                          campagne SMS++ : `run_train` et `run_simulate`, répartis sur des workers (le travail d'un run est dans `src/functions/run/`)
 validation.ipynb                   notebook : entraînement, simulation, courbes de borne et de temps du MIP racine
+toy_une_unite.ipynb                notebook : une unité (capacité 10, coût 1, coût fixe 1, rampes 1), délestage à coût 2, demande 15 ; bornes intervalle contre 3-bin
 Data/
   T-Ramp/                          41 instances SMS++ (.nc4)
   IEEE/118_syst/                   données IEEE 118-bus (lues par `parse_IEEE`)
