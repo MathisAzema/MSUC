@@ -8,7 +8,7 @@
 #    R^U_{j,a,b,t}       membre de droite de (45b)                 -> ramp_up
 #    R^D_{j,a,b,t}       membre de droite de (45c)                 -> ramp_down
 #    q_{j,a,b,t}         trajectoire de reference, eq. (49)        -> reference_output
-#    ytilde^k            point de linearisation (y si gamma = 1, ybar si gamma = 0)   -> linearization_point
+#    ytilde^k            point de linearisation (y ou ybar, conditions (i)-(ii))      -> linearization_point
 #    ytilde_{j,a,b,0}    etat initial par intervalle, eq. (17)     -> initial_interval_output
 #    Qhat_{j,a,b,t}      valeur locale (48) et support (49)        -> local_support
 #
@@ -144,16 +144,50 @@ function reference_output(unit, a, b, t, T)
 end
 
 """
-    linearization_point(unit, a, b, t, T, y, selected)
+    ramp_steps(unit, rate)
 
-Production ỹ^k_{j,a,b,t} de l'intervalle [a:b] a l'etape t ou l'on linearise le probleme local : la
-production visitee `y` si l'intervalle est choisi (γ = 1), car la coupe doit etre serree au point visite,
-et la production maximale atteignable ȳ (`reference_output`) sinon (γ = 0). Un support local est valide
-en n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
-intervalle serait choisi.
+T^R_j de l'article : ⌈(P_max - P_min) / rate⌉, nombre de pas pour parcourir la plage [P_min, P_max] en
+montee (`rate` = R^U, T^RU) ou en descente (`rate` = R^D, T^RD).
 """
-linearization_point(unit, a, b, t, T, y, selected::Bool) =
-    selected ? y : reference_output(unit, a, b, t, T)
+ramp_steps(unit, rate) = ceil(Int, (unit.MaxPower - unit.MinPower) / rate)
+
+"""
+    linearization_point(unit, a, b, t, T, y, selected, chosen)
+
+Production ỹ^k_{j,a,b,t} de l'intervalle [a:b] au pas t (etat entrant de l'etape s = t + 1) ou l'on linearise
+le probleme local : la production visitee `y` si
+  (i)  l'intervalle est choisi (`selected`, γ = 1), car la coupe doit etre serree au point visite ; ou
+  (ii) l'intervalle est assez long, b - a >= T^RU + T^RD, et il existe un intervalle choisi [c:d] de la meme
+       unite (`chosen`, liste des (c, d)) tel que s appartienne a
+           [max(a, c) + (1 + T^RU) 1_{a≠c} : min(b, d) - T^RD 1_{b≠d}],
+       car `y`, atteignable depuis [c:d], l'est alors aussi depuis [a:b] ;
+et la production maximale atteignable ȳ (`reference_output`) sinon. Un support local est valide en
+n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
+intervalle serait choisi.
+
+Les marges sont les plus petites qui garantissent l'atteignabilite (conventions du code : u = 1 sur
+[a : b-1], S^U = S^D = P_min). Quand les debuts different, il faut que le plus tardif ait fini sa montee
+pour que la plage soit complete : atteindre P_max demande T^RU pas, et l'etat entrant de l'etape s est
+y_{s-1}, d'ou s >= a + T^RU + 1. A la fin, le dernier pas allume est b - 1 et la descente demande T^RD
+pas, d'ou s <= b - T^RD. Quand les bornes coincident, les cones sont identiques. Les intervalles initiaux
+(a <= 0, depart a y_{j,0}) n'ont pas de cas particulier : ils n'existent que pour
+b >= 1 + ⌈(y_{j,0} - P_min) / R^D⌉ (`set_intervals`), donc tout redemarrage choisi commence apres la fin de
+la descente, et la borne basse max(P_min, y_{j,0} - R^D t) est deja retombee a P_min.
+"""
+function linearization_point(unit, a, b, t, T, y, selected::Bool, chosen)
+    selected && return y
+    t_up = ramp_steps(unit, unit.DeltaRampUp)
+    t_down = ramp_steps(unit, unit.DeltaRampDown)
+    if b - a >= t_up + t_down
+        s = t + 1
+        for (c, d) in chosen
+            lower = max(a, c) + (a != c ? 1 + t_up : 0)
+            upper = min(b, d) - (b != d ? t_down : 0)
+            lower <= s <= upper && return y
+        end
+    end
+    return reference_output(unit, a, b, t, T)
+end
 
 """
     local_support(unit, a, b, t, T, y_prev, z) -> (h, beta)
