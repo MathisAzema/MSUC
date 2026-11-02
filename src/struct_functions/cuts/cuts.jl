@@ -15,6 +15,7 @@ mutable struct BinCut <: AbstractCut
     beta::Vector{Float64}  # coefficients sur y_j, une par unite
     delta::Vector{Float64} # coefficients sur zeta
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
+    applied::Vector{Float64}   # pentes en y deja ecrites dans la ligne d'epigraphe (vide : aucune)
 end
 
 mutable struct IntervalCut <: AbstractCut
@@ -23,4 +24,12 @@ mutable struct IntervalCut <: AbstractCut
     beta::Vector{Float64}
     delta::Vector{Float64}
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
+    applied::Vector{Float64}   # pentes en y deja ecrites dans la ligne d'epigraphe (vide : aucune)
 end
+
+# Une coupe neuve n'a encore ecrit aucune pente dans le sous-probleme.
+BinCut(alpha, tau, beta, delta, constraint_ref) =
+    BinCut(alpha, tau, beta, delta, constraint_ref, Float64[])
+
+IntervalCut(alpha, tau, beta, delta, constraint_ref) =
+    IntervalCut(alpha, tau, beta, delta, constraint_ref, Float64[])

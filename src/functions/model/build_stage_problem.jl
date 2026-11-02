@@ -1,11 +1,21 @@
+# Variables fixees a `value` : elles portent le planning x^k dans les etapes de dispatch. Ce ne sont pas
+# des `Parameter` JuMP : changer la valeur d'un `Parameter` oblige JuMP a recopier tout le modele dans
+# Gurobi a la resolution suivante (et a perdre la base de depart), alors que changer la valeur d'une
+# variable fixee modifie ses bornes en place.
+function _fixed_variables(subproblem, n, value)
+    x = @variable(subproblem, [1:n])
+    JuMP.fix.(x, value)
+    return x
+end
+
 # Capacite, rampes et faisabilite d'arret de l'etape t, ecrites sur le planning fixe.
 function _stage_parameters!(subproblem, instance, power, t, basis)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
-    u_prev = @variable(subproblem, [1:N] in Parameter(0.0))
-    u = @variable(subproblem, [1:N] in Parameter(0.0))
-    v = @variable(subproblem, [1:N] in Parameter(0.0))
-    w = @variable(subproblem, [1:N] in Parameter(0.0))
+    u_prev = _fixed_variables(subproblem, N, 0.0)
+    u = _fixed_variables(subproblem, N, 0.0)
+    v = _fixed_variables(subproblem, N, 0.0)
+    w = _fixed_variables(subproblem, N, 0.0)
     for i in 1:N
         add_unit_dynamics!(subproblem, units[i], power[i].out, power[i].in, u[i], u_prev[i], v[i], w[i])
     end
@@ -17,7 +27,7 @@ function _stage_parameters!(subproblem, instance, power, t, basis)
             for h in 1:(T-t)
                 coef = max(0.0, unit.MaxPower - unit.MinPower - (h - 1) * unit.DeltaRampDown)
                 coef <= 0 && break
-                p = @variable(subproblem, set = Parameter(0.0))
+                p = _fixed_variables(subproblem, 1, 0.0)[1]
                 push!(w_future[unit.name], p)
                 @constraint(
                     subproblem,
@@ -27,7 +37,8 @@ function _stage_parameters!(subproblem, instance, power, t, basis)
             end
         end
     else
-        cap = @variable(subproblem, [i = 1:N] in Parameter(units[i].MaxPower))
+        cap = _fixed_variables(subproblem, N, 0.0)
+        JuMP.fix.(cap, [unit.MaxPower for unit in units])
         @constraint(subproblem, [i = 1:N], power[i].out <= cap[i])
     end
     return StageParameters(u_prev, u, v, w, w_future, cap)

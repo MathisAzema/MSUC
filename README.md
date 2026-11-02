@@ -413,7 +413,7 @@ C'est la table de référence pour lire le code.
 
 | Article | Code |
 |---|---|
-| $x_j = (u_j, v_j, w_j)$ | variables binaires `u`, `v`, `w` de la racine (`RootVariables`) ; **paramètres** `StageParameters` aux étapes de dispatch, fixés par `set_schedule!` ; valeurs lues dans `Schedule` |
+| $x_j = (u_j, v_j, w_j)$ | variables binaires `u`, `v`, `w` de la racine (`RootVariables`) ; **variables fixées** `StageParameters` aux étapes de dispatch (`JuMP.fix`, mises à jour en place par `set_schedule!`) ; valeurs lues dans `Schedule` |
 | $y_{j,t}$ | `power[j]` (état), `node.power` |
 | $\zeta_t$ | `ζ` (état), `node.zeta` |
 | $\gamma_{j,a,b}$ | `RootVariables.gamma[j,a,b]` à la racine ; `Schedule.selected` (intervalles choisis) ensuite |

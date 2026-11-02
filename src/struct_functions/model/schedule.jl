@@ -7,7 +7,7 @@
 #  Trois objets :
 #    RootVariables     variables de decision du probleme racine (MIP)
 #    Schedule          valeurs du planning x^k lues a la racine apres resolution
-#    StageParameters   parametres JuMP des etapes de dispatch, fixes a x^k
+#    StageParameters   variables des etapes de dispatch fixees a x^k (`JuMP.fix`)
 # =============================================================================
 
 """
@@ -27,7 +27,8 @@ end
 """
     StageParameters
 
-Parametres du planning dans le sous-probleme de l'etape `t` : le statut `u_prev` (t-1) et
+Variables fixees au planning dans le sous-probleme de l'etape `t` (`JuMP.fix`, et non des `Parameter` : changer
+un `Parameter` fait recopier tout le modele dans Gurobi, changer une borne se fait en place) : le statut `u_prev` (t-1) et
 `u` (t), le demarrage `v` et l'arret `w` a `t`, plus selon la formulation
   * 3-bin      : `w_future[j][h]` = w_{t+h}, necessaires aux lignes de faisabilite d'arret
                  (44), dont les duaux portent les coefficients de la coupe sur x ;

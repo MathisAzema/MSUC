@@ -31,12 +31,52 @@ function instantiate(cut::IntervalCut, schedule::Schedule, N::Int)
     return A, b
 end
 
-function instantiate_cut!(cut::AbstractCut, y_out, schedule::Schedule, N::Int)
-    A, b = instantiate(cut, schedule, N)
-    JuMP.set_normalized_rhs(cut.constraint_ref, A)
-    JuMP.set_normalized_coefficient.(cut.constraint_ref, y_out, -b)
+# Ligne d'epigraphe d'une coupe de noeud d'etape : `theta - zeta_term >= A` plus `-b_j y_j`.
+const CutRef = JuMP.ConstraintRef{
+    JuMP.Model,
+    MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64},MOI.GreaterThan{Float64}},
+    JuMP.ScalarShape,
+}
+
+"""
+    instantiate_cuts!(cuts, y_out, schedule, N)
+
+Ecrit dans le sous-probleme le second membre et les pentes en y de `cuts` au planning `schedule`. Les
+modifications sont envoyees au solveur en deux lots (seconds membres, puis pentes), et seules les
+pentes qui different de celles deja ecrites (`cut.applied`) y sont envoyees : d'une iteration a la
+suivante le planning ne change que pour quelques unites, et en 3-bin les pentes ne changent jamais. Envoyer
+chaque coefficient separement coutait bien plus cher que la resolution des LP.
+"""
+function instantiate_cuts!(cuts::AbstractVector{<:AbstractCut}, y_out, schedule::Schedule, N::Int)
+    isempty(cuts) && return
+    rhs_refs, rhs = CutRef[], Float64[]
+    slope_refs, slope_vars, slope_values = CutRef[], JuMP.VariableRef[], Float64[]
+    for cut in cuts
+        ref = cut.constraint_ref::CutRef
+        A, b = instantiate(cut, schedule, N)
+        push!(rhs_refs, ref)
+        push!(rhs, A)
+        first_time = isempty(cut.applied)
+        for j in eachindex(y_out)
+            if first_time || b[j] != cut.applied[j]
+                push!(slope_refs, ref)
+                push!(slope_vars, y_out[j])
+                push!(slope_values, -b[j])
+            end
+        end
+        if first_time
+            cut.applied = copy(b)
+        else
+            copyto!(cut.applied, b)
+        end
+    end
+    JuMP.set_normalized_rhs(rhs_refs, rhs)
+    isempty(slope_refs) || JuMP.set_normalized_coefficient(slope_refs, slope_vars, slope_values)
     return
 end
+
+instantiate_cut!(cut::AbstractCut, y_out, schedule::Schedule, N::Int) =
+    instantiate_cuts!([cut], y_out, schedule, N)
 
 # A la racine le planning est variable : la partie de la coupe qui ne depend ni de zeta ni
 # de theta s'ecrit sur les variables de decision.

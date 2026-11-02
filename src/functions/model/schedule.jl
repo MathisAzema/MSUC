@@ -60,15 +60,15 @@ function set_stage_parameters!(
     t::Int,
 )
     for (i, unit) in enumerate(instance.Thermalunits)
-        JuMP.set_parameter_value(params.u_prev[i], schedule.u[i, t])
-        JuMP.set_parameter_value(params.u[i], schedule.u[i, t+1])
-        JuMP.set_parameter_value(params.v[i], schedule.v[i, t])
-        JuMP.set_parameter_value(params.w[i], schedule.w[i, t])
+        JuMP.fix(params.u_prev[i], schedule.u[i, t])
+        JuMP.fix(params.u[i], schedule.u[i, t+1])
+        JuMP.fix(params.v[i], schedule.v[i, t])
+        JuMP.fix(params.w[i], schedule.w[i, t])
         for (h, p) in enumerate(params.w_future[i])
-            JuMP.set_parameter_value(p, schedule.w[i, t+h])
+            JuMP.fix(p, schedule.w[i, t+h])
         end
         if !isempty(params.cap)
-            JuMP.set_parameter_value(params.cap[i], shutdown_cap(unit, schedule, i, t))
+            JuMP.fix(params.cap[i], shutdown_cap(unit, schedule, i, t))
         end
     end
     return
@@ -105,9 +105,7 @@ function set_schedule!(model::PolicyGraph, schedule::Schedule)
         node_index == 1 && continue
         set_stage_parameters!(node.planning, model.instance, schedule, node_index - 1)
         y_out = [s.out for s in node.power]
-        for cut in node.cuts
-            instantiate_cut!(cut, y_out, schedule, N)
-        end
+        instantiate_cuts!(node.cuts, y_out, schedule, N)
     end
     return
 end

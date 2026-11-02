@@ -13,12 +13,12 @@ qui n'apparaissent pas dans les contraintes de l'etape restent nulles.
 function commitment_duals(params::StageParameters, instance::Instance, t::Int)
     τ = zeros(commitment_dimension(instance))
     for i in 1:instance.N
-        τ[u_index(instance, i, t-1)] += JuMP.dual(JuMP.ParameterRef(params.u_prev[i]))
-        τ[u_index(instance, i, t)] += JuMP.dual(JuMP.ParameterRef(params.u[i]))
-        τ[v_index(instance, i, t)] += JuMP.dual(JuMP.ParameterRef(params.v[i]))
-        τ[w_index(instance, i, t)] += JuMP.dual(JuMP.ParameterRef(params.w[i]))
+        τ[u_index(instance, i, t-1)] += JuMP.dual(JuMP.FixRef(params.u_prev[i]))
+        τ[u_index(instance, i, t)] += JuMP.dual(JuMP.FixRef(params.u[i]))
+        τ[v_index(instance, i, t)] += JuMP.dual(JuMP.FixRef(params.v[i]))
+        τ[w_index(instance, i, t)] += JuMP.dual(JuMP.FixRef(params.w[i]))
         for (h, p) in enumerate(params.w_future[i])
-            τ[w_index(instance, i, t+h)] += JuMP.dual(JuMP.ParameterRef(p))
+            τ[w_index(instance, i, t+h)] += JuMP.dual(JuMP.FixRef(p))
         end
     end
     return τ
