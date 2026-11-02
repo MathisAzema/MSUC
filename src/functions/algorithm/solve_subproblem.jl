@@ -148,6 +148,7 @@ function default_numerical_difficulty_callback(
         return
     end
     MOI.Utilities.reset_optimizer(node.subproblem)
+    delete!(node.ext, :cut_rows)    # les lignes des coupes dans le modele Gurobi ont pu changer
     optimize!(node.subproblem)
     return
 end
