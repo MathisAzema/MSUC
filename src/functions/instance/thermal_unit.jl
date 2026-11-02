@@ -165,14 +165,22 @@ et la production maximale atteignable ȳ (`reference_output`) sinon. Un support 
 n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
 intervalle serait choisi.
 
+Pour un intervalle initial non choisi (a <= 0, depart a y_{j,0}) et un intervalle choisi [c:d] different de
+lui (c ≠ a), (ii) exige aussi t >= ⌈(y_{j,0} - P_min) / R^D⌉ : la production de [a:b] ne peut pas descendre
+plus vite que R^D depuis y_{j,0}, elle reste donc >= max(P_min, y_{j,0} - R^D t), et un `y` plus bas, atteignable
+depuis [c:d], ne l'est pas depuis [a:b]. Si c = a, les deux intervalles ont la meme borne basse.
+
 Les marges sont les plus petites qui garantissent l'atteignabilite (conventions du code : u = 1 sur
 [a : b-1], S^U = S^D = P_min). Quand les debuts different, il faut que le plus tardif ait fini sa montee
 pour que la plage soit complete : atteindre P_max demande T^RU pas, et l'etat entrant de l'etape s est
 y_{s-1}, d'ou s >= a + T^RU + 1. A la fin, le dernier pas allume est b - 1 et la descente demande T^RD
-pas, d'ou s <= b - T^RD. Quand les bornes coincident, les cones sont identiques. Les intervalles initiaux
-(a <= 0, depart a y_{j,0}) n'ont pas de cas particulier : ils n'existent que pour
-b >= 1 + ⌈(y_{j,0} - P_min) / R^D⌉ (`set_intervals`), donc tout redemarrage choisi commence apres la fin de
-la descente, et la borne basse max(P_min, y_{j,0} - R^D t) est deja retombee a P_min.
+pas, d'ou s <= b - T^RD. Quand les bornes coincident, les cones sont identiques.
+
+Dans le modele du code (S^D = P_min), la condition sur les intervalles initiaux est toujours satisfaite par
+les plannings admissibles : un intervalle initial [a:b] n'existe que pour b >= 1 + ⌈(y_{j,0} - P_min) / R^D⌉
+(`set_intervals`), donc tout redemarrage choisi commence apres la fin de la descente. Elle ne change alors
+aucun resultat ; elle protege une generalisation a S^D > P_min, ou une unite initialement allumee peut
+s'arreter avant d'etre redescendue a P_min.
 """
 function linearization_point(unit, a, b, t, T, y, selected::Bool, chosen)
     selected && return y
@@ -180,7 +188,10 @@ function linearization_point(unit, a, b, t, T, y, selected::Bool, chosen)
     t_down = ramp_steps(unit, unit.DeltaRampDown)
     if b - a >= t_up + t_down
         s = t + 1
+        # pas necessaires a un intervalle initial pour que sa borne basse retombe a P_min
+        t_initial = a <= 0 ? ceil(Int, max(0.0, unit.InitialPower - unit.MinPower) / unit.DeltaRampDown) : 0
         for (c, d) in chosen
+            a <= 0 && c != a && t < t_initial && continue
             lower = max(a, c) + (a != c ? 1 + t_up : 0)
             upper = min(b, d) - (b != d ? t_down : 0)
             lower <= s <= upper && return y
