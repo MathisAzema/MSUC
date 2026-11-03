@@ -8,7 +8,7 @@
 #    R^U_{j,a,b,t}       membre de droite de (45b)                 -> ramp_up
 #    R^D_{j,a,b,t}       membre de droite de (45c)                 -> ramp_down
 #    q_{j,a,b,t}         trajectoire de reference, eq. (49)        -> reference_output
-#    ytilde^k            point de linearisation (y ou ybar, conditions (i)-(ii))      -> linearization_point
+#    ytilde^k            point de linearisation, regle des prix (Sect. 4.2)           -> forward_interval_state
 #    ytilde_{j,a,b,0}    etat initial par intervalle, eq. (17)     -> initial_interval_output
 #    Qhat_{j,a,b,t}      valeur locale (48) et support (49)        -> local_support
 #
@@ -128,10 +128,11 @@ initial_interval_output(unit, a) = a <= 0 ? unit.InitialPower : 0.0
 """
     reference_output(unit, a, b, t, T)
 
-q_{j,a,b,t} de l'eq. (49) : trajectoire de reference de l'intervalle, c.-a-d. le
-plus grand profil qu'il admet. Sert de point de linearisation pour les
-intervalles NON selectionnes (Sect. 4.3). Nulle hors de [a : b-1] ; en t=0 elle
-vaut l'etat initial (17).
+q_{j,a,b,t} = ybar_{j,a,b,t} de l'eq. (52) : production maximale atteignable de l'intervalle, c.-a-d. le
+plus grand profil qu'il admet. C'est la production d'un intervalle dont le signal de cout est negatif a
+toutes les etapes (la regle des prix, `forward_interval_state`, la monte a fond) ; elle donne les coefficients
+des premieres coupes, quand tous les prix du bilan valent le cout de delestage. Nulle hors de [a : b-1] ;
+en t=0 elle vaut l'etat initial (17).
 """
 function reference_output(unit, a, b, t, T)
     t == 0 && return initial_interval_output(unit, a)
@@ -141,63 +142,6 @@ function reference_output(unit, a, b, t, T)
     return b <= T ?
            min(startup, unit.MaxPower, unit.MinPower + (b - t - 1) * unit.DeltaRampDown) :
            min(startup, unit.MaxPower)
-end
-
-"""
-    ramp_steps(unit, rate)
-
-T^R_j de l'article : ⌈(P_max - P_min) / rate⌉, nombre de pas pour parcourir la plage [P_min, P_max] en
-montee (`rate` = R^U, T^RU) ou en descente (`rate` = R^D, T^RD).
-"""
-ramp_steps(unit, rate) = ceil(Int, (unit.MaxPower - unit.MinPower) / rate)
-
-"""
-    linearization_point(unit, a, b, t, T, y, selected, chosen)
-
-Production ỹ^k_{j,a,b,t} de l'intervalle [a:b] au pas t (etat entrant de l'etape s = t + 1) ou l'on linearise
-le probleme local : la production visitee `y` si
-  (i)  l'intervalle est choisi (`selected`, γ = 1), car la coupe doit etre serree au point visite ; ou
-  (ii) l'intervalle est assez long, b - a >= T^RU + T^RD, et il existe un intervalle choisi [c:d] de la meme
-       unite (`chosen`, liste des (c, d)) tel que s appartienne a
-           [max(a, c) + (1 + T^RU) 1_{a≠c} : min(b, d) - T^RD 1_{b≠d}],
-       car `y`, atteignable depuis [c:d], l'est alors aussi depuis [a:b] ;
-et la production maximale atteignable ȳ (`reference_output`) sinon. Un support local est valide en
-n'importe quel point : ce choix ne change que la qualite de la coupe aux autres plannings, ou cet
-intervalle serait choisi.
-
-Pour un intervalle initial non choisi (a <= 0, depart a y_{j,0}) et un intervalle choisi [c:d] different de
-lui (c ≠ a), (ii) exige aussi t >= ⌈(y_{j,0} - P_min) / R^D⌉ : la production de [a:b] ne peut pas descendre
-plus vite que R^D depuis y_{j,0}, elle reste donc >= max(P_min, y_{j,0} - R^D t), et un `y` plus bas, atteignable
-depuis [c:d], ne l'est pas depuis [a:b]. Si c = a, les deux intervalles ont la meme borne basse.
-
-Les marges sont les plus petites qui garantissent l'atteignabilite (conventions du code : u = 1 sur
-[a : b-1], S^U = S^D = P_min). Quand les debuts different, il faut que le plus tardif ait fini sa montee
-pour que la plage soit complete : atteindre P_max demande T^RU pas, et l'etat entrant de l'etape s est
-y_{s-1}, d'ou s >= a + T^RU + 1. A la fin, le dernier pas allume est b - 1 et la descente demande T^RD
-pas, d'ou s <= b - T^RD. Quand les bornes coincident, les cones sont identiques.
-
-Dans le modele du code (S^D = P_min), la condition sur les intervalles initiaux est toujours satisfaite par
-les plannings admissibles : un intervalle initial [a:b] n'existe que pour b >= 1 + ⌈(y_{j,0} - P_min) / R^D⌉
-(`set_intervals`), donc tout redemarrage choisi commence apres la fin de la descente. Elle ne change alors
-aucun resultat ; elle protege une generalisation a S^D > P_min, ou une unite initialement allumee peut
-s'arreter avant d'etre redescendue a P_min.
-"""
-function linearization_point(unit, a, b, t, T, y, selected::Bool, chosen)
-    selected && return y
-    t_up = ramp_steps(unit, unit.DeltaRampUp)
-    t_down = ramp_steps(unit, unit.DeltaRampDown)
-    if b - a >= t_up + t_down
-        s = t + 1
-        # pas necessaires a un intervalle initial pour que sa borne basse retombe a P_min
-        t_initial = a <= 0 ? ceil(Int, max(0.0, unit.InitialPower - unit.MinPower) / unit.DeltaRampDown) : 0
-        for (c, d) in chosen
-            a <= 0 && c != a && t < t_initial && continue
-            lower = max(a, c) + (a != c ? 1 + t_up : 0)
-            upper = min(b, d) - (b != d ? t_down : 0)
-            lower <= s <= upper && return y
-        end
-    end
-    return reference_output(unit, a, b, t, T)
 end
 
 """

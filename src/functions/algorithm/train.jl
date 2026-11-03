@@ -36,19 +36,7 @@ complet : une resolution du MIP racine suivie de `passes_per_mip` passes.
 solveur. Un ecart plus large accelere nettement l'entrainement (le MIP racine en est le poste
 dominant) sans invalider la borne inferieure, qui reste la borne duale du MIP.
 
-`linearization` (formulation intervalle seulement) choisit le point ytilde^k ou l'on linearise le probleme
-local des intervalles non choisis par le planning (eq. (40)) : tout point atteignable donne une coupe valide,
-serree au point visite pour les intervalles choisis, et ce choix ne change que la force de la coupe aux autres
-plannings.
-  * `:max_reachable` (defaut) : calcule a la passe arriere, la production echantillonnee si l'intervalle est
-    choisi ou atteignable depuis un intervalle choisi, la production maximale atteignable sinon
-    (`linearization_point`) ;
-  * `:price` : regle des prix de la Sect. 4.2, calculee a la passe avant a partir des multiplicateurs du
-    probleme d'etape echantillonne (`forward_interval_state`) : un intervalle non choisi monte a fond si son signal
-    de cout est negatif et descend a fond sinon. La passe avant lit alors les duaux de chaque etape.
-Sans effet en formulation 3-bin.
-
-`reuse_incumbent` (faux par defaut) evite de resoudre le MIP racine quand c'est inutile. A chaque iteration,
+`reuse_incumbent` (vrai par defaut ; `false` pour toujours resoudre le MIP racine) evite de le resoudre quand c'est inutile. A chaque iteration,
 le planning precedent est evalue avec la nouvelle approximation de la valeur future (cout d'engagement plus
 maximum des coupes de la racine, nouvelle coupe comprise). S'il est a moins de l'ecart d'optimalite du MIP
 (`mip_gap`, ou celui du solveur) de la meilleure borne inferieure, il est deja optimal pour le nouveau MIP
@@ -61,8 +49,7 @@ function train(
     time_limit::Union{Real,Nothing} = nothing,
     mip_gap::Union{Real,Nothing} = nothing,
     passes_per_mip::Int = 1,
-    linearization::Symbol = :max_reachable,
-    reuse_incumbent::Bool = false,
+    reuse_incumbent::Bool = true,
     print_level::Int = 1,
     log_frequency::Union{Nothing,Int} = nothing,
     log_every_seconds::Float64 = log_frequency === nothing ? -1.0 : 0.0,
@@ -82,14 +69,6 @@ function train(
     if passes_per_mip < 1
         throw(ArgumentError("`passes_per_mip` must be at least 1. Got $passes_per_mip."))
     end
-    if !(linearization in (:max_reachable, :price))
-        throw(
-            ArgumentError(
-                "`linearization` must be `:max_reachable` or `:price`. Got `:$linearization`.",
-            ),
-        )
-    end
-    model.ext[:linearization] = linearization
     model.ext[:reuse_incumbent] = reuse_incumbent
     if mip_gap !== nothing
         JuMP.set_optimizer_attribute(

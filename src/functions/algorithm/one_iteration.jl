@@ -11,7 +11,7 @@ dispatch, puis `options.passes_per_mip` passes avant/arriere (une seule par defa
 de la borne inferieure (maximum courant des bornes duales, donc valide et monotone), du journal et
 des criteres d'arret.
 
-Avec `train(...; reuse_incumbent = true)`, le MIP racine n'est pas resolu si le planning precedent, evalue
+Par defaut (`train(...; reuse_incumbent = true)`), le MIP racine n'est pas resolu si le planning precedent, evalue
 avec la nouvelle approximation, est deja dans l'ecart d'optimalite de la meilleure borne
 (`reusable_incumbent`) : le planning est conserve tel quel, les coupes ajoutees depuis ayant deja ete
 instanciees a ce planning par `add_cut!`, et la borne reste celle de l'iteration precedente.
@@ -24,7 +24,7 @@ passe est ajoutee a la racine.
 function one_iteration(model::PolicyGraph, options::Options)
     model.ext[:numerical_issue] = false
     reused = nothing
-    if get(model.ext, :reuse_incumbent, false)
+    if get(model.ext, :reuse_incumbent, true)
         TimerOutputs.@timeit model.timer_output "first_stage_value" begin
             reused = reusable_incumbent(model)
         end

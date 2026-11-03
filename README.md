@@ -57,8 +57,7 @@ model = MSUC.PolicyGraph(
 MSUC.train(model; iteration_limit = 20)              # au moins un critere : iteration_limit et/ou time_limit
 MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2)   # ecart d'optimalite du MIP racine (defaut du solveur : 1e-4)
 MSUC.train(model; iteration_limit = 20, passes_per_mip = 5)   # 5 passes avant/arriere (LP) par resolution du MIP racine (defaut : 1)
-MSUC.train(model; iteration_limit = 20, linearization = :price)   # point de linearisation des intervalles non choisis (voir ci-dessous)
-MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2, reuse_incumbent = true)   # evite le MIP racine quand le planning precedent est deja dans l'ecart
+MSUC.train(model; iteration_limit = 20, reuse_incumbent = false)   # toujours resoudre le MIP racine (defaut : true, l'evite quand le planning precedent est deja dans l'ecart)
 ```
 
 `mip_gap` agit sur le MIP racine, poste dominant du temps d'entraînement : un écart plus large l'accélère
@@ -68,24 +67,18 @@ sans invalider la borne inférieure, qui reste la borne duale du MIP (voir `trai
 re-résoudre le MIP racine : avec 1, c'est l'algorithme usuel. Les coupes restent valides, et seule celle de la
 dernière passe est ajoutée à la racine. Une « itération » est alors un cycle complet (un MIP puis les passes).
 
-`linearization` (formulation intervalle seulement) choisit le point $\tilde y^k_{j,a,b,t}$ où l'on linéarise le problème
-local des intervalles que le planning ne choisit pas. Tout point atteignable donne une coupe valide et serrée au point
-visité ; ce choix ne change que la force de la coupe aux autres plannings.
+**Point de linéarisation des intervalles (formulation intervalle).** Chaque coupe linéarise le problème local de
+chaque intervalle $[a:b]$ en un point $\tilde y^k_{j,a,b,t}$. Tout point atteignable donne une coupe valide, serrée au
+point visité pour les intervalles choisis par le planning ; pour les autres, ce point ne change que la force de la coupe
+aux plannings où ils seraient choisis. Il est construit à la **passe avant** (Sect. 4.2, éq. (55)–(56),
+`forward_interval_state`) : la passe avant lit les duaux de chaque étape, forme le signal de coût
+$z^F_{j,a,b,s} = c_{j,s} - \nu_{n(j),s} + \sum_\ell \sigma_\ell \tilde\beta^\ell_{j,a,b,s+1}$, et un intervalle non choisi monte à fond si
+$z^F < 0$, descend à fond sinon ; les intervalles choisis gardent la production échantillonnée. La passe arrière linéarise
+les coupes en ces états, stockés dans `forward_trajectory.sampled_states_interval`. La passe avant est donc plus coûteuse
+qu'en 3-bin (lecture des duaux), pour un surcoût négligeable. `make_recorder(model; interval_states = true)` les conserve pour
+les diagnostics ; par défaut ils ne sont pas gardés, car ils pèsent un vecteur par intervalle et par nœud et par passe.
 
-- `:max_reachable` (défaut) : calculé à la passe arrière, la production échantillonnée si l'intervalle est choisi ou
-  atteignable depuis un intervalle choisi, sa production maximale atteignable $\bar y$ sinon (`linearization_point`).
-- `:price` : règle des prix (Sect. 4.2, éq. (55)–(56)), calculée à la **passe avant** (`forward_interval_state`). La passe
-  avant lit les duaux de chaque étape, forme le signal de coût $z^F_{j,a,b,s} = c_{j,s} - \nu_{n(j),s} + \sum_\ell \sigma_\ell \tilde\beta^\ell_{j,a,b,s+1}$
-  et fait monter à fond un intervalle non choisi si $z^F < 0$, descendre à fond sinon (les intervalles choisis gardent
-  la production échantillonnée). La passe arrière linéarise les coupes en ces états, stockés dans
-  `forward_trajectory.sampled_states_interval`.
-
-[`examples/compare_linearization.jl`](examples/compare_linearization.jl) compare les deux règles à scénarios identiques
-(plusieurs graines), avec le temps passé en passes avant et arrière ; sur IEEE (`T = 4`, `S = 2`) la règle des prix
-atteint 99,97 % de l'optimum en 12 itérations contre 98,05 % pour la règle par défaut (moyenne sur 5 graines). Le gain n'est pas général :
-sur les instances SMS++ essayées (`T = 12`) les deux règles sont à moins de 0,5 % l'une de l'autre.
-
-`reuse_incumbent` (faux par défaut) évite de résoudre le MIP racine quand c'est inutile. À chaque itération, le planning
+`reuse_incumbent` (vrai par défaut ; `false` pour toujours résoudre le MIP racine) évite de le résoudre quand c'est inutile. À chaque itération, le planning
 précédent $x^k$ est évalué avec la nouvelle approximation $V^{k+1}$, sans solveur : coût d'engagement plus maximum des
 coupes de la racine, nouvelle coupe comprise (`first_stage_value`). Cette approximation ne décroît jamais, donc la meilleure
 borne déjà obtenue minore aussi le nouveau MIP racine : si $x^k$ est à moins de `mip_gap` de cette borne (même définition
@@ -416,11 +409,12 @@ de preuve de 2,2·10⁻⁴), graine 1234 :
 
 | | borne | % opt. | politique | borne ≤ opt. ≤ politique |
 |---|---|---|---|---|
-| intervalle (39) | 143 570 | 98,1 | 149 109 | oui |
+| intervalle (39) | 146 272 | 99,96 | 146 393 | oui |
 | 3-bin (13) | 139 827 | 95,6 | 279 428 | oui |
 
-Les deux encadrements sont valides. À 12 itérations la 3-bin est à 95,6 % de l'optimum et sa politique coûte presque
-le double de celle de l'intervalle (279 428 contre 149 109), là où les coupes intervalle sont à 98,1 %. À `T = 24`, `S = 5` l'entraînement tourne
+Les deux encadrements sont valides. À 12 itérations la borne intervalle est à 99,96 % de l'optimum et sa politique à
+0,04 % au-dessus, alors que la 3-bin est à 95,6 % et que sa politique coûte presque le double (279 428 contre 146 393).
+À `T = 24`, `S = 5` l'entraînement tourne
 (quelques secondes par itération avec `mip_gap = 1e-2`), mais aucun optimum exact n'existe pour
 comparer : la validation de cette taille repose sur le test à `T = 4`.
 
@@ -468,11 +462,10 @@ C'est la table de référence pour lire le code.
 | $R^U_{j,a,b,t}$ — membre droit de (45b) | `ramp_up(unit, a, b, t)` |
 | $R^D_{j,a,b,t}$ — membre droit de (45c) | `ramp_down(unit, a, b, t)` |
 | $\tilde y_{j,a,b,0}$ — éq. (17) | `initial_interval_output(unit, a)` |
-| $q_{j,a,b,t}$ — éq. (49) | `reference_output(unit, a, b, t, T)` |
-| $\tilde y^k_{j,a,b,t}$ — $y_{j,t}$ si $\gamma_{a,b}=1$ (i) ou si $y_{j,t}$ est atteignable depuis un intervalle choisi (ii), $\bar y_{j,a,b,t}$ sinon | `linearization_point(unit, a, b, t, T, y, selected, chosen)` |
+| $q_{j,a,b,t} = \bar y_{j,a,b,t}$ — éq. (49), (52) | `reference_output(unit, a, b, t, T)` |
 | $\hat Q_{j,a,b,t}$ et son support (48)–(49) | `local_support(unit, a, b, t, T, y_prev, z)` → `(h, β)` |
 | $\tilde y^k_{j,a,b,0}$ — éq. (17), départ de la passe avant | `initial_interval_state(instance)` |
-| $z^{F,k}_{j,a,b,s}$ et $\tilde y^k_{j,a,b,s}$ — Sect. 4.2, éq. (55)–(56) (règle des prix, `linearization = :price`) | `forward_interval_state(model, node, previous, y, duals)` |
+| $z^{F,k}_{j,a,b,s}$ et $\tilde y^k_{j,a,b,s}$ — Sect. 4.2, éq. (55)–(56) (règle des prix) | `forward_interval_state(model, node, previous, y, duals)` |
 
 ### Coupes (`struct_functions/cuts/cuts.jl`, `functions/cuts/cuts.jl`, `functions/cuts/refine_cuts.jl`)
 

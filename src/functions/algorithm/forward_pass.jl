@@ -11,11 +11,11 @@ dispatch, en partant de l'etat initial. Suppose la racine resolue et le planning
 (`one_iteration`). Renvoie les etats sortants le long de la trajectoire, racine comprise, qui
 sont (y, zeta) a la sortie du noeud k.
 
-Avec la regle des prix (`train(...; linearization = :price`, formulation intervalle), la passe avant
-lit aussi les multiplicateurs de chaque probleme d'etape et construit l'etat par intervalle ytilde^k
-(`forward_interval_state`) : `sampled_states_interval[k]` est le vecteur des ytilde^k_{a,b} de tous les
-intervalles a la sortie du noeud k, dans l'ordre de `instance.intervals`. Sinon (`nothing`), les points
-de linearisation sont calcules a la passe arriere.
+En formulation intervalle, la passe avant lit aussi les multiplicateurs de chaque probleme d'etape et
+construit l'etat par intervalle ytilde^k (`forward_interval_state`, regle des prix de la Sect. 4.2) :
+`sampled_states_interval[k]` est le vecteur des ytilde^k_{a,b} de tous les intervalles a la sortie du
+noeud k, dans l'ordre de `instance.intervals`. La passe arriere linearise les coupes en ces points. En
+formulation 3-bin, il n'y a pas d'etat par intervalle : `nothing`.
 """
 function forward_pass(model::PolicyGraph, options::Options)
     TimerOutputs.@timeit model.timer_output "sample_scenario" begin
@@ -24,7 +24,7 @@ function forward_pass(model::PolicyGraph, options::Options)
     state = options.initial_state
     sampled_states_power = [state.power]
     sampled_states_zeta = [state.zeta]
-    price_rule = uses_price_rule(model)
+    price_rule = model.method == ExtendedFormulation
     interval_state = price_rule ? initial_interval_state(model.instance) : nothing
     sampled_states_interval = price_rule ? [interval_state] : nothing
 

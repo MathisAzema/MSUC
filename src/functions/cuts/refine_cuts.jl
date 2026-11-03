@@ -11,13 +11,16 @@
 Ajoute au noeud `node` la coupe moyenne construite a partir des sous-problemes de l'etape
 suivante resolus en (y_k, ζ_k) pour chaque realisation de l'alea (`items`) : calcule les
 coefficients (α, τ, β, δ) de la coupe selon la formulation du modele, puis l'ajoute (`add_cut!`).
-`interval_state` (formulation intervalle) donne l'etat par intervalle ytilde^k a la sortie du noeud, construit
-par la passe avant (regle des prix) ; sans lui, c'est `linearization_point` qui choisit les points.
+`interval_state` (formulation intervalle, obligatoire) est l'etat par intervalle ytilde^k a la sortie du noeud,
+construit par la passe avant (regle des prix, `forward_interval_state`) : c'est le point ou l'on linearise le
+probleme local de chaque intervalle. La formulation 3-bin l'ignore.
 """
 function refine_bellman_function(model::PolicyGraph, node::Node, items, y_k, ζ_k; interval_state = nothing)
     TimerOutputs.@timeit model.timer_output "compute_coefficients" begin
         if model.method == ExtendedFormulation
-            α, τ, β, δ = compute_coefficients_extended(model, node, items, y_k, ζ_k; interval_state)
+            interval_state === nothing &&
+                error("la formulation intervalle a besoin de l'etat par intervalle de la passe avant")
+            α, τ, β, δ = compute_coefficients_extended(model, node, items, y_k, ζ_k, interval_state)
             cut = IntervalCut(α, τ, β, δ, nothing)
         else
             α, τ, β, δ = compute_coefficients_3bin(model, node, items, y_k, ζ_k)
@@ -87,16 +90,9 @@ end
 # intervalles (identifiants de `IntervalIndex`). Multiplicateurs exterieurs (σ, ν) du sous-probleme
 # 3-bin projete, coefficients locaux par intervalle en forme close (`local_support`). Les
 # sommes sur les coupes stockees sont faites par vecteurs entiers, pas intervalle par intervalle.
-# `interval_state`, s'il est donne, remplace `linearization_point` : c'est l'etat par intervalle ytilde^k
-# a la sortie du noeud, construit par la passe avant (regle des prix, `forward_interval_state`).
-function compute_coefficients_extended(
-    model::PolicyGraph,
-    node::Node,
-    items,
-    y_k,
-    ζ_k;
-    interval_state = nothing,
-)
+# `interval_state` est l'etat par intervalle ytilde^k a la sortie du noeud, construit par la passe avant
+# (regle des prix, `forward_interval_state`) : le point ou l'on linearise le probleme local de chaque intervalle.
+function compute_coefficients_extended(model::PolicyGraph, node::Node, items, y_k, ζ_k, interval_state)
     instance = model.instance
     idx = instance.intervals
     units = instance.Thermalunits
@@ -122,30 +118,11 @@ function compute_coefficients_extended(
     τ = _weighted_sum(cuts, σ_mean, :tau)
     β = zeros(nid)
 
-    # Partie locale, pour les seuls intervalles actifs a l'etape t+1 : point de linearisation ỹ de chacun.
-    # Regle par defaut (`linearization_point`) : la production courante si l'intervalle est choisi ou
-    # atteignable depuis un intervalle choisi de la meme unite, la production maximale atteignable ȳ sinon.
-    # Regle des prix : l'etat par intervalle de la passe avant, `interval_state`.
+    # Partie locale, pour les seuls intervalles actifs a l'etape t+1 : support affine du probleme local au
+    # point de linearisation ỹ de chacun, c'est-a-dire l'etat par intervalle de la passe avant (le point
+    # visite si l'intervalle est choisi, le point de cout minimal sous les prix de la passe avant sinon).
     active = [id for id in 1:nid if is_on_interval(idx.a[id], idx.b[id], t + 1)]
-    y_prev = zeros(length(active))
-    if interval_state === nothing
-        is_selected = falses(nid)
-        is_selected[schedule.selected] .= true
-        chosen = [Tuple{Int,Int}[] for _ in 1:instance.N]    # intervalles choisis (c, d) de chaque unite
-        for id in schedule.selected
-            push!(chosen[idx.unit[id]], (idx.a[id], idx.b[id]))
-        end
-        for (n, id) in enumerate(active)
-            unit = units[idx.unit[id]]
-            y_prev[n] = linearization_point(
-                unit, idx.a[id], idx.b[id], t, horizon, y_k[unit.name], is_selected[id], chosen[unit.name],
-            )
-        end
-    else
-        for (n, id) in enumerate(active)
-            y_prev[n] = interval_state[id]
-        end
-    end
+    y_prev = [interval_state[id] for id in active]
 
     # Pour chaque alea ξ : z_ξ = c_j - ν_ξ + Σ_k σ_ξ,k β_k(a,b), puis le support affine du probleme local
     # en `y_prev` (`local_support`), pondere par p_ξ : τ_ab = τ_prop + Σ_ξ p_ξ h_ξ et β_ab = Σ_ξ p_ξ β_ξ.
