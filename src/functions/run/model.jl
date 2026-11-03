@@ -1,4 +1,4 @@
-# --- Modele et dossier de resultats d'un run (voir `runSMS.jl`) --------------------------------
+# --- Modele et dossier de resultats d'un run (voir `runSMS.jl` et `runIEEE.jl`) ----------------
 
 # Les deux formulations de la coupe : (constructeur des sous-problemes, formulation).
 const METHODS = Dict(
@@ -9,15 +9,25 @@ const METHODS = Dict(
 # Graine de tous les runs : entrainement (tirages de la passe avant) et simulation.
 const SEED = 1
 
+# Instance IEEE 118 noeuds : un dossier de `Data/IEEE` (lu par `parse_IEEE`), a la place d'un fichier
+# `.nc4` de `Data/T-Ramp`. Les deux sortes d'instances se distinguent par leur nom : c'est un
+# dossier de `Data/IEEE` ou non.
+const IEEE_INSTANCE = "118_syst"
+
+is_ieee(instance_name) =
+    isdir(joinpath(@__DIR__, "..", "..", "..", "Data", "IEEE", instance_name))
+
 # `settings` : (T, S, sigma, mip_gap, passes_per_mip). Tous les parametres figurent dans le nom du
-# dossier, pour que des runs de parametres differents ne s'ecrasent jamais.
+# dossier, pour que des runs de parametres differents ne s'ecrasent jamais. Les runs IEEE sont ecrits
+# dans `results_ieee/`, les runs SMS++ dans `results_sms/`.
 function results_folder(instance_name, method, time_max, settings)
     gap = settings.mip_gap === nothing ? "default" : string(settings.mip_gap)
     tag = string(
         method, "_T", settings.T, "_S", settings.S, "_sigma", settings.sigma,
         "_passes", settings.passes_per_mip, "_gap", gap,
     )
-    return "results_sms/$(tag)/$(instance_name)/time_$(time_max)"
+    root = is_ieee(instance_name) ? "results_ieee" : "results_sms"
+    return "$(root)/$(tag)/$(instance_name)/time_$(time_max)"
 end
 
 # Nom, sans extension, du fichier de `Data/T-Ramp` d'une instance : nombre de groupes, 0, identifiant, w.
@@ -44,6 +54,27 @@ function run_combos(
     isempty(absent) || @warn "instances absentes de Data/T-Ramp, ignorees" absent
     isempty(instances) &&
         error("aucune instance de Data/T-Ramp pour size_list = $(size_list) et id_list = $(id_list)")
+    return campaign(
+        instances, method_list, time_max_list;
+        T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
+    )
+end
+
+# Tous les runs de l'instance IEEE (`IEEE_INSTANCE`) : memes elements que `run_combos`.
+ieee_combos(method_list, time_max_list; kwargs...) =
+    campaign([IEEE_INSTANCE], method_list, time_max_list; kwargs...)
+
+# Le produit des listes : un run `(instance, methode, temps limite, settings)` par combinaison.
+function campaign(
+    instances,
+    method_list,
+    time_max_list;
+    T,
+    S_list,
+    sigma_list,
+    passes_per_mip_list,
+    mip_gap_list,
+)
     return [
         (instance, method, time_max, (; T, S, sigma, mip_gap, passes_per_mip)) for
         instance in instances for method in method_list for time_max in time_max_list for
@@ -70,13 +101,17 @@ end
 # Un modele neuf (sans coupe) : meme construction a l'entrainement et a la simulation.
 function build_model(instance_name, method, settings, optimizer)
     builder, formulation = METHODS[method]
-    instance = parse_nc4(
-        "Data/T-Ramp/$(instance_name).nc4",
-        optimizer,
-        settings.T;
-        sigma = settings.sigma,
-        S = settings.S,
-    )
+    instance = if is_ieee(instance_name)
+        parse_IEEE(instance_name, optimizer, settings.T; sigma = settings.sigma, S = settings.S)
+    else
+        parse_nc4(
+            "Data/T-Ramp/$(instance_name).nc4",
+            optimizer,
+            settings.T;
+            sigma = settings.sigma,
+            S = settings.S,
+        )
+    end
     # force = 1 : l'amplitude de l'alea est entierement donnee par `sigma`.
     return PolicyGraph(
         builder,

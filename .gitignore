@@ -1,6 +1,7 @@
 # Journaux et artefacts produits par les runs
 MSUC.log
 results_sms/
+results_ieee/
 *.mof.json
 *.cuts.json
 
