@@ -58,6 +58,7 @@ MSUC.train(model; iteration_limit = 20)              # au moins un critere : ite
 MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2)   # ecart d'optimalite du MIP racine (defaut du solveur : 1e-4)
 MSUC.train(model; iteration_limit = 20, passes_per_mip = 5)   # 5 passes avant/arriere (LP) par resolution du MIP racine (defaut : 1)
 MSUC.train(model; iteration_limit = 20, linearization = :price)   # point de linearisation des intervalles non choisis (voir ci-dessous)
+MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2, reuse_incumbent = true)   # evite le MIP racine quand le planning precedent est deja dans l'ecart
 ```
 
 `mip_gap` agit sur le MIP racine, poste dominant du temps d'entraînement : un écart plus large l'accélère
@@ -81,8 +82,17 @@ visité ; ce choix ne change que la force de la coupe aux autres plannings.
 
 [`examples/compare_linearization.jl`](examples/compare_linearization.jl) compare les deux règles à scénarios identiques
 (plusieurs graines), avec le temps passé en passes avant et arrière ; sur IEEE (`T = 4`, `S = 2`) la règle des prix
-atteint 99,9 % de l'optimum exact en 12 itérations contre 98,1 % pour la règle par défaut. Le gain n'est pas général :
+atteint 99,97 % de l'optimum en 12 itérations contre 98,05 % pour la règle par défaut (moyenne sur 5 graines). Le gain n'est pas général :
 sur les instances SMS++ essayées (`T = 12`) les deux règles sont à moins de 0,5 % l'une de l'autre.
+
+`reuse_incumbent` (faux par défaut) évite de résoudre le MIP racine quand c'est inutile. À chaque itération, le planning
+précédent $x^k$ est évalué avec la nouvelle approximation $V^{k+1}$, sans solveur : coût d'engagement plus maximum des
+coupes de la racine, nouvelle coupe comprise (`first_stage_value`). Cette approximation ne décroît jamais, donc la meilleure
+borne déjà obtenue minore aussi le nouveau MIP racine : si $x^k$ est à moins de `mip_gap` de cette borne (même définition
+que Gurobi, $(\text{valeur} - \text{borne}) / |\text{valeur}|$), il est déjà optimal pour le nouveau MIP à cet écart près, et on
+le garde. La borne publiée reste celle de l'itération précédente, et l'itération est marquée `MIP evite` dans le journal
+(`Log.first_stage_solved`). Cela ne sert que près de la convergence : tant que la borne est loin de la valeur de $x^k$,
+le MIP est résolu comme d'habitude.
 
 `train` affiche son journal (une ligne par itération) uniquement dans le terminal, sans écrire de fichier ;
 `print_level = 0` le coupe. Pour l'exploiter dans le code, `model.most_recent_training_results.log` contient
@@ -384,6 +394,15 @@ MSUC.train(model; iteration_limit = 50, mip_gap = 1e-2)
 `Data/IEEE/<dossier>` : 54 groupes thermiques, 118 nœuds, réseau en flux DC (chaque ligne dans les
 deux sens, capacité et réactance du fichier), horizon `T ≤ 24`.
 
+`lines.csv` compte **179 lignes**, une par corridor. Le cas IEEE 118 standard a 186 circuits (177 lignes et
+9 transformateurs), mais 7 corridors sont à double circuit : (42,49), (49,54), (49,66), (56,59), (77,80), (89,90) et
+(89,92). Chacun est agrégé en une ligne équivalente : la susceptance est la somme de celles des circuits, et la
+capacité vaut $B_{\text{tot}} \min_i(\text{cap}_i / B_i)$, ce qui est exact en flux DC avec une limite par circuit
+(les deux circuits partagent le même $\Delta\theta$, le plus chargé sature le premier ; $2\,\text{cap}$ si les circuits
+sont identiques). La capacité de chaque circuit est supposée égale à celle de la ligne qui était conservée jusque-là.
+Le chargement range les lignes par couple de nœuds $(b_1, b_2)$ : deux circuits sur le même couple s'écraseraient, donc
+les corridors parallèles doivent être agrégés dans le fichier.
+
 - **Demande** : charge maximale de chaque nœud (`maximum_load.csv`) × profil horaire
   (`load_distribution_profile.csv`, en %). L'éolien n'est **pas** modélisé : la demande nette est la
   charge.
@@ -392,15 +411,16 @@ deux sens, capacité et réactance du fichier), horizon `T ≤ 24`.
   $\sigma$ est le même à toutes les heures.
 
 Validé comme le toy, à `T = 4`, `S = 2` (12 itérations, `mip_gap = 1e-3`), face à l'optimum multi-étapes
-**exact** de l'arbre (`multistage_extensive`, 146 328,4058) :
+de l'arbre (`multistage_extensive`, 146 328,4058 ; après 12 s la borne duale du MIP est à 146 296,04, soit un écart
+de preuve de 2,2·10⁻⁴), graine 1234 :
 
 | | borne | % opt. | politique | borne ≤ opt. ≤ politique |
 |---|---|---|---|---|
-| intervalle (39) | 143 449 | 98,0 | 149 273 | oui |
-| 3-bin (13) | 3 136 | 2,1 | 363 518 | oui |
+| intervalle (39) | 143 570 | 98,1 | 149 109 | oui |
+| 3-bin (13) | 139 827 | 95,6 | 279 428 | oui |
 
-Les deux encadrements sont valides ; en revanche la 3-bin reste très en dessous de l'optimum sur ce
-réseau, là où les coupes intervalles en sont à 98 %. À `T = 24`, `S = 5` l'entraînement tourne
+Les deux encadrements sont valides. À 12 itérations la 3-bin est à 95,6 % de l'optimum et sa politique coûte presque
+le double de celle de l'intervalle (279 428 contre 149 109), là où les coupes intervalle sont à 98,1 %. À `T = 24`, `S = 5` l'entraînement tourne
 (quelques secondes par itération avec `mip_gap = 1e-2`), mais aucun optimum exact n'existe pour
 comparer : la validation de cette taille repose sur le test à `T = 4`.
 

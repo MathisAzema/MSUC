@@ -48,6 +48,10 @@ end
 Instance IEEE 118 noeuds (`Data/IEEE/<folder>`, par exemple `"118_syst"`) : 54 groupes, reseau en
 flux DC (chaque ligne dans les deux sens), horizon de `T <= 24` heures.
 
+`lines.csv` donne une ligne par corridor (179) : les 7 corridors a double circuit du cas standard (186 circuits)
+y sont agreges en une ligne equivalente, car les lignes sont rangees par couple de noeuds `(b1, b2)` et deux
+circuits sur le meme couple s'ecraseraient.
+
 Demande nette nominale du noeud b a l'heure t : charge maximale du noeud × profil horaire (l'eolien
 n'est pas modelise). L'incertitude est un unique processus ARMA de l'erreur RELATIVE, commun a tous
 les noeuds : le ratio prevision/realise est le meme partout, c'est-a-dire une charge nette de reseau

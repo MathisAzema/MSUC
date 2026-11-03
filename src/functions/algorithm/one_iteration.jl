@@ -11,6 +11,11 @@ dispatch, puis `options.passes_per_mip` passes avant/arriere (une seule par defa
 de la borne inferieure (maximum courant des bornes duales, donc valide et monotone), du journal et
 des criteres d'arret.
 
+Avec `train(...; reuse_incumbent = true)`, le MIP racine n'est pas resolu si le planning precedent, evalue
+avec la nouvelle approximation, est deja dans l'ecart d'optimalite de la meilleure borne
+(`reusable_incumbent`) : le planning est conserve tel quel, les coupes ajoutees depuis ayant deja ete
+instanciees a ce planning par `add_cut!`, et la borne reste celle de l'iteration precedente.
+
 Avec plusieurs passes, le planning x^k reste fixe : les passes ne resolvent que des LP et affinent les
 coupes de chaque etape avant de resoudre de nouveau le MIP racine, qui est le poste le plus couteux.
 Les coupes sont valides pour tout planning ; pour ne pas gonfler le MIP, seule la coupe de la derniere
@@ -18,13 +23,25 @@ passe est ajoutee a la racine.
 """
 function one_iteration(model::PolicyGraph, options::Options)
     model.ext[:numerical_issue] = false
-    TimerOutputs.@timeit model.timer_output "solve_first_stage_problem" begin
-        lower_bound, incumbent = solve_first_stage_problem(model, options.initial_state)
+    reused = nothing
+    if get(model.ext, :reuse_incumbent, false)
+        TimerOutputs.@timeit model.timer_output "first_stage_value" begin
+            reused = reusable_incumbent(model)
+        end
     end
-    # Le planning x^k lu a la racine est fixe pour toute l'iteration : parametres des etapes de
-    # dispatch, puis second membre et pentes des coupes stockees (qui dependent de x^k).
-    TimerOutputs.@timeit model.timer_output "set_schedule" begin
-        set_schedule!(model, extract_schedule(model))
+    first_stage_solved = reused === nothing
+    if first_stage_solved
+        TimerOutputs.@timeit model.timer_output "solve_first_stage_problem" begin
+            lower_bound, incumbent = solve_first_stage_problem(model, options.initial_state)
+        end
+        # Le planning x^k lu a la racine est fixe pour toute l'iteration : parametres des etapes de
+        # dispatch, puis second membre et pentes des coupes stockees (qui dependent de x^k).
+        TimerOutputs.@timeit model.timer_output "set_schedule" begin
+            set_schedule!(model, extract_schedule(model))
+        end
+    else
+        lower_bound, incumbent = reused.bound, reused.incumbent
+        push!(model[model.first_node].computation_time, 0.0)    # une entree par iteration : pas de MIP resolu
     end
     for pass in 1:options.passes_per_mip
         TimerOutputs.@timeit model.timer_output "forward_pass" begin
@@ -52,6 +69,7 @@ function one_iteration(model::PolicyGraph, options::Options)
             time() - options.start_time,
             model.ext[:total_solves],
             model.ext[:numerical_issue],
+            first_stage_solved,
         ),
     )
     # Criteres d'arret : nombre d'iterations et temps total.

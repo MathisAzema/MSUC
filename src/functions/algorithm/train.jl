@@ -47,6 +47,13 @@ plannings.
     probleme d'etape echantillonne (`forward_interval_state`) : un intervalle non choisi monte a fond si son signal
     de cout est negatif et descend a fond sinon. La passe avant lit alors les duaux de chaque etape.
 Sans effet en formulation 3-bin.
+
+`reuse_incumbent` (faux par defaut) evite de resoudre le MIP racine quand c'est inutile. A chaque iteration,
+le planning precedent est evalue avec la nouvelle approximation de la valeur future (cout d'engagement plus
+maximum des coupes de la racine, nouvelle coupe comprise). S'il est a moins de l'ecart d'optimalite du MIP
+(`mip_gap`, ou celui du solveur) de la meilleure borne inferieure, il est deja optimal pour le nouveau MIP
+a cet ecart pres : on le garde, sans resoudre. La borne publiee reste alors celle de l'iteration precedente
+et l'iteration est marquee `MIP evite` dans le journal (`Log.first_stage_solved`).
 """
 function train(
     model::PolicyGraph;
@@ -55,6 +62,7 @@ function train(
     mip_gap::Union{Real,Nothing} = nothing,
     passes_per_mip::Int = 1,
     linearization::Symbol = :max_reachable,
+    reuse_incumbent::Bool = false,
     print_level::Int = 1,
     log_frequency::Union{Nothing,Int} = nothing,
     log_every_seconds::Float64 = log_frequency === nothing ? -1.0 : 0.0,
@@ -82,6 +90,7 @@ function train(
         )
     end
     model.ext[:linearization] = linearization
+    model.ext[:reuse_incumbent] = reuse_incumbent
     if mip_gap !== nothing
         JuMP.set_optimizer_attribute(
             model[model.first_node].subproblem,

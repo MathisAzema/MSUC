@@ -106,6 +106,31 @@ function root_term(cut::IntervalCut, node::Node, instance::Instance)
 end
 
 """
+    root_cut_value(model, cut, schedule)
+
+Valeur de `cut` a la racine au planning `schedule` : la meme expression que la ligne d'epigraphe ecrite par
+`add_cut!` (`root_term`), evaluee en x^k, en y_0 et en zeta_0, sans passer par le solveur.
+"""
+function root_cut_value(model::PolicyGraph, cut::BinCut, schedule::Schedule)
+    start = initial_state(model.instance)
+    return cut.alpha +
+           LinearAlgebra.dot(cut.delta, start.zeta) +
+           LinearAlgebra.dot(cut.tau, schedule.x) +
+           LinearAlgebra.dot(cut.beta, start.power)
+end
+
+function root_cut_value(model::PolicyGraph, cut::IntervalCut, schedule::Schedule)
+    start = initial_state(model.instance)
+    idx = model.instance.intervals
+    value = cut.alpha + LinearAlgebra.dot(cut.delta, start.zeta)
+    for id in schedule.selected
+        unit = model.instance.Thermalunits[idx.unit[id]]
+        value += cut.tau[id] + cut.beta[id] * initial_interval_output(unit, idx.a[id])
+    end
+    return value
+end
+
+"""
     add_cut!(model, node, cut)
 
 Ajoute `cut` aux coupes du noeud : cree sa ligne d'epigraphe, ecrite sur les variables de

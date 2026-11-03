@@ -10,6 +10,7 @@ struct Log
     time::Float64
     total_solves::Int
     serious_numerical_issue::Bool
+    first_stage_solved::Bool    # faux si l'incumbent precedent a ete reutilise (`reuse_incumbent`)
 end
 
 struct TrainingResults
