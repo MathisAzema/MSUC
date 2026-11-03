@@ -37,6 +37,7 @@ function one_iteration(model::PolicyGraph, options::Options)
                 forward_trajectory.sampled_states_power,
                 forward_trajectory.sampled_states_zeta;
                 root_cut = pass == options.passes_per_mip,
+                sampled_states_interval = forward_trajectory.sampled_states_interval,
             )
         end
     end
