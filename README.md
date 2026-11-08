@@ -73,7 +73,10 @@ point visité pour les intervalles choisis par le planning ; pour les autres, ce
 aux plannings où ils seraient choisis. Il est construit à la **passe avant** (Sect. 4.2, éq. (55)–(56),
 `forward_interval_state`) : la passe avant lit les duaux de chaque étape, forme le signal de coût
 $z^F_{j,a,b,s} = c_{j,s} - \nu_{n(j),s} + \sum_\ell \sigma_\ell \tilde\beta^\ell_{j,a,b,s+1}$, et un intervalle non choisi monte à fond si
-$z^F < 0$, descend à fond sinon ; les intervalles choisis gardent la production échantillonnée. La passe arrière linéarise
+$z^F < -\varepsilon$ et descend à fond si $z^F > \varepsilon$ ; si $|z^F| \le \varepsilon$ (`MSUC.SIGNAL_TOLERANCE`, $10^{-6}$, la précision
+des duaux), l'intervalle est indifférent, typiquement l'unité marginale dont la production est fixée par l'équilibre
+offre-demande, et il prend la production échantillonnée $y^k_{j,s}$ projetée sur l'ensemble des successeurs
+$\mathcal Y_{j,a,b,s}(\tilde y^k_{s-1})$. Les intervalles choisis gardent la production échantillonnée. La passe arrière linéarise
 les coupes en ces états, stockés dans `forward_trajectory.sampled_states_interval`. La passe avant est donc plus coûteuse
 qu'en 3-bin (lecture des duaux), pour un surcoût négligeable. `make_recorder(model; interval_states = true)` les conserve pour
 les diagnostics ; par défaut ils ne sont pas gardés, car ils pèsent un vecteur par intervalle et par nœud et par passe.
