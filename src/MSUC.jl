@@ -18,6 +18,7 @@ import TimerOutputs
 using Gurobi
 using NCDatasets
 using CSV
+using XZ_jll
 using DataFrames
 
 export @stageobjective

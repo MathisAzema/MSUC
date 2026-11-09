@@ -44,12 +44,40 @@ function write_policy(folder, model, schedules)
         vcat(i, c.alpha, c.delta, c.tau[used], interval ? c.beta[used] : c.beta) for
         i in 2:(nodes-1) for c in model[i].cuts[2:end]
     ]
-    CSV.write(
-        joinpath(folder, "cuts.csv"),
-        DataFrame(permutedims(reduce(hcat, rows)), :auto);
-        writeheader = false,
-    )
+    write_cuts(joinpath(folder, CUTS_FILE), permutedims(reduce(hcat, rows)))
     return
+end
+
+# Matrice des coupes (une ligne par coupe) : binaire Float64 compresse en xz (niveau 9), sans perte.
+# Format : deux Int64 (lignes, colonnes) puis les valeurs en ordre colonne-majeur. Environ 4,6 fois
+# plus petit que le CSV equivalent (mesure sur un run SMS++ a 10 unites). L'executable `xz` vient de
+# `XZ_jll`, pas du systeme. Attention : `xz -9` demande ~700 Mo de memoire et ecrit lentement.
+const CUTS_FILE = "cuts.bin.xz"
+
+function write_cuts(path, cuts::Matrix{Float64})
+    open(pipeline(`$(XZ_jll.xz()) -9 -c`; stdout = path), "w") do io
+        write(io, Int64(size(cuts, 1)), Int64(size(cuts, 2)))
+        write(io, cuts)
+    end
+    return
+end
+
+function read_cuts(path)
+    open(`$(XZ_jll.xz()) -dc $path`) do io
+        nrows, ncols = read(io, Int64), read(io, Int64)
+        cuts = Matrix{Float64}(undef, nrows, ncols)
+        read!(io, cuts)
+        return cuts
+    end
+end
+
+# Lit les coupes d'un dossier : `cuts.bin.xz`, ou `cuts.csv` pour les anciens resultats.
+function read_cuts_folder(folder)
+    binary = joinpath(folder, CUTS_FILE)
+    isfile(binary) && return read_cuts(binary)
+    return Matrix{Float64}(
+        CSV.read(joinpath(folder, "cuts.csv"), DataFrame; header = false, types = Float64),
+    )
 end
 
 # Relit ce que `write_policy` a ecrit : les plannings, les composantes utiles, la matrice des coupes
@@ -67,9 +95,7 @@ function read_policy(folder, model)
         r in eachrow(table)
     ]
     used = CSV.read(joinpath(folder, "used_components.csv"), DataFrame).component
-    cuts = Matrix{Float64}(
-        CSV.read(joinpath(folder, "cuts.csv"), DataFrame; header = false, types = Float64),
-    )
+    cuts = read_cuts_folder(folder)
     node_rows = [findall(==(i), view(cuts, :, 1)) for i in 1:length(model.nodes)]
     return (; schedules, used, cuts, node_rows)
 end
