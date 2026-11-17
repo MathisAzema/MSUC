@@ -57,6 +57,7 @@ model = MSUC.PolicyGraph(
 MSUC.train(model; iteration_limit = 20)              # au moins un critere : iteration_limit et/ou time_limit
 MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2)   # ecart d'optimalite du MIP racine (defaut du solveur : 1e-4)
 MSUC.train(model; iteration_limit = 20, passes_per_mip = 5)   # 5 passes avant/arriere (LP) par resolution du MIP racine (defaut : 1)
+MSUC.train(model; iteration_limit = 20, interval_rule = :projection)   # formulation intervalle : regle du point de linearisation (defaut : :dual, voir ci-dessous)
 MSUC.train(model; iteration_limit = 20, reuse_incumbent = false)   # toujours resoudre le MIP racine (defaut : true, l'evite quand le planning precedent est deja dans l'ecart)
 ```
 
@@ -80,6 +81,22 @@ $\mathcal Y_{j,a,b,s}(\tilde y^k_{s-1})$. Les intervalles choisis gardent la pro
 les coupes en ces états, stockés dans `forward_trajectory.sampled_states_interval`. La passe avant est donc plus coûteuse
 qu'en 3-bin (lecture des duaux), pour un surcoût négligeable. `make_recorder(model; interval_states = true)` les conserve pour
 les diagnostics ; par défaut ils ne sont pas gardés, car ils pèsent un vecteur par intervalle et par nœud et par passe.
+
+`interval_rule` choisit, pour les intervalles non choisis, le point $\tilde y^k_{j,a,b,s}$ pris dans l'ensemble des successeurs
+$[\mathrm{lo}, \mathrm{hi}]$ de $\tilde y^k_{j,a,b,s-1}$, avec $\mathrm{lo} = \max\{\underline P_{a,b,s}, \tilde y_{s-1} - R^D_{a,b,s}\}$ et
+$\mathrm{hi} = \min\{\overline P_{a,b,s}, \tilde y_{s-1} + R^U_{a,b,s}\}$ (les intervalles choisis gardent toujours $y^k_{j,s}$) :
+
+| `interval_rule` | $\tilde y^k_{j,a,b,s}$ d'un intervalle non choisi |
+|---|---|
+| `:dual` (défaut) | règle des prix ci-dessus : hi si $z^F < -\varepsilon$, lo si $z^F > \varepsilon$, sinon $y^k_{j,s}$ projeté sur $[\mathrm{lo}, \mathrm{hi}]$ |
+| `:projection` | $y^k_{j,s}$ (production agrégée de l'unité) projeté sur $[\mathrm{lo}, \mathrm{hi}]$ |
+| `:minimum` | toujours lo, le plus petit niveau atteignable |
+| `:maximum` | toujours hi, le plus grand niveau atteignable |
+
+Les quatre règles donnent des coupes valides (tout point atteignable convient) : elles ne changent que la force des coupes,
+donc la vitesse de convergence. Seule `:dual` lit les duaux des étapes (donc `sampled_signals_interval` ne contient des signaux
+$z^F$ que pour elle). Sans effet en 3-bin. `runSMS.jl` et `runIEEE.jl` les comparent avec les méthodes `"interval_dual"` (`:dual`),
+`"interval_projection"`, `"interval_minimum"` et `"interval_maximum"`, dont le nom figure dans le dossier de résultats.
 
 `reuse_incumbent` (vrai par défaut ; `false` pour toujours résoudre le MIP racine) évite de le résoudre quand c'est inutile. À chaque itération, le planning
 précédent $x^k$ est évalué avec la nouvelle approximation $V^{k+1}$, sans solveur : coût d'engagement plus maximum des
@@ -230,7 +247,7 @@ include("runSMS.jl")                      # NBWORKERS=2 julia ... pour un essai 
 
 size_list = [10, 50]                      # nombre de groupes de l'instance
 id_list   = 1:5                           # identifiant (Data/T-Ramp/<n>_0_<id>_w.nc4)
-methods   = ["interval", "bin3"]          # coupes intervalle ou 3-bin
+methods   = ["interval_dual", "bin3"]     # coupes intervalle (regle des prix) ou 3-bin ; voir `MSUC.METHODS` pour les autres regles
 
 # 1. Entraînement : un run de 3 600 s par combinaison (taille, identifiant, méthode, S, sigma, ...)
 run_train(size_list, id_list, methods, [3600];
@@ -468,7 +485,7 @@ C'est la table de référence pour lire le code.
 | $q_{j,a,b,t} = \bar y_{j,a,b,t}$ — éq. (49), (52) | `reference_output(unit, a, b, t, T)` |
 | $\hat Q_{j,a,b,t}$ et son support (48)–(49) | `local_support(unit, a, b, t, T, y_prev, z)` → `(h, β)` |
 | $\tilde y^k_{j,a,b,0}$ — éq. (17), départ de la passe avant | `initial_interval_state(instance)` |
-| $z^{F,k}_{j,a,b,s}$ et $\tilde y^k_{j,a,b,s}$ — Sect. 4.2, éq. (55)–(56) (règle des prix) | `forward_interval_state(model, node, previous, y, duals)` |
+| $z^{F,k}_{j,a,b,s}$ et $\tilde y^k_{j,a,b,s}$ — Sect. 4.2, éq. (55)–(56) (règle des prix) | `forward_interval_state(model, node, previous, y, duals, rule)` |
 
 ### Coupes (`struct_functions/cuts/cuts.jl`, `functions/cuts/cuts.jl`, `functions/cuts/refine_cuts.jl`)
 

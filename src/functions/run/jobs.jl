@@ -82,6 +82,7 @@ function train_job(instance_name, method, time_max, settings)
         time_limit = time_max,
         mip_gap = settings.mip_gap,
         passes_per_mip = settings.passes_per_mip,
+        interval_rule = METHODS[method][3],
         print_level = 0,
         run_numerical_stability_report = false,
         forward_pass_callback = record_pass,

@@ -36,6 +36,13 @@ complet : une resolution du MIP racine suivie de `passes_per_mip` passes.
 solveur. Un ecart plus large accelere nettement l'entrainement (le MIP racine en est le poste
 dominant) sans invalider la borne inferieure, qui reste la borne duale du MIP.
 
+`interval_rule` (`:dual` par defaut ; formulation intervalle seulement, sans effet en 3-bin) choisit comment la passe
+avant construit le point de linearisation ytilde^k des intervalles non choisis (Sect. 4.2, voir `INTERVAL_RULES` et
+`forward_interval_state`) : `:dual`, la regle des prix (signe du signal de cout z^F) ; `:projection`, la production
+echantillonnee de l'unite projetee sur les successeurs de ytilde_{s-1} ; `:minimum` ou `:maximum`, toujours le plus
+petit ou le plus grand successeur. Tout point atteignable donne une coupe valide : la regle ne change que la force des
+coupes, donc la vitesse de convergence, pas la validite de la borne. Seule `:dual` lit les duaux des etapes.
+
 `reuse_incumbent` (vrai par defaut ; `false` pour toujours resoudre le MIP racine) evite de le resoudre quand c'est inutile. A chaque iteration,
 le planning precedent est evalue avec la nouvelle approximation de la valeur future (cout d'engagement plus
 maximum des coupes de la racine, nouvelle coupe comprise). S'il est a moins de l'ecart d'optimalite du MIP
@@ -50,6 +57,7 @@ function train(
     mip_gap::Union{Real,Nothing} = nothing,
     passes_per_mip::Int = 1,
     reuse_incumbent::Bool = true,
+    interval_rule::Symbol = :dual,
     print_level::Int = 1,
     log_frequency::Union{Nothing,Int} = nothing,
     log_every_seconds::Float64 = log_frequency === nothing ? -1.0 : 0.0,
@@ -69,7 +77,11 @@ function train(
     if passes_per_mip < 1
         throw(ArgumentError("`passes_per_mip` must be at least 1. Got $passes_per_mip."))
     end
+    if !(interval_rule in INTERVAL_RULES)
+        throw(ArgumentError("`interval_rule` must be one of $(INTERVAL_RULES). Got :$interval_rule."))
+    end
     model.ext[:reuse_incumbent] = reuse_incumbent
+    model.ext[:interval_rule] = interval_rule
     if mip_gap !== nothing
         JuMP.set_optimizer_attribute(
             model[model.first_node].subproblem,

@@ -1,9 +1,15 @@
 # --- Modele et dossier de resultats d'un run (voir `runSMS.jl` et `runIEEE.jl`) ----------------
 
-# Les deux formulations de la coupe : (constructeur des sous-problemes, formulation).
+# Les methodes d'un run : (constructeur des sous-problemes, formulation, regle `interval_rule` de `train`).
+# "bin3" est la formulation 3-bin ; "interval_<regle>" la formulation intervalle avec la regle `<regle>` de construction
+# du point de linearisation (`INTERVAL_RULES`), "interval_dual" etant la regle des prix de l'article. Le nom de la
+# methode figure dans le dossier de resultats, donc les regles ne s'ecrasent pas.
 const METHODS = Dict(
-    "interval" => (subproblem_builder_UC_extended, ExtendedFormulation),
-    "bin3" => (subproblem_builder_UC_def, SDDPFormulation),
+    "interval_dual" => (subproblem_builder_UC_extended, ExtendedFormulation, :dual),
+    "interval_projection" => (subproblem_builder_UC_extended, ExtendedFormulation, :projection),
+    "interval_minimum" => (subproblem_builder_UC_extended, ExtendedFormulation, :minimum),
+    "interval_maximum" => (subproblem_builder_UC_extended, ExtendedFormulation, :maximum),
+    "bin3" => (subproblem_builder_UC_def, SDDPFormulation, :dual),
 )
 
 # Graine de tous les runs : entrainement (tirages de la passe avant) et simulation.
@@ -100,7 +106,7 @@ end
 
 # Un modele neuf (sans coupe) : meme construction a l'entrainement et a la simulation.
 function build_model(instance_name, method, settings, optimizer)
-    builder, formulation = METHODS[method]
+    builder, formulation, _ = METHODS[method]
     instance = if is_ieee(instance_name)
         parse_IEEE(instance_name, optimizer, settings.T; sigma = settings.sigma, S = settings.S)
     else

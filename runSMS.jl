@@ -15,7 +15,8 @@
 #
 #     size_list = [10, 50]                      # nombre de groupes de l'instance
 #     id_list   = 1:5                           # identifiant de l'instance (Data/T-Ramp/<n>_0_<id>_w.nc4)
-#     methods   = ["interval", "bin3"]          # voir `MSUC.METHODS`
+#     methods   = ["interval_dual", "bin3"]     # voir `MSUC.METHODS` ; "interval_projection", "interval_minimum" et
+#                                               # "interval_maximum" : autres regles du point de linearisation (`interval_rule`)
 #
 #     # 1. Entrainement : un run de 3 600 s par combinaison (taille, identifiant, methode, S, sigma, ...).
 #     run_train(size_list, id_list, methods, [3600]; S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
