@@ -42,15 +42,18 @@ function save_run(folder, model, snapshots, schedules, states, passes, config)
 
     # Chaque iteration ajoute `passes` coupes a chaque noeud d'etape (sauf au dernier, sans valeur
     # future) : c'est ce qui permet de savoir quelles coupes existaient a chaque iteration.
+    # Une iteration arretee par la limite de temps apres son MIP n'a pas fait de passe (`one_iteration`).
+    skipped = get(model.ext, :passes_skipped, false)
     nodes = length(model.nodes)
     for i in 2:nodes
-        expected = i == nodes ? 0 : passes * length(schedules)
+        expected = i == nodes ? 0 : passes * (length(schedules) - skipped)
         length(model[i].cuts) - 1 == expected ||
             error("noeud $i : $(length(model[i].cuts) - 1) coupes, $expected attendues")
     end
 
     # Une trajectoire par passe : `passes` par iteration.
-    all(length(s) == passes for s in states) && length(states) == length(log) ||
+    all(length(s) == (skipped && k == length(states) ? 0 : passes) for (k, s) in enumerate(states)) &&
+        length(states) == length(log) ||
         error("etats echantillonnes : $passes trajectoires par iteration attendues")
 
     write_policy(folder, model, schedules)

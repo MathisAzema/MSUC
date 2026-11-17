@@ -169,6 +169,11 @@ function solve_subproblem(
     if JuMP.primal_status(node.subproblem) == JuMP.MOI.INTERRUPTED
         throw(InterruptException())
     end
+    if !_has_primal_solution(node) && JuMP.termination_status(node.subproblem) == MOI.TIME_LIMIT
+        # Limite de temps atteinte sans solution realisable : seul le MIP racine peut en avoir une
+        # (`solve_first_stage_problem`). Pas de recuperation numerique, qui le relancerait : l'appelant decide.
+        return nothing
+    end
     if !_has_primal_solution(node)
         attempt_numerical_recovery(model, node)
     end

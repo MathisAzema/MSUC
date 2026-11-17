@@ -25,7 +25,11 @@ end
     train(model; iteration_limit, time_limit, mip_gap, ...)
 
 Entraine la politique (algorithme 2). Il faut au moins un critere d'arret : `iteration_limit`
-(nombre d'iterations) et/ou `time_limit` (temps total, en secondes).
+(nombre d'iterations) et/ou `time_limit` (temps total, en secondes). Avec `time_limit`, le MIP racine est limite au
+temps restant (`time_limit` moins le temps ecoule, sauf a la premiere iteration) : une resolution longue ne fait pas
+deborder l'entrainement. Si la limite l'arrete, sa borne duale reste valide et le planning est le meilleur trouve (le
+planning precedent si aucun), et l'iteration s'arrete alors sans passe avant/arriere (sa borne et son planning suffisent :
+les coupes qu'elle creerait ne serviraient a aucune politique evaluee a temps). La premiere iteration va toujours au bout.
 
 `passes_per_mip` (1 par defaut) est le nombre de passes avant/arriere faites, planning fixe, entre deux
 resolutions du MIP racine : avec 1, c'est l'algorithme usuel ; avec 10, on affine les coupes par 10 passes
@@ -43,7 +47,7 @@ echantillonnee de l'unite projetee sur les successeurs de ytilde_{s-1} ; `:minim
 petit ou le plus grand successeur. Tout point atteignable donne une coupe valide : la regle ne change que la force des
 coupes, donc la vitesse de convergence, pas la validite de la borne. Seule `:dual` lit les duaux des etapes.
 
-`reuse_incumbent` (vrai par defaut ; `false` pour toujours resoudre le MIP racine) evite de le resoudre quand c'est inutile. A chaque iteration,
+`reuse_incumbent` (faux par defaut : le MIP racine est toujours resolu ; `true` pour l'eviter quand c'est inutile). A chaque iteration,
 le planning precedent est evalue avec la nouvelle approximation de la valeur future (cout d'engagement plus
 maximum des coupes de la racine, nouvelle coupe comprise). S'il est a moins de l'ecart d'optimalite du MIP
 (`mip_gap`, ou celui du solveur) de la meilleure borne inferieure, il est deja optimal pour le nouveau MIP
@@ -56,7 +60,7 @@ function train(
     time_limit::Union{Real,Nothing} = nothing,
     mip_gap::Union{Real,Nothing} = nothing,
     passes_per_mip::Int = 1,
-    reuse_incumbent::Bool = true,
+    reuse_incumbent::Bool = false,
     interval_rule::Symbol = :dual,
     print_level::Int = 1,
     log_frequency::Union{Nothing,Int} = nothing,

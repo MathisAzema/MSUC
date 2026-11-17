@@ -58,8 +58,14 @@ MSUC.train(model; iteration_limit = 20)              # au moins un critere : ite
 MSUC.train(model; iteration_limit = 20, mip_gap = 1e-2)   # ecart d'optimalite du MIP racine (defaut du solveur : 1e-4)
 MSUC.train(model; iteration_limit = 20, passes_per_mip = 5)   # 5 passes avant/arriere (LP) par resolution du MIP racine (defaut : 1)
 MSUC.train(model; iteration_limit = 20, interval_rule = :projection)   # formulation intervalle : regle du point de linearisation (defaut : :dual, voir ci-dessous)
-MSUC.train(model; iteration_limit = 20, reuse_incumbent = false)   # toujours resoudre le MIP racine (defaut : true, l'evite quand le planning precedent est deja dans l'ecart)
+MSUC.train(model; iteration_limit = 20, reuse_incumbent = true)   # evite le MIP racine quand le planning precedent est deja dans l'ecart (defaut : false, toujours le resoudre)
 ```
+
+`time_limit` limite aussi chaque MIP racine au temps restant (`time_limit` moins le temps écoulé, sauf à la première itération) :
+une résolution longue ne fait pas déborder l'entraînement. Si la limite l'arrête, sa borne duale reste valide et le planning
+retenu est le meilleur trouvé, ou le précédent si aucun n'a été trouvé ; l'itération s'arrête alors sans passe avant/arrière (sa
+borne et son planning suffisent : les coupes qu'elle créerait ne serviraient à aucune politique évaluée à temps). La première
+itération va toujours au bout.
 
 `mip_gap` agit sur le MIP racine, poste dominant du temps d'entraînement : un écart plus large l'accélère
 sans invalider la borne inférieure, qui reste la borne duale du MIP (voir `train`).
@@ -98,7 +104,7 @@ donc la vitesse de convergence. Seule `:dual` lit les duaux des étapes (donc `s
 $z^F$ que pour elle). Sans effet en 3-bin. `runSMS.jl` et `runIEEE.jl` les comparent avec les méthodes `"interval_dual"` (`:dual`),
 `"interval_projection"`, `"interval_minimum"` et `"interval_maximum"`, dont le nom figure dans le dossier de résultats.
 
-`reuse_incumbent` (vrai par défaut ; `false` pour toujours résoudre le MIP racine) évite de le résoudre quand c'est inutile. À chaque itération, le planning
+`reuse_incumbent` (faux par défaut : le MIP racine est toujours résolu ; `true` pour l'éviter quand c'est inutile). À chaque itération, le planning
 précédent $x^k$ est évalué avec la nouvelle approximation $V^{k+1}$, sans solveur : coût d'engagement plus maximum des
 coupes de la racine, nouvelle coupe comprise (`first_stage_value`). Cette approximation ne décroît jamais, donc la meilleure
 borne déjà obtenue minore aussi le nouveau MIP racine : si $x^k$ est à moins de `mip_gap` de cette borne (même définition

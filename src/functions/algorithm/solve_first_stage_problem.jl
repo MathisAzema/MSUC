@@ -1,24 +1,45 @@
 """
-    solve_first_stage_problem(model, initial_state)
+    solve_first_stage_problem(model, initial_state; time_limit = nothing)
 
 Resout le probleme racine (MIP), algorithme 2 lignes 4-5 : choisit le planning x^k (et gamma^k
 en formulation intervalle) avec l'approximation courante du cout futur. Ne fixe pas x^k pour les
 etapes de dispatch : c'est `one_iteration` qui le fait (`extract_schedule`, `set_schedule!`).
+
+`time_limit` (secondes, `nothing` : sans limite) plafonne le temps de ce MIP ; la resolution suivante, sans
+`time_limit`, retire la limite. Si la limite est atteinte, la borne duale du MIP reste valide et l'incumbent est le meilleur
+planning trouve ; si elle l'est sans aucun planning realisable, l'incumbent vaut `nothing` et le planning
+courant est inchange (a `one_iteration` de decider).
 
 Renvoie `(bound, incumbent)`. `bound` est la borne inferieure L^k, c'est-a-dire la borne DUALE du
 MIP (`objective_bound`) : avec un `MIPGap` non nul, la valeur de l'incumbent majore l'optimum du MIP
 et n'est pas une borne inferieure valide. `incumbent` est la valeur de l'objectif du planning x^k
 retenu (`objective_value`), egale a `bound` si le MIP est resolu a l'optimalite.
 """
-function solve_first_stage_problem(model::PolicyGraph, initial_state)
+function solve_first_stage_problem(
+    model::PolicyGraph,
+    initial_state;
+    time_limit::Union{Real,Nothing} = nothing,
+)
     root = model[model.first_node]
     noise = root.noise_terms[1].term
-    solve_subproblem(
-        model,
-        root,
-        initial_state,
-        noise,
-    )
+    # La limite est posee avant la resolution, jamais retiree apres : modifier un parametre du solveur
+    # invalide la solution, que `one_iteration` lit ensuite (`extract_schedule`).
+    if time_limit !== nothing
+        JuMP.set_time_limit_sec(root.subproblem, max(Float64(time_limit), 0.0))
+        model.ext[:root_time_limit_set] = true
+    elseif get(model.ext, :root_time_limit_set, false)
+        JuMP.set_time_limit_sec(root.subproblem, nothing)    # la limite d'une resolution precedente ne persiste pas
+        model.ext[:root_time_limit_set] = false
+    end
+    result = solve_subproblem(model, root, initial_state, noise)
+    if result === nothing    # limite de temps sans planning realisable
+        bound = try
+            JuMP.objective_bound(root.subproblem)
+        catch
+            -Inf
+        end
+        return (bound = bound, incumbent = nothing)
+    end
     return (
         bound = JuMP.objective_bound(root.subproblem),
         incumbent = JuMP.objective_value(root.subproblem),
