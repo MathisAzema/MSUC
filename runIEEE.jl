@@ -16,6 +16,7 @@
 #
 #     methods = ["interval_dual", "bin3"]       # voir `MSUC.METHODS` ; "interval_projection", "interval_minimum" et
 #                                               # "interval_maximum" : autres regles du point de linearisation (`interval_rule`)
+#                                               # "bin3_gamma" : 3-bin avec les variables gamma en plus a la racine
 #
 #     # 1. Entrainement : un run de 3 600 s par combinaison (methode, S, sigma, ...).
 #     run_train(methods, [3600]; S_list = [3, 5], sigma_list = [0.25, 1.0])

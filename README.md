@@ -45,7 +45,7 @@ T = 24
 instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T)
 
 model = MSUC.PolicyGraph(
-    MSUC.subproblem_builder_UC_extended,   # ou subproblem_builder_UC_def pour la 3-bin
+    MSUC.subproblem_builder_UC_extended,   # ou subproblem_builder_UC_def pour la 3-bin (et SDDPFormulation ci-dessous)
     instance,
     1.0,                                   # `force` : amplitude de l'aléa (0 => déterministe)
     MSUC.Graph(T + 1),                     # T+1 nœuds : racine + T étapes de dispatch
@@ -103,6 +103,16 @@ Les quatre règles donnent des coupes valides (tout point atteignable convient) 
 donc la vitesse de convergence. Seule `:dual` lit les duaux des étapes (donc `sampled_signals_interval` ne contient des signaux
 $z^F$ que pour elle). Sans effet en 3-bin. `runSMS.jl` et `runIEEE.jl` les comparent avec les méthodes `"interval_dual"` (`:dual`),
 `"interval_projection"`, `"interval_minimum"` et `"interval_maximum"`, dont le nom figure dans le dossier de résultats.
+
+**3-bin avec les variables $\gamma$ à la racine.** `MSUC.subproblem_builder_UC_def_gamma` (avec `SDDPFormulation`, méthode `"bin3_gamma"` de
+`runSMS.jl` et `runIEEE.jl`) garde les étapes de dispatch et les coupes (12) de la 3-bin, mais ajoute au MIP racine les variables
+$\gamma_{j,a,b}$ et les contraintes (19c) qui les relient à $(u, v, w)$, comme en formulation intervalle. Les coupes restent celles de la 3-bin, et
+le planning lu à la racine contient alors les intervalles choisis (`Schedule.selected`), que ces coupes n'utilisent pas. Les $\gamma$
+**ne resserrent pas** la relaxation du MIP racine dans l'espace de $x$ : avec les mêmes coupes, les racines 3-bin et 3-bin + $\gamma$
+ont les mêmes valeurs LP et MIP (écart $< 10^{-8}$ sur 31 objectifs, IEEE et SMS++ à $T = 4$), car les inégalités de durée minimale de
+marche et d'arrêt de la 3-bin (somme des $v$, des $w$ sur une fenêtre) décrivent déjà l'enveloppe convexe des plannings. Cette variante
+ne change donc que la taille du modèle : la force des coupes intervalle ne vient pas du MIP racine. Deux runs 3-bin et 3-bin + $\gamma$
+peuvent quand même diverger, par le choix du solveur entre des plannings optimaux équivalents, qui change les coupes suivantes.
 
 `reuse_incumbent` (faux par défaut : le MIP racine est toujours résolu ; `true` pour l'éviter quand c'est inutile). À chaque itération, le planning
 précédent $x^k$ est évalué avec la nouvelle approximation $V^{k+1}$, sans solveur : coût d'engagement plus maximum des
@@ -253,7 +263,7 @@ include("runSMS.jl")                      # NBWORKERS=2 julia ... pour un essai 
 
 size_list = [10, 50]                      # nombre de groupes de l'instance
 id_list   = 1:5                           # identifiant (Data/T-Ramp/<n>_0_<id>_w.nc4)
-methods   = ["interval_dual", "bin3"]     # coupes intervalle (regle des prix) ou 3-bin ; voir `MSUC.METHODS` pour les autres regles
+methods   = ["interval_dual", "bin3"]     # coupes intervalle (regle des prix) ou 3-bin ; voir `MSUC.METHODS` pour les autres (dont "bin3_gamma")
 
 # 1. Entraînement : un run de 3 600 s par combinaison (taille, identifiant, méthode, S, sigma, ...)
 run_train(size_list, id_list, methods, [3600];

@@ -39,11 +39,13 @@ function _declare_states!(subproblem, instance)
     return node.power, node.zeta
 end
 
-function _stage_builder!(instance, subproblem, node_index, force, basis)
+# `basis` : base du planning dans les etapes de dispatch (`:bins` ou `:intervals`, donc les coupes). `root_basis`
+# (par defaut `basis`) : celle du probleme racine, qui avec `:intervals` porte en plus les variables gamma.
+function _stage_builder!(instance, subproblem, node_index, force, basis; root_basis = basis)
     power, ζ = _declare_states!(subproblem, instance)
     node = get_node(subproblem)
     if node_index == 1
-        node.planning = _root_problem!(subproblem, instance, power, ζ, basis)
+        node.planning = _root_problem!(subproblem, instance, power, ζ, root_basis)
     else
         t = node_index - 1
         node.planning = _stage_parameters!(subproblem, instance, power, t, basis)
@@ -61,6 +63,20 @@ d'arret, il faut donc enumerer les decalages.
 """
 function subproblem_builder_UC_def(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     return _stage_builder!(instance, subproblem, node, force, :bins)
+end
+
+"""
+    subproblem_builder_UC_def_gamma(instance, force, subproblem, node)
+
+Formulation 3-bin (Sect. 2) dont le probleme racine porte en plus les variables gamma_{j,a,b} reliees au planning
+par (19c), comme en formulation intervalle : les etapes de dispatch et les coupes (12) sont celles de la 3-bin,
+a utiliser avec `SDDPFormulation`. Les gamma ne resserrent pas la relaxation du MIP racine dans l'espace de x
+(mesure : memes valeurs LP et MIP avec les memes coupes), car les inegalites de duree minimale de la 3-bin
+decrivent deja l'enveloppe convexe des plannings : cette variante ne change que la taille du modele.
+`extract_schedule` en lit les intervalles choisis (`Schedule.selected`), que les coupes 3-bin n'utilisent pas.
+"""
+function subproblem_builder_UC_def_gamma(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
+    return _stage_builder!(instance, subproblem, node, force, :bins; root_basis = :intervals)
 end
 
 """

@@ -1,7 +1,8 @@
 # --- Modele et dossier de resultats d'un run (voir `runSMS.jl` et `runIEEE.jl`) ----------------
 
 # Les methodes d'un run : (constructeur des sous-problemes, formulation, regle `interval_rule` de `train`).
-# "bin3" est la formulation 3-bin ; "interval_<regle>" la formulation intervalle avec la regle `<regle>` de construction
+# "bin3" est la formulation 3-bin, "bin3_gamma" la meme avec les variables gamma en plus a la racine (coupes 3-bin
+# inchangees ; a la racine, relaxation identique a la 3-bin) ; "interval_<regle>" la formulation intervalle avec la regle `<regle>` de construction
 # du point de linearisation (`INTERVAL_RULES`), "interval_dual" etant la regle des prix de l'article. Le nom de la
 # methode figure dans le dossier de resultats, donc les regles ne s'ecrasent pas.
 const METHODS = Dict(
@@ -10,6 +11,7 @@ const METHODS = Dict(
     "interval_minimum" => (subproblem_builder_UC_extended, ExtendedFormulation, :minimum),
     "interval_maximum" => (subproblem_builder_UC_extended, ExtendedFormulation, :maximum),
     "bin3" => (subproblem_builder_UC_def, SDDPFormulation, :dual),
+    "bin3_gamma" => (subproblem_builder_UC_def_gamma, SDDPFormulation, :dual),
 )
 
 # Graine de tous les runs : entrainement (tirages de la passe avant) et simulation.
