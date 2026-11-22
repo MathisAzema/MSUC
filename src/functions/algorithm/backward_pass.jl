@@ -7,12 +7,10 @@
     backward_pass(model, sampled_states_power, sampled_states_zeta; root_cut = true,
                   sampled_states_interval = nothing)
 
-Passe arriere (algorithme 2, lignes 12-20) : en remontant de la fin vers la racine, resout l'etape
-suivante au point `(y, zeta)` visite par la passe avant, pour chaque realisation de l'alea, et en
-tire une coupe pour le noeud courant. Le graphe est lineaire : le noeud d'indice k est a la
-profondeur k de la trajectoire. Avec `root_cut = false`, la coupe de la racine (une ligne dense du MIP)
-n'est pas ajoutee. Avec `sampled_states_interval` (regle des prix, voir `forward_pass`), les
-coefficients locaux des intervalles sont linearises aux etats par intervalle de la passe avant.
+Backward pass (Algorithm 2, lines 12-20): from the last stage to the root, solve the next stage at the
+state visited by the forward pass for every noise realization and build a cut for the current node.
+With `root_cut = false` the (dense) root cut is not added. With `sampled_states_interval`, interval
+cut coefficients are linearized at the forward-pass interval states.
 """
 function backward_pass(
     model::PolicyGraph,

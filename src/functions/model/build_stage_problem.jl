@@ -1,14 +1,12 @@
-# Variables fixees a `value` : elles portent le planning x^k dans les etapes de dispatch. Ce ne sont pas
-# des `Parameter` JuMP : changer la valeur d'un `Parameter` oblige JuMP a recopier tout le modele dans
-# Gurobi a la resolution suivante (et a perdre la base de depart), alors que changer la valeur d'une
-# variable fixee modifie ses bornes en place.
+# Fixed variables carry the schedule x^k in the dispatch stages. They are not JuMP `Parameter`s:
+# changing a `Parameter` makes JuMP copy the whole model into Gurobi at the next solve (losing the
+# warm-start basis), whereas changing a fixed variable updates its bounds in place.
 function _fixed_variables(subproblem, n, value)
     x = @variable(subproblem, [1:n])
     JuMP.fix.(x, value)
     return x
 end
 
-# Capacite, rampes et faisabilite d'arret de l'etape t, ecrites sur le planning fixe.
 function _stage_parameters!(subproblem, instance, power, t, basis)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
@@ -44,15 +42,15 @@ function _stage_parameters!(subproblem, instance, power, t, basis)
     return StageParameters(u_prev, u, v, w, w_future, cap)
 end
 
-# Reseau, alea et bilan de demande d'une etape de dispatch : (1c)-(1g).
-# Renvoie les contraintes de bilan, dont les duaux sont le nu du papier.
+# Network, noise and demand balance of a dispatch stage, (1c)-(1g). Returns the balance
+# constraints, whose duals are the paper's nu.
 function _dispatch_common!(subproblem, instance, force, power, ζ, t)
     units = instance.Thermalunits
     Next = instance.Next
     Buses = 1:size(Next)[1]
     arma = instance.arma
     nz = MSUC.zeta_dimension(arma)
-    ni = size(arma.E, 2)             # dimension de l'innovation
+    ni = size(arma.E, 2)
 
     @variables(subproblem, begin
         power_shedding[b in Buses] >= 0
@@ -60,8 +58,7 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
         θ[b in Buses]
         flow[b in Buses, bp in Next[b]]
     end)
-    # Innovation xi_t a support fini (Hypothese 2) et recursion ARMA (1f) :
-    #     zeta_t = Psi zeta_{t-1} + E xi_t
+    # Finite-support innovation xi_t and ARMA recursion (1f).
     @variable(subproblem, ξ[n = 1:ni])
     MSUC.parameterize(subproblem, arma.support, arma.probability) do ω
         for n in 1:ni
@@ -75,11 +72,10 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
         sum(arma.Psi[i, k] * ζ[k].in for k in 1:nz) +
         sum(arma.E[i, n] * ξ[n] for n in 1:ni)
     )
-    # (1c)-(1e) : flux DC et capacites de ligne.
     for line in values(instance.Lines)
         add_line_constraints!(subproblem, line, flow[line.b1, line.b2], θ[line.b1], θ[line.b2])
     end
-    # (1g) : bilan par noeud. Les duaux nu_{n,t} alimentent z_{j,a,b} (Prop. 4).
+    # (1g) node balance; its duals nu_{n,t} feed z_{j,a,b} (Prop. 4).
     demand = [
         @constraint(
             subproblem,

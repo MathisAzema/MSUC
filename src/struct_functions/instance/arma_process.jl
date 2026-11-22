@@ -1,15 +1,9 @@
 """
     ARMAProcess
 
-Processus ARMA(p,q) de l'erreur relative de prevision, sous la forme d'etat (1g).
-
-* `Psi`, `E` : matrices de (1g), de dimension `(p+q)` (elles contiennent les coefficients AR et MA
-  du facteur scalaire commun a tous les noeuds).
-* `S_eta` : extraction `eta_t = S_eta zeta_t`, de taille |N| × (p+q) (recopie de l'erreur
-  du facteur sur chaque noeud).
-* `support`, `probability` : discretisation a support fini de `xi_t` (Hypothese 1),
-  une realisation est un vecteur de longueur 1.
-* `zeta0` : etat initial, donnee du probleme.
+ARMA(p,q) process of the relative forecast error in state form (1g):
+`zeta_t = Psi zeta_{t-1} + E xi_t`, `eta_t = S_eta zeta_t` (`S_eta` copies the error to every node).
+`support`/`probability` discretize the innovation `xi_t`; `zeta0` is the initial state.
 """
 struct ARMAProcess
     Psi::Matrix{Float64}

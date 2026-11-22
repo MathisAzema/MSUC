@@ -1,21 +1,8 @@
-# =============================================================================
-#  Le planning d'engagement x = (u, v, w) est decide a la racine, puis reste FIXE
-#  pendant toute l'iteration : ce n'est pas un etat du programme dynamique mais un
-#  parametre des etapes de dispatch (algorithme 1 et 2 : x^k, gamma^k fixes). Les
-#  seuls etats sont la production y_t et l'etat d'incertitude zeta_t.
-#
-#  Trois objets :
-#    RootVariables     variables de decision du probleme racine (MIP)
-#    Schedule          valeurs du planning x^k lues a la racine apres resolution
-#    StageParameters   variables des etapes de dispatch fixees a x^k (`JuMP.fix`)
-# =============================================================================
-
 """
     RootVariables
 
-Variables de decision du noeud racine : le planning `u` (sur `0:T`), `v` et `w` (sur
-`1:T`), indexes `[unit.name, t]`, et, pour la formulation intervalle, les `gamma[j, a, b]`
-(vide en 3-bin).
+Root decision variables: `u` (on `0:T`), `v` and `w` (on `1:T`) indexed `[unit.name, t]`,
+and `gamma[j, a, b]` for the interval formulation (empty for 3-bin).
 """
 struct RootVariables
     u::Any
@@ -27,12 +14,9 @@ end
 """
     StageParameters
 
-Variables fixees au planning dans le sous-probleme de l'etape `t` (`JuMP.fix`, et non des `Parameter` : changer
-un `Parameter` fait recopier tout le modele dans Gurobi, changer une borne se fait en place) : le statut `u_prev` (t-1) et
-`u` (t), le demarrage `v` et l'arret `w` a `t`, plus selon la formulation
-  * 3-bin      : `w_future[j][h]` = w_{t+h}, necessaires aux lignes de faisabilite d'arret
-                 (44), dont les duaux portent les coefficients de la coupe sur x ;
-  * intervalle : `cap[j]`, l'enveloppe d'arret (46) de l'intervalle actif.
+Schedule values fixed (`JuMP.fix`) in the stage-`t` subproblem: `u_prev`, `u`, `v`, `w`, plus
+  * 3-bin:    `w_future[j][h]` = w_{t+h}, used by the shutdown-feasibility rows (44);
+  * interval: `cap[j]`, the shutdown envelope (46) of the active interval.
 """
 struct StageParameters
     u_prev::Vector{JuMP.VariableRef}
@@ -46,11 +30,9 @@ end
 """
     Schedule
 
-Planning x^k = (u, v, w) lu a la racine, arrondi a {0, 1}. `u[i, t+1]` vaut u_{i,t}
-(t in 0:T), `v[i, t]` et `w[i, t]` valent v_{i,t} et w_{i,t} (t in 1:T). `selected` liste les
-identifiants (`IntervalIndex`) des intervalles [a:b] choisis (gamma = 1) et `selected_units` leur
-unite, dans l'ordre (unite, a, b) ; vides en 3-bin. `x` est le vecteur plat
-(u, v, w) : sa i-eme coordonnee est celle de `u_index`, `v_index`, `w_index`.
+Schedule x^k = (u, v, w) read at the root, rounded to {0, 1}. `u[i, t+1]` is u_{i,t} (t in 0:T);
+`v[i, t]`, `w[i, t]` are v_{i,t}, w_{i,t} (t in 1:T). `selected`/`selected_units` list the chosen
+intervals (`IntervalIndex` ids) and their units (empty for 3-bin). `x` is the flat vector (u, v, w).
 """
 struct Schedule
     u::Matrix{Float64}

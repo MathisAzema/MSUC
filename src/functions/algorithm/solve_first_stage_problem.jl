@@ -1,19 +1,15 @@
 """
     solve_first_stage_problem(model, initial_state; time_limit = nothing)
 
-Resout le probleme racine (MIP), algorithme 2 lignes 4-5 : choisit le planning x^k (et gamma^k
-en formulation intervalle) avec l'approximation courante du cout futur. Ne fixe pas x^k pour les
-etapes de dispatch : c'est `one_iteration` qui le fait (`extract_schedule`, `set_schedule!`).
+Solve the root MIP (Algorithm 2, lines 4-5): choose the schedule x^k (and gamma^k with the interval
+formulation) given the current future-cost approximation. Fixing x^k in the dispatch stages is left to
+`one_iteration`.
 
-`time_limit` (secondes, `nothing` : sans limite) plafonne le temps de ce MIP ; la resolution suivante, sans
-`time_limit`, retire la limite. Si la limite est atteinte, la borne duale du MIP reste valide et l'incumbent est le meilleur
-planning trouve ; si elle l'est sans aucun planning realisable, l'incumbent vaut `nothing` et le planning
-courant est inchange (a `one_iteration` de decider).
+`time_limit` (seconds) caps this MIP; a later call without it removes the cap. If the limit is hit, the
+dual bound stays valid and `incumbent` is the best schedule found, or `nothing` if there is none.
 
-Renvoie `(bound, incumbent)`. `bound` est la borne inferieure L^k, c'est-a-dire la borne DUALE du
-MIP (`objective_bound`) : avec un `MIPGap` non nul, la valeur de l'incumbent majore l'optimum du MIP
-et n'est pas une borne inferieure valide. `incumbent` est la valeur de l'objectif du planning x^k
-retenu (`objective_value`), egale a `bound` si le MIP est resolu a l'optimalite.
+Returns `(bound, incumbent)`: `bound` is the lower bound L^k, i.e. the MIP *dual* bound (with a nonzero
+`MIPGap` the incumbent value is not a valid lower bound); `incumbent` is the objective value of x^k.
 """
 function solve_first_stage_problem(
     model::PolicyGraph,
@@ -22,17 +18,17 @@ function solve_first_stage_problem(
 )
     root = model[model.first_node]
     noise = root.noise_terms[1].term
-    # La limite est posee avant la resolution, jamais retiree apres : modifier un parametre du solveur
-    # invalide la solution, que `one_iteration` lit ensuite (`extract_schedule`).
+    # Set before solving and never reset afterwards: changing a solver parameter invalidates the
+    # solution that `one_iteration` reads next (`extract_schedule`).
     if time_limit !== nothing
         JuMP.set_time_limit_sec(root.subproblem, max(Float64(time_limit), 0.0))
         model.ext[:root_time_limit_set] = true
     elseif get(model.ext, :root_time_limit_set, false)
-        JuMP.set_time_limit_sec(root.subproblem, nothing)    # la limite d'une resolution precedente ne persiste pas
+        JuMP.set_time_limit_sec(root.subproblem, nothing)
         model.ext[:root_time_limit_set] = false
     end
     result = solve_subproblem(model, root, initial_state, noise)
-    if result === nothing    # limite de temps sans planning realisable
+    if result === nothing
         bound = try
             JuMP.objective_bound(root.subproblem)
         catch
@@ -49,9 +45,8 @@ end
 """
     first_stage_value(model, schedule)
 
-Valeur du planning `schedule` pour le probleme racine avec l'approximation courante : cout d'engagement plus
-le maximum des coupes de la racine (coupe triviale comprise), c'est-a-dire l'objectif du MIP racine en ce
-planning, sans le resoudre. Appelee apres une passe arriere, elle inclut la coupe qui vient d'y etre ajoutee.
+Objective of the root MIP at `schedule` with the current approximation (commitment cost plus the
+maximum of the root cuts), without solving it.
 """
 function first_stage_value(model::PolicyGraph, schedule::Schedule)
     root = model[model.first_node]
@@ -62,13 +57,9 @@ end
 """
     reusable_incumbent(model)
 
-Decide si le MIP racine peut etre evite a cette iteration. Le planning x^k de l'iteration precedente est
-evalue avec la nouvelle approximation (`first_stage_value`). Cette approximation ne decroit jamais, donc la
-meilleure borne inferieure deja obtenue minore aussi le nouveau MIP racine ; si x^k est a moins de l'ecart
-d'optimalite du MIP de cette borne (meme definition que Gurobi : `(valeur - borne) / |valeur|`), x^k est
-deja optimal pour le nouveau MIP a cet ecart pres. Renvoie alors `(bound, incumbent)` avec la meilleure borne
-(inchangee) et la valeur de x^k, sinon `nothing`. Il faut un planning deja choisi et une borne finie, donc
-la premiere iteration resout toujours le MIP.
+Return `(bound, incumbent)` if the previous schedule x^k, evaluated with the new approximation, is within
+the MIP relative gap (as defined by Gurobi) of the best bound, so the root MIP can be skipped; `nothing`
+otherwise. Valid because the approximation never decreases, so the best bound also bounds the new MIP.
 """
 function reusable_incumbent(model::PolicyGraph)
     model.schedule === nothing && return nothing

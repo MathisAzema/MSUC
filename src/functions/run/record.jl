@@ -1,7 +1,4 @@
-# --- Enregistrement pendant l'entrainement ------------------------------------------------------
-
-# Temps cumule (secondes) et nombre d'appels de chaque phase, cle = chemin de la phase
-# (`parent/enfant`). Les temps sont cumules depuis le debut de `train`.
+# Cumulative time (s) and call count of each phase, keyed by path (`parent/child`).
 function flatten_timer(to::TimerOutputs.TimerOutput)
     phases = Dict{String,Tuple{Int,Float64}}()
     function walk(d, prefix)
@@ -15,17 +12,13 @@ function flatten_timer(to::TimerOutputs.TimerOutput)
     return phases
 end
 
-# Deux fonctions a passer a `train` et ce qu'elles remplissent. Aucune ne touche au deroulement de
-# l'algorithme.
-#   - `record_pass` (`forward_pass_callback`) : apres chaque passe avant, garde les etats echantillonnes
-#     de la trajectoire, `(sampled_states_power, sampled_states_zeta)`, c'est-a-dire (y, zeta) a la
-#     sortie de chaque noeud, le noeud 1 (racine) etant l'etat initial. Avec `interval_states = true`, garde
-#     aussi `sampled_states_interval`, l'etat par intervalle ytilde^k de la passe avant (formulation
-#     intervalle), avec les signaux de cout `sampled_signals_interval` (z^F) : un vecteur par intervalle et par
-#     noeud, trop volumineux pour un long run, utile pour les diagnostics ;
-#   - `record` (`post_iteration_callback`) : apres chaque iteration, releve les temps cumules par phase,
-#     le planning x^k de l'iteration (celui du MIP racine) et les trajectoires de ses passes.
-# `states[k][p]` est la trajectoire de la passe p de l'iteration k.
+# Returns callbacks for `train` that record without affecting the algorithm:
+#   `record_pass` (`forward_pass_callback`) keeps the sampled (y, zeta) trajectory of each forward
+#   pass; with `interval_states = true` it also keeps the per-interval states and cost signals
+#   (large, for diagnostics only);
+#   `record` (`post_iteration_callback`) keeps the phase timings, the schedule x^k and the pass
+#   trajectories of the iteration.
+# `states[k][p]` is the trajectory of pass p of iteration k.
 function make_recorder(model; interval_states::Bool = false)
     snapshots = Dict{String,Tuple{Int,Float64}}[]
     schedules = Schedule[]

@@ -26,8 +26,8 @@ end
 """
     sample_scenario(model)
 
-Tire une realisation de l'alea par noeud (le noeud k est a la profondeur k, la racine a un alea
-nul) : `sample_scenario(model)[k]` est le terme tire pour le noeud k.
+Samples one noise realization per node: `sample_scenario(model)[k]` is the term drawn for node k
+(`nothing` at the root, which has no noise).
 """
 function sample_scenario(model::PolicyGraph)
     return [sample_noise(model[k].noise_terms) for k in 1:length(model.nodes)]

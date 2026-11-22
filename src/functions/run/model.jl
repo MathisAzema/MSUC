@@ -1,10 +1,6 @@
-# --- Modele et dossier de resultats d'un run (voir `runSMS.jl` et `runIEEE.jl`) ----------------
-
-# Les methodes d'un run : (constructeur des sous-problemes, formulation, regle `interval_rule` de `train`).
-# "bin3" est la formulation 3-bin, "bin3_gamma" la meme avec les variables gamma en plus a la racine (coupes 3-bin
-# inchangees ; a la racine, relaxation identique a la 3-bin) ; "interval_<regle>" la formulation intervalle avec la regle `<regle>` de construction
-# du point de linearisation (`INTERVAL_RULES`), "interval_dual" etant la regle des prix de l'article. Le nom de la
-# methode figure dans le dossier de resultats, donc les regles ne s'ecrasent pas.
+# Methods: (subproblem builder, formulation, `interval_rule` for `train`). "bin3_gamma" is 3-bin
+# with the gamma variables added at the root; "interval_<rule>" is the interval formulation with the
+# given linearization rule (`INTERVAL_RULES`).
 const METHODS = Dict(
     "interval_dual" => (subproblem_builder_UC_extended, ExtendedFormulation, :dual),
     "interval_projection" => (subproblem_builder_UC_extended, ExtendedFormulation, :projection),
@@ -14,20 +10,17 @@ const METHODS = Dict(
     "bin3_gamma" => (subproblem_builder_UC_def_gamma, SDDPFormulation, :dual),
 )
 
-# Graine de tous les runs : entrainement (tirages de la passe avant) et simulation.
+# Seed of all runs, training and simulation.
 const SEED = 1
 
-# Instance IEEE 118 noeuds : un dossier de `Data/IEEE` (lu par `parse_IEEE`), a la place d'un fichier
-# `.nc4` de `Data/T-Ramp`. Les deux sortes d'instances se distinguent par leur nom : c'est un
-# dossier de `Data/IEEE` ou non.
+# The IEEE instance is a folder in `Data/IEEE`, not an `.nc4` file in `Data/T-Ramp`.
 const IEEE_INSTANCE = "118_syst"
 
 is_ieee(instance_name) =
     isdir(joinpath(@__DIR__, "..", "..", "..", "Data", "IEEE", instance_name))
 
-# `settings` : (T, S, sigma, mip_gap, passes_per_mip). Tous les parametres figurent dans le nom du
-# dossier, pour que des runs de parametres differents ne s'ecrasent jamais. Les runs IEEE sont ecrits
-# dans `results_ieee/`, les runs SMS++ dans `results_sms/`.
+# `settings`: (T, S, sigma, mip_gap, passes_per_mip). All parameters appear in the folder name so
+# that runs never overwrite each other.
 function results_folder(instance_name, method, time_max, settings)
     gap = settings.mip_gap === nothing ? "default" : string(settings.mip_gap)
     tag = string(
@@ -38,13 +31,10 @@ function results_folder(instance_name, method, time_max, settings)
     return "$(root)/$(tag)/$(instance_name)/time_$(time_max)"
 end
 
-# Nom, sans extension, du fichier de `Data/T-Ramp` d'une instance : nombre de groupes, 0, identifiant, w.
 instance_name(n_units, id) = "$(n_units)_0_$(id)_w"
 
-# Tous les runs d'une campagne : le produit des listes. Chaque element est
-# `(instance, methode, temps limite, settings)`. Les combinaisons (taille, identifiant) sans fichier
-# dans `Data/T-Ramp` sont ignorees avec un avertissement (les instances a 200 groupes vont jusqu'a
-# l'identifiant 11, les autres jusqu'a 5) ; il y a une erreur si aucune n'existe.
+# All runs of a campaign, as `(instance, method, time limit, settings)`. (size, id) combinations
+# without a file in `Data/T-Ramp` are skipped with a warning; it is an error if none exists.
 function run_combos(
     size_list,
     id_list,
@@ -68,11 +58,9 @@ function run_combos(
     )
 end
 
-# Tous les runs de l'instance IEEE (`IEEE_INSTANCE`) : memes elements que `run_combos`.
 ieee_combos(method_list, time_max_list; kwargs...) =
     campaign([IEEE_INSTANCE], method_list, time_max_list; kwargs...)
 
-# Le produit des listes : un run `(instance, methode, temps limite, settings)` par combinaison.
 function campaign(
     instances,
     method_list,
@@ -91,9 +79,8 @@ function campaign(
     ]
 end
 
-# Fabrique d'optimiseur d'un run, enregistree dans chaque processus (`set_run_optimizer!`, appelee sur
-# chaque worker par `runSMS.jl`). Les jobs la relisent ici au lieu de la recevoir de `pmap`, qui
-# enverrait sinon l'environnement Gurobi du processus principal aux workers.
+# Optimizer factory registered in each process (`set_run_optimizer!`). Jobs read it here instead of
+# receiving it from `pmap`, which would ship the master's Gurobi environment to the workers.
 const RUN_OPTIMIZER = Ref{Any}(nothing)
 
 set_run_optimizer!(factory) = (RUN_OPTIMIZER[] = factory; nothing)
@@ -106,7 +93,6 @@ function run_optimizer()
     return RUN_OPTIMIZER[]
 end
 
-# Un modele neuf (sans coupe) : meme construction a l'entrainement et a la simulation.
 function build_model(instance_name, method, settings, optimizer)
     builder, formulation, _ = METHODS[method]
     instance = if is_ieee(instance_name)
@@ -120,7 +106,7 @@ function build_model(instance_name, method, settings, optimizer)
             S = settings.S,
         )
     end
-    # force = 1 : l'amplitude de l'alea est entierement donnee par `sigma`.
+    # force = 1: the noise amplitude is entirely given by `sigma`.
     return PolicyGraph(
         builder,
         instance,

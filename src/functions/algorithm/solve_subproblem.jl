@@ -3,8 +3,6 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Etat porte d'une etape a l'autre : la production y et l'etat d'incertitude zeta,
-# sous la forme `(power = [...], zeta = [...])`.
 function initial_state(instance::Instance)
     return (
         power = [unit.InitialPower for unit in instance.Thermalunits],
@@ -18,7 +16,7 @@ function set_incoming_state(node::Node, state)
     return
 end
 
-# Valeur d'une variable ramenee dans ses bornes (le solveur tolere de petits depassements).
+# The solver tolerates small bound violations; clamp them away.
 function _clamped_value(var::JuMP.VariableRef)
     value = JuMP.value(var)
     if JuMP.has_upper_bound(var)
@@ -148,7 +146,7 @@ function default_numerical_difficulty_callback(
         return
     end
     MOI.Utilities.reset_optimizer(node.subproblem)
-    delete!(node.ext, :cut_rows)    # les lignes des coupes dans le modele Gurobi ont pu changer
+    delete!(node.ext, :cut_rows)
     optimize!(node.subproblem)
     return
 end
@@ -170,8 +168,8 @@ function solve_subproblem(
         throw(InterruptException())
     end
     if !_has_primal_solution(node) && JuMP.termination_status(node.subproblem) == MOI.TIME_LIMIT
-        # Limite de temps atteinte sans solution realisable : seul le MIP racine peut en avoir une
-        # (`solve_first_stage_problem`). Pas de recuperation numerique, qui le relancerait : l'appelant decide.
+        # Only the root MIP can hit this (`solve_first_stage_problem`). No numerical recovery, which
+        # would re-solve: the caller decides.
         return nothing
     end
     if !_has_primal_solution(node)

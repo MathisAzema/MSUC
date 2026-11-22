@@ -3,37 +3,9 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# ============================================================================ #
-#
-#   Code to implement a JuMP variable extension.
-#
-#   Usage:
-#   julia> @variable(subproblem, 0 <= x[i=1:2] <= i,
-#              MSUC.State, initial_value = i)
-#
-#   julia> x
-#   2-element Array{State{VariableRef},1}:
-#     State(x[1]_in,x[1]_out)
-#     State(x[2]_in,x[2]_out)
-#
-#   julia> x[1].in
-#   x[1]_in
-#
-#   julia> typeof(x[1].in)
-#   VariableRef
-#
-#   julia> x[2].out
-#   x[2]_out
-#
-#   Assuming subproblem has been solved, and there exists a primal solution
-#   julia> x_values = JuMP.value.(x)
-#   2-element Array{State{Float64},1}:
-#     State(0.0,1.0)
-#     State(1.2,3.0)
-#
-#   julia> x_values[1].out
-#   1.0
-# ============================================================================ #
+# JuMP variable extension for state variables, e.g.
+#   @variable(subproblem, 0 <= x[i=1:2] <= i, MSUC.State, initial_value = i)
+# creates `State(x[i]_in, x[i]_out)` objects; `JuMP.value.(x)` returns `State`s of values.
 
 function JuMP.build_variable(
     _error::Function,
@@ -100,8 +72,6 @@ end
 
 # Overload for broadcast syntax such as `JuMP.value.([state_1, state_2])`.
 Broadcast.broadcastable(state::State{JuMP.VariableRef}) = Ref(state)
-
-# ==============================================================================
 
 function JuMP.set_optimizer(model::MSUC.PolicyGraph, optimizer)
     for node in values(model.nodes)

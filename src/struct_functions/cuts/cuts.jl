@@ -3,31 +3,28 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Une coupe du noeud n minore la valeur future en fonction de l'etat sortant (y, zeta) ET du
-# planning x : theta >= alpha + delta' zeta + beta' y + (terme en x). Sa forme depend de la
-# base du planning : composantes (u, v, w) en 3-bin, intervalles [a:b] en formulation
-# intervalle. `constraint_ref` est la ligne d'epigraphe de theta dans le sous-probleme.
+# Cut on the future value: theta >= alpha + delta' zeta + beta' y + (term in x). `tau` is indexed by
+# (u, v, w) components for BinCut and by interval id for IntervalCut. `constraint_ref` is the epigraph row.
 abstract type AbstractCut end
 
 mutable struct BinCut <: AbstractCut
     alpha::Float64
-    tau::Vector{Float64}   # coefficients sur le vecteur plat x = (u, v, w)
-    beta::Vector{Float64}  # coefficients sur y_j, une par unite
-    delta::Vector{Float64} # coefficients sur zeta
+    tau::Vector{Float64}
+    beta::Vector{Float64}
+    delta::Vector{Float64}
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
-    applied::Vector{Float64}   # pentes en y deja ecrites dans la ligne d'epigraphe (vide : aucune)
+    applied::Vector{Float64}   # y-slopes already written in the epigraph row (empty: none)
 end
 
 mutable struct IntervalCut <: AbstractCut
     alpha::Float64
-    tau::Vector{Float64}   # un coefficient par intervalle (identifiant de `IntervalIndex`)
+    tau::Vector{Float64}
     beta::Vector{Float64}
     delta::Vector{Float64}
     constraint_ref::Union{Nothing,JuMP.ConstraintRef}
-    applied::Vector{Float64}   # pentes en y deja ecrites dans la ligne d'epigraphe (vide : aucune)
+    applied::Vector{Float64}
 end
 
-# Une coupe neuve n'a encore ecrit aucune pente dans le sous-probleme.
 BinCut(alpha, tau, beta, delta, constraint_ref) =
     BinCut(alpha, tau, beta, delta, constraint_ref, Float64[])
 

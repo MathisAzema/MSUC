@@ -1,8 +1,5 @@
-# --- Sauvegarde et rechargement de la politique ------------------------------------------------
-
-# Composantes de x dont au moins un planning visite a besoin : intervalles choisis en formulation
-# intervalle, composantes non nulles de (u, v, w) en 3-bin. C'est tout ce dont l'evaluation d'une
-# coupe en l'un de ces plannings depend.
+# Components of x used by at least one visited schedule (chosen intervals, or nonzero (u, v, w)
+# entries for 3-bin): the only ones needed to evaluate a cut at those schedules.
 function used_components(model, schedules)
     if model.method == ExtendedFormulation
         return sort(unique(reduce(vcat, [s.selected for s in schedules])))
@@ -10,8 +7,7 @@ function used_components(model, schedules)
     return findall(l -> any(s.x[l] != 0 for s in schedules), eachindex(schedules[1].x))
 end
 
-# Planning x^k reconstruit a partir de ses composantes non nulles : il ne contient que des 0 et des
-# 1, et x = (u, v, w) se decoupe en u (N x (T+1)), v et w (N x T).
+# Rebuilds x^k = (u, v, w) from its nonzero components (all equal to 1).
 function rebuild_schedule(instance, selected, x_nonzero)
     N, T = instance.N, instance.TimeHorizon
     x = zeros(commitment_dimension(instance))
@@ -23,9 +19,8 @@ function rebuild_schedule(instance, selected, x_nonzero)
     return Schedule(u, v, w, selected, instance.intervals.unit[selected])
 end
 
-# Ecrit les plannings et les coupes d'etape restreintes aux composantes utiles. En 3-bin, `beta` (une
-# pente par unite en y) ne depend pas du planning et est gardee entiere. Les coupes de la racine ne
-# sont pas enregistrees : le MIP racine n'est jamais resolu a la simulation.
+# Writes the schedules and the stage cuts restricted to the used components. 3-bin `beta` does not
+# depend on the schedule and is kept whole. Root cuts are not saved: simulation never solves the root MIP.
 function write_policy(folder, model, schedules)
     interval = model.method == ExtendedFormulation
     used = used_components(model, schedules)
@@ -48,10 +43,8 @@ function write_policy(folder, model, schedules)
     return
 end
 
-# Matrice des coupes (une ligne par coupe) : binaire Float64 compresse en xz (niveau 9), sans perte.
-# Format : deux Int64 (lignes, colonnes) puis les valeurs en ordre colonne-majeur. Environ 4,6 fois
-# plus petit que le CSV equivalent (mesure sur un run SMS++ a 10 unites). L'executable `xz` vient de
-# `XZ_jll`, pas du systeme. Attention : `xz -9` demande ~700 Mo de memoire et ecrit lentement.
+# Cut matrix (one row per cut): Float64 binary, xz-compressed. Format: two Int64 (rows, columns),
+# then the values in column-major order. About 4.6x smaller than CSV. `xz -9` needs ~700 MB of memory.
 const CUTS_FILE = "cuts.bin.xz"
 
 function write_cuts(path, cuts::Matrix{Float64})
@@ -71,7 +64,7 @@ function read_cuts(path)
     end
 end
 
-# Lit les coupes d'un dossier : `cuts.bin.xz`, ou `cuts.csv` pour les anciens resultats.
+# Reads `cuts.bin.xz`, or `cuts.csv` for older results.
 function read_cuts_folder(folder)
     binary = joinpath(folder, CUTS_FILE)
     isfile(binary) && return read_cuts(binary)
@@ -80,8 +73,7 @@ function read_cuts_folder(folder)
     )
 end
 
-# Relit ce que `write_policy` a ecrit : les plannings, les composantes utiles, la matrice des coupes
-# et, pour chaque noeud, les lignes de ses coupes dans l'ordre de creation.
+# Reads back what `write_policy` wrote, plus for each node the rows of its cuts in creation order.
 function read_policy(folder, model)
     table = CSV.read(
         joinpath(folder, "schedules.csv"),
@@ -106,11 +98,11 @@ function expand(v, used, n)
     return full
 end
 
-# Coupe de taille complete a partir d'une ligne de `cuts.csv`, nulle hors des composantes utiles :
-# ses valeurs en tout planning de l'entrainement sont celles de la coupe d'origine.
+# Full-size cut from a saved row, zero outside the used components: it agrees with the original
+# cut at every training schedule.
 function new_cut(model, row, used)
     interval = model.method == ExtendedFormulation
-    trivial = model[2].cuts[1]    # la coupe triviale donne les tailles
+    trivial = model[2].cuts[1]    # gives the sizes
     nz, nu = length(trivial.delta), length(used)
     tau = expand(row[(3+nz):(2+nz+nu)], used, length(trivial.tau))
     beta_part = row[(3+nz+nu):end]
@@ -119,10 +111,9 @@ function new_cut(model, row, used)
     return Cut(row[2], tau, beta, row[3:(2+nz)], nothing)
 end
 
-# Ajoute aux etapes de dispatch les coupes creees jusqu'a l'iteration `j` (0 : aucune) : chaque passe
-# ajoute une coupe a chaque noeud d'etape, donc `passes` par iteration. `loaded[i]` est le nombre de
-# coupes deja chargees au noeud i, ce qui permet de charger par instants croissants sans rien
-# recharger. La coupe triviale (position 1 de chaque noeud) existe deja dans un modele neuf.
+# Adds to the stage nodes the cuts created up to iteration `j` (`passes` per iteration). `loaded[i]`
+# counts the cuts already loaded at node i, so successive calls only add the new ones. The trivial
+# cut (position 1) already exists in a fresh model.
 function load_cuts!(model, data, passes::Int, j::Int, loaded::Vector{Int})
     for i in 2:length(loaded)
         target = min(passes * j, length(data.node_rows[i]))

@@ -1,35 +1,15 @@
-# --- Etat par intervalle de la passe avant : point de linearisation ytilde^k (Sect. 4.2) --------------
-#
-# Les coupes intervalle linearisent le probleme local de chaque intervalle [a:b] en un point
-# ytilde^k_{j,a,b,t} : tout point atteignable donne une coupe valide, serree au point visite pour les
-# intervalles choisis. Pour les autres, ce point n'influe que sur la qualite de la coupe aux plannings ou
-# ils seraient choisis. Il est construit pendant la passe avant. Les intervalles choisis gardent la
-# production echantillonnee ; pour les autres, `train(...; interval_rule)` choisit la regle, parmi
-# `INTERVAL_RULES`, qui prend un point de l'ensemble des successeurs [lo, hi] de ytilde_{s-1} :
-#
-#   :dual        regle des prix (eq. (55)-(56)), la regle par defaut : chaque intervalle suit la trajectoire qui
-#                minimise son cout lineaire local, c'est-a-dire monte a fond (hi) si son signal de cout z est
-#                negatif et descend a fond (lo) sinon. Un intervalle indifferent (|z| <= SIGNAL_TOLERANCE,
-#                typiquement l'unite marginale, dont la production est fixee par l'equilibre offre-demande et non
-#                par son cout) prend la production echantillonnee de son unite, ramenee dans [lo, hi] ;
-#   :projection  la production echantillonnee de l'unite, projetee sur [lo, hi] ;
-#   :minimum     toujours le plus petit niveau atteignable, lo ;
-#   :maximum     toujours le plus grand niveau atteignable, hi.
-#
-# Seule la regle :dual lit les multiplicateurs du probleme d'etape (donc seule elle calcule les duaux).
-
-# Un signal de cout dont la valeur absolue est au plus SIGNAL_TOLERANCE est considere nul : les duaux ne sont
-# connus qu'a la tolerance d'optimalite du solveur (1e-6 pour Gurobi), donc son signe n'a pas de sens.
+# Cost signals with |z| <= SIGNAL_TOLERANCE are treated as zero: duals are only known up to the
+# solver's optimality tolerance (1e-6 for Gurobi), so their sign is meaningless.
 const SIGNAL_TOLERANCE = 1e-6
 
-# Les regles de construction de ytilde^k pour les intervalles non choisis (`train(...; interval_rule)`).
+# Rules to build ytilde^k for intervals not selected by the schedule (`train(...; interval_rule)`).
 const INTERVAL_RULES = (:dual, :projection, :minimum, :maximum)
 
 """
     initial_interval_state(instance) -> Vector{Float64}
 
-ytilde_{j,a,b,0} de l'eq. (17) pour tous les intervalles (identifiants de `IntervalIndex`) : la production
-initiale du groupe si l'intervalle couvre t = 0, zero sinon.
+ytilde_{j,a,b,0} (eq. (17)) for all intervals: the unit's initial output if the interval covers t = 0,
+zero otherwise.
 """
 function initial_interval_state(instance::Instance)
     idx = instance.intervals
@@ -42,29 +22,22 @@ end
 """
     forward_interval_state(model, node, previous, y, duals, rule = :dual) -> (state, signal)
 
-Etat par intervalle ytilde^k_{.,s} (`state`) a la sortie de l'etape `s = node.index - 1` de la passe avant, a
-partir de celui de l'etape precedente `previous`, de la production echantillonnee `y` (une par unite) et des
-multiplicateurs `duals` du probleme d'etape resolu (`nothing` si `rule != :dual`, qui n'en a pas besoin).
-`signal` est le signal de cout z^F_{j,a,b,s} de chaque intervalle actif a l'etape s (NaN pour les autres, et
-partout si `rule != :dual`), calcule aussi pour les intervalles choisis. Pour chaque intervalle [a:b] actif a
-l'etape s :
+Interval state ytilde^k_{.,s} at the exit of stage `s = node.index - 1`, from the previous one `previous`,
+the sampled output `y` (one per unit) and the stage duals `duals` (`nothing` unless `rule == :dual`).
+Also returns the cost signal z^F_{j,a,b,s} of each active interval (NaN otherwise, and everywhere unless
+`rule == :dual`). For an interval [a:b] active at stage s:
 
-  * choisi par le planning courant : la production echantillonnee, ytilde_s = y_{j,s} ;
-  * sinon, un point de l'ensemble des successeurs (50) de ytilde_{s-1}, de bornes
-    hi = min{Pbar_{a,b,s}, ytilde_{s-1} + R^U_{a,b,s}} et lo = max{P_j, ytilde_{s-1} - R^D}, donne par `rule`
-    (`INTERVAL_RULES`) :
-      - `:dual` : avec le signal de cout (55)
+  * selected by the schedule: the sampled output, ytilde_s = y_{j,s};
+  * otherwise, a point of the successor set (50) of ytilde_{s-1}, with
+    hi = min{Pbar_{a,b,s}, ytilde_{s-1} + R^U_{a,b,s}} and lo = max{P_j, ytilde_{s-1} - R^D}, given by `rule`:
+      - `:dual`: with z_{j,a,b,s} = c_{j,s} - nu_{n(j),s} + sum_l sigma_l betatilde^l_{j,a,b,s+1} (eq. (55)),
+        hi if z < -SIGNAL_TOLERANCE, lo if z > SIGNAL_TOLERANCE (eq. (56)), else (indifferent, typically
+        the marginal unit) the sampled output projected on [lo, hi];
+      - `:projection`: the sampled output projected on [lo, hi];
+      - `:minimum`: lo;
+      - `:maximum`: hi.
 
-            z_{j,a,b,s} = c_{j,s} - nu_{n(j),s} + sum_l sigma_l betatilde^l_{j,a,b,s+1}
-
-        hi si z < -SIGNAL_TOLERANCE (eq. (56)), lo si z > SIGNAL_TOLERANCE ; si |z| <= SIGNAL_TOLERANCE,
-        l'intervalle est indifferent : la production echantillonnee y_{j,s} de l'unite, projetee sur [lo, hi]
-        (le successeur le plus proche de ce que le dispatch demande) ;
-      - `:projection` : la production echantillonnee y_{j,s} de l'unite projetee sur [lo, hi] ;
-      - `:minimum` : lo ;
-      - `:maximum` : hi.
-
-Un intervalle inactif a l'etape s vaut 0 (Hypothese 1) et n'a pas de signal.
+An interval inactive at stage s is 0 and has no signal.
 """
 function forward_interval_state(
     model::PolicyGraph,
@@ -84,7 +57,7 @@ function forward_interval_state(
     s = node.index - 1
     horizon = instance.TimeHorizon
     selected = BitSet(model.schedule.selected)
-    σβ = rule == :dual ? _weighted_sum(node.cuts, duals.σ, :beta) : nothing   # sum_l sigma_l betatilde^l_{.,s+1}, par intervalle
+    σβ = rule == :dual ? _weighted_sum(node.cuts, duals.σ, :beta) : nothing
     state = zeros(length(previous))
     signal = fill(NaN, length(previous))
     for id in eachindex(state)

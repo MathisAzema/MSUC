@@ -1,5 +1,4 @@
-# Racine : le probleme d'engagement. La production et ζ sont recopiees a l'identique
-# pour transmettre l'etat initial a l'etape 1.
+# Root commitment problem. Power and ζ are copied through to pass the initial state to stage 1.
 function _root_problem!(subproblem, instance, power, ζ, basis)
     N, T = instance.N, instance.TimeHorizon
     units = instance.Thermalunits
@@ -13,7 +12,7 @@ function _root_problem!(subproblem, instance, power, ζ, basis)
 
     gamma = Dict{Tuple{Int,Int,Int},JuMP.VariableRef}()
     if basis === :intervals
-        # gamma_{j,a,b} >= 0, [a:b] in T_j, relies a x par (19c) composante par composante.
+        # gamma_{j,a,b} >= 0 linked to x by (19c).
         for i in 1:N, (a, b) in units[i].intervals
             gamma[i, a, b] = @variable(subproblem, lower_bound = 0.0, base_name = "gamma_$(i)_$(a)_$(b)")
         end

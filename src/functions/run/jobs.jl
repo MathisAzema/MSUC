@@ -1,11 +1,8 @@
-# --- Un run d'entrainement et la simulation de sa politique (voir `runSMS.jl`) -------------------
-
-# Rend au systeme la memoire du job qui vient de se terminer sur ce worker : un worker inactif ne
-# declenche jamais le ramasse-miettes, donc les modeles Gurobi d'un long run resteraient en memoire.
-# A appeler une fois le job revenu, pas dans le job.
+# Idle workers never trigger GC, so Gurobi models of a finished job would stay in memory.
+# Call after the job has returned, not inside it.
 function release_memory()
     GC.gc(true)
-    GC.gc(true)   # le second passage recupere ce que les finaliseurs ont libere
+    GC.gc(true)   # second pass reclaims what finalizers released
     Sys.islinux() && ccall(:malloc_trim, Cint, (Cint,), 0)
     return
 end
@@ -40,9 +37,9 @@ function save_run(folder, model, snapshots, schedules, states, passes, config)
         ),
     )
 
-    # Chaque iteration ajoute `passes` coupes a chaque noeud d'etape (sauf au dernier, sans valeur
-    # future) : c'est ce qui permet de savoir quelles coupes existaient a chaque iteration.
-    # Une iteration arretee par la limite de temps apres son MIP n'a pas fait de passe (`one_iteration`).
+    # Sanity check: each iteration adds `passes` cuts per stage node (none at the last node), which is
+    # how the cuts available at each iteration are recovered. An iteration stopped by the time limit
+    # right after its MIP did no pass (`one_iteration`).
     skipped = get(model.ext, :passes_skipped, false)
     nodes = length(model.nodes)
     for i in 2:nodes
@@ -51,7 +48,6 @@ function save_run(folder, model, snapshots, schedules, states, passes, config)
             error("noeud $i : $(length(model[i].cuts) - 1) coupes, $expected attendues")
     end
 
-    # Une trajectoire par passe : `passes` par iteration.
     all(length(s) == (skipped && k == length(states) ? 0 : passes) for (k, s) in enumerate(states)) &&
         length(states) == length(log) ||
         error("etats echantillonnes : $passes trajectoires par iteration attendues")
@@ -70,8 +66,7 @@ function save_run(folder, model, snapshots, schedules, states, passes, config)
     return
 end
 
-# Entraine un modele (`train` est appele tel quel, avec un releve apres chaque iteration), puis
-# ecrit dans `results_folder(...)` la borne, les temps par phase, les plannings et les coupes.
+# Trains a model and writes bounds, phase timings, schedules and cuts to `results_folder(...)`.
 function train_job(instance_name, method, time_max, settings)
     folder = results_folder(instance_name, method, time_max, settings)
     mkpath(folder)
@@ -106,13 +101,12 @@ function train_job(instance_name, method, time_max, settings)
     return
 end
 
-# Simule la politique de l'iteration `k` (planning x^k, coupes d'etape jusqu'a l'iteration k-1, chargees dans
-# `model` a partir de `loaded`) sur `N` trajectoires, ecrit le cout de dispatch de chacune dans
-# `simulation_<label>_<N>.csv` et renvoie les colonnes de resume communes aux deux entrees (`simulate_job` et
-# `simulate_iterations_job`). Il faut l'appeler avec des `k` croissants : les coupes ne sont jamais retirees.
+# Simulates the policy of iteration `k` (schedule x^k, stage cuts up to iteration k-1) on `N` paths
+# and writes the per-path dispatch cost to `simulation_<label>_<N>.csv`. Must be called with
+# increasing `k`: cuts are never removed from `model`.
 function simulate_iteration!(model, data, folder, log, k, label, N, settings, loaded)
     load_cuts!(model, data, settings.passes_per_mip, k - 1, loaded)
-    schedule = data.schedules[k]              # le planning x^k de l'iteration k
+    schedule = data.schedules[k]
     seconds = @elapsed sim = simulate(model; schedule, samples = N, seed = SEED)
     CSV.write(
         joinpath(folder, "simulation_$(label)_$(N).csv"),
@@ -133,10 +127,8 @@ function simulate_iteration!(model, data, folder, log, k, label, N, settings, lo
     )
 end
 
-# Rejoue, par instants croissants, la politique de l'entrainement `folder` : a un instant donne, la
-# politique de la derniere iteration k terminee (`time` <= instant), c'est-a-dire le planning x^k et les
-# coupes d'etape jusqu'a l'iteration k-1, simulee sur `N` trajectoires d'alea. Un instant anterieur a la
-# fin de la premiere iteration n'a pas de politique et est ignore. Le modele est construit une seule fois.
+# Replays the policy of the training run in `folder` at each time in `time_list`: the policy of the
+# last iteration finished by then. Times before the first iteration ends are skipped.
 function simulate_job(folder, instance_name, method, time_list, N, settings)
     log = CSV.read(joinpath(folder, "log.csv"), DataFrame)
 
@@ -146,7 +138,7 @@ function simulate_job(folder, instance_name, method, time_list, N, settings)
     loaded = zeros(Int, length(model.nodes))
     rows = NamedTuple[]
     for time_limit in sort(time_list)
-        k = count(<=(time_limit), log.time)    # iterations terminees a cet instant
+        k = count(<=(time_limit), log.time)
         if k == 0
             @warn "aucune iteration terminee a $(time_limit) s : instant ignore" folder
             continue
@@ -158,12 +150,8 @@ function simulate_job(folder, instance_name, method, time_list, N, settings)
     return
 end
 
-# Comme `simulate_job`, mais on donne les iterations a simuler au lieu des instants : la politique de
-# l'iteration k est le planning x^k et les coupes d'etape jusqu'a l'iteration k-1. Une iteration absente de
-# l'entrainement (k < 1 ou k plus grand que le nombre d'iterations) est ignoree avec un avertissement.
-# Ecrit `simulation_it<k>_<N>.csv` (cout de dispatch de chaque trajectoire) et `simulation_iterations_<N>.csv`
-# (un resume par iteration, avec le temps `time` de fin de l'iteration), sans toucher aux fichiers de
-# `simulate_job`.
+# Like `simulate_job`, but for given iterations instead of times. Iterations missing from the
+# training run are skipped with a warning.
 function simulate_iterations_job(folder, instance_name, method, iteration_list, N, settings)
     log = CSV.read(joinpath(folder, "log.csv"), DataFrame)
 

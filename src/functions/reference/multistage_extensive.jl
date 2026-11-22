@@ -1,25 +1,14 @@
-# =============================================================================
-#  Equivalent deterministe de l'arbre de scenarios : l'optimum EXACT du probleme
-#  multi-etapes (1), non-anticipativite (1j) incluse.
-#
-#  Sert de reference aux bornes SDDP dans le regime stochastique. L'arbre a
-#  sum_{t=0}^{T} S^t noeuds, donc n'est tractable que pour S et T petits : avec
-#  S = 2 et T = 4, 31 noeuds.
-#
-#  Avec une instance construite en S = 1 (`parse_nc4(...; S = 1)`), l'aleas est
-#  deterministe : l'arbre se reduit a un chemin et c'est l'optimum exact du
-#  probleme deterministe.
-# =============================================================================
+# Deterministic equivalent of the scenario tree: the exact optimum of the multistage problem (1),
+# with nonanticipativity (1j). Used as a reference for the SDDP bounds. The tree has
+# sum_{t=0}^T S^t nodes, so it is tractable only for small S and T; with an instance built with
+# S = 1 it reduces to a path (the deterministic problem).
 
 """
     scenario_tree(instance, T) -> (parent, innovation, probability, eta)
 
-Arbre de scenarios de l'ARMA de l'instance, indexe par `(t, k)` avec `k in 1:S^t`.
-
-Renvoie, pour chaque etage `t in 0:T`, le noeud parent, l'indice d'innovation, la
-probabilite du noeud, et l'erreur relative `eta` de chaque noeud (vecteur de longueur
-|N|). `eta` est deterministe le long d'un chemin : la recursion (1g) est donc evaluee
-numeriquement, sans variable `zeta` dans le programme.
+ARMA scenario tree, indexed by `(t, k)` with `k in 1:S^t`. For each stage `t in 0:T` it returns the
+parent node, the innovation index, the node probability and the relative error `eta` of each bus.
+Since `eta` is deterministic along a path, recursion (1g) is evaluated numerically (no `zeta` variable).
 """
 function scenario_tree(instance::Instance, T::Int)
     a = instance.arma
@@ -36,8 +25,8 @@ function scenario_tree(instance::Instance, T::Int)
     eta[1][1] = a.S_eta * a.zeta0
     for t in 1:T
         for k in 1:S^t
-            p = div(k - 1, S) + 1            # parent a l'etage t-1
-            s = mod(k - 1, S) + 1            # innovation tiree
+            p = div(k - 1, S) + 1
+            s = mod(k - 1, S) + 1
             parent[t+1][k] = p
             innovation[t+1][k] = s
             probability[t+1][k] = probability[t][p] * a.probability[s]
@@ -48,7 +37,6 @@ function scenario_tree(instance::Instance, T::Int)
     return parent, innovation, probability, eta
 end
 
-# Contraintes du premier etage (engagement) du modele 3-bin : u, v, w et leur cout fixe.
 function thermal_unit_commit_constraints(model, instance)
     is_on = model[:is_on]
     start_up = model[:start_up]
@@ -61,19 +49,13 @@ end
 """
     multistage_extensive(instance; force, silent, gap, timelimit, res_gamma)
 
-Resout l'equivalent deterministe de l'arbre de scenarios : l'optimum EXACT du probleme
-multi-etapes (1). Les deux bornes SDDP doivent converger vers cette valeur.
+Solve the scenario-tree deterministic equivalent (exact optimum of problem (1)). The commitment is
+shared by the whole tree and dispatch is indexed by tree node, which encodes (1j). The shutdown
+feasibility lines (44)/(46) are omitted: over the full horizon the ramps imply them, so the
+reference is independent of them.
 
-L'engagement `x` est commun a tout l'arbre (decide en t = 0), le dispatch est indexe par
-noeud de l'arbre, ce qui encode exactement la non-anticipativite (1j).
-
-Les lignes de faisabilite d'arret (44) ne sont PAS imposees : sur l'horizon complet elles
-sont impliquees par les rampes, elles ne servent qu'a la decomposition par etage. Leur
-absence rend cette reference independante de (44) et (46).
-
-Renvoie `(valeur, borne, temps, planning, gamma_par_unite)` ou `nothing` si echec.
-`res_gamma` permet de figer l'engagement a un planning donne, pour evaluer un planning
-issu du SDDP.
+Returns `(value, bound, time, schedule)`, or `nothing` on failure. `res_gamma` fixes the
+commitment to a given schedule, e.g. to evaluate one produced by SDDP.
 """
 function multistage_extensive(
     instance::Instance;
@@ -97,7 +79,6 @@ function multistage_extensive(
     model = Model(instance.optimizer)
     silent && set_silent(model)
 
-    # Engagement : premier etage, commun a tout l'arbre.
     @variable(model, is_on[j in names, t in 0:T], Bin)
     @variable(model, start_up[j in names, t in 1:T], Bin)
     @variable(model, start_down[j in names, t in 1:T], Bin)
@@ -112,7 +93,6 @@ function multistage_extensive(
             sum(res_gamma[u.name, a, b] for (a, b) in u.intervals if b == t) == start_down[u.name, t])
     end
 
-    # Dispatch : un jeu de variables par noeud de l'arbre (non-anticipativite 1j).
     power = Dict((j, t, k) => @variable(model, lower_bound = 0.0)
                  for j in names for t in 0:T for k in nodes_at(t))
     shed = Dict((b, t, k) => @variable(model, lower_bound = 0.0)
@@ -128,18 +108,15 @@ function multistage_extensive(
     end
     for t in 1:T, k in nodes_at(t)
         kp = parent_of(t, k)
-        # (43a)-(43c) capacite et rampes
         for u in units
             j = u.name
             add_unit_dynamics!(model, u, power[(j, t, k)], power[(j, t - 1, kp)],
                                is_on[j, t], is_on[j, t-1], start_up[j, t], start_down[j, t])
         end
-        # (1e)-(1f) reseau
         for line in Lines
             add_line_constraints!(model, line, flow[(line.b1, line.b2, t, k)],
                                   θ[(line.b1, t, k)], θ[(line.b2, t, k)])
         end
-        # (1h) bilan, avec l'erreur ARMA du noeud
         for b in Buses
             @constraint(model,
                 sum(power[(u.name, t, k)] for u in units if u.Bus == b) - curt[(b, t, k)] +

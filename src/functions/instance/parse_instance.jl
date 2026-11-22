@@ -1,8 +1,8 @@
 """
     parse_nc4(name_instance, optimizer, T = 24; sigma, S, discretization)
 
-Instance SMS++ de la T-Ramp (`.nc4`) : un seul noeud, sans reseau, demande nette nominale lue dans
-le fichier. L'incertitude est le processus ARMA de l'erreur relative (`ARMAProcess`).
+Load a T-Ramp SMS++ instance (`.nc4`): a single bus, no network, nominal net demand read from the
+file. Uncertainty is the relative-error ARMA process (`ARMAProcess`).
 """
 function parse_nc4(name_instance, optimizer, T=24; sigma::Float64=1.0, S::Int=ARMA_SUPPORT_SIZE, discretization::Symbol=ARMA_DISCRETIZATION)
     data=Dataset(name_instance)
@@ -45,18 +45,14 @@ end
 """
     parse_IEEE(folder, optimizer, T = 24; sigma, S, discretization)
 
-Instance IEEE 118 noeuds (`Data/IEEE/<folder>`, par exemple `"118_syst"`) : 54 groupes, reseau en
-flux DC (chaque ligne dans les deux sens), horizon de `T <= 24` heures.
+Load the IEEE 118-bus instance from `Data/IEEE/<folder>` (e.g. `"118_syst"`): 54 units, DC power
+flow, horizon `T <= 24` hours.
 
-`lines.csv` donne une ligne par corridor (179) : les 7 corridors a double circuit du cas standard (186 circuits)
-y sont agreges en une ligne equivalente, car les lignes sont rangees par couple de noeuds `(b1, b2)` et deux
-circuits sur le meme couple s'ecraseraient.
+`lines.csv` has one row per corridor (179): the 7 double-circuit corridors are aggregated into one
+equivalent line, since lines are keyed by bus pair `(b1, b2)`.
 
-Demande nette nominale du noeud b a l'heure t : charge maximale du noeud × profil horaire (l'eolien
-n'est pas modelise). L'incertitude est un unique processus ARMA de l'erreur RELATIVE, commun a tous
-les noeuds : le ratio prevision/realise est le meme partout, c'est-a-dire une charge nette de reseau
-repartie sur les noeuds au prorata des charges, comme dans l'etude IEEE 118 de Zou, Ahmed & Sun
-(2018). L'etat d'incertitude `zeta` est donc de dimension 2 (ARMA(1,1)), et non 2 × 118.
+Nominal net demand at bus b, hour t is the bus maximum load times the hourly profile. A single ARMA
+error process is shared by all buses (as in Zou, Ahmed & Sun, 2018), so `zeta` has dimension 2.
 """
 function parse_IEEE(
     folder,

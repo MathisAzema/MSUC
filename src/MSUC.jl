@@ -23,11 +23,10 @@ using DataFrames
 
 export @stageobjective
 
-#UC 
 const SHEDDING_COST=700.0
 const CURTAILEMENT_COST=700.0
 
-# Structures : une par fichier de `functions/` qui en a besoin, dans l'ordre des dependances.
+# Struct definitions, in dependency order.
 include("struct_functions/instance/arma_process.jl")
 include("struct_functions/instance/instance.jl")
 include("struct_functions/model/schedule.jl")
@@ -42,7 +41,7 @@ include("struct_functions/algorithm/one_iteration.jl")
 include("struct_functions/algorithm/backward_pass.jl")
 include("struct_functions/tools/print_log.jl")
 
-# Fonctions. Les macros (`@stageobjective`) sont definies avant leur premier usage.
+# Functions. Macros (`@stageobjective`) must be defined before first use.
 include("functions/instance/arma_process.jl")
 include("functions/instance/parse_instance.jl")
 include("functions/instance/thermal_unit.jl")

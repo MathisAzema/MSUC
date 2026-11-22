@@ -6,19 +6,14 @@
 """
     forward_pass(model, options)
 
-Passe avant (algorithme 2, lignes 6-11) : tire une trajectoire d'aleas et resout chaque etape de
-dispatch, en partant de l'etat initial. Suppose la racine resolue et le planning x^k fixe
-(`one_iteration`). Renvoie les etats sortants le long de la trajectoire, racine comprise, qui
-sont (y, zeta) a la sortie du noeud k.
+Forward pass (Algorithm 2, lines 6-11): sample a noise trajectory and solve each dispatch stage from the
+initial state. Assumes the root is solved and the schedule x^k is fixed (see `one_iteration`). Returns
+the outgoing states `(y, zeta)` along the trajectory, root included.
 
-En formulation intervalle, la passe avant lit aussi les multiplicateurs de chaque probleme d'etape et
-construit l'etat par intervalle ytilde^k (`forward_interval_state`, regle `interval_rule` de `train`, regle des
-prix de la Sect. 4.2 par defaut) : `sampled_states_interval[k]` est le vecteur des ytilde^k_{a,b} de tous les
-intervalles a la sortie du noeud k, dans l'ordre de `instance.intervals`. La passe arriere linearise les coupes en
-ces points. Pour les diagnostics, `sampled_signals_interval[k]` donne les signaux de cout z^F de la meme etape (NaN
-pour un intervalle inactif, et partout si la regle n'est pas `:dual`, qui seule lit les duaux) ; ces deux champs
-valent NaN a la racine.
-En formulation 3-bin, il n'y a pas d'etat par intervalle : `nothing`.
+With the interval formulation it also builds the interval states ytilde^k (`forward_interval_state`, rule
+`interval_rule` of `train`): `sampled_states_interval[k]` holds ytilde^k for all intervals at the exit of
+node k, in the order of `instance.intervals`, and `sampled_signals_interval[k]` the cost signals z^F (for
+diagnostics). Both are `nothing` with the 3-bin formulation.
 """
 function forward_pass(model::PolicyGraph, options::Options)
     TimerOutputs.@timeit model.timer_output "sample_scenario" begin
@@ -33,7 +28,7 @@ function forward_pass(model::PolicyGraph, options::Options)
     sampled_states_interval = interval ? [interval_state] : nothing
     sampled_signals_interval = interval ? [fill(NaN, length(interval_state))] : nothing
 
-    for node_index in 2:length(noises)    # le noeud 1 est la racine
+    for node_index in 2:length(noises)
         TimerOutputs.@timeit model.timer_output "solve_subproblem" begin
             subproblem_results = solve_subproblem(
                 model,

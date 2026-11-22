@@ -24,35 +24,25 @@ end
 """
     train(model; iteration_limit, time_limit, mip_gap, ...)
 
-Entraine la politique (algorithme 2). Il faut au moins un critere d'arret : `iteration_limit`
-(nombre d'iterations) et/ou `time_limit` (temps total, en secondes). Avec `time_limit`, le MIP racine est limite au
-temps restant (`time_limit` moins le temps ecoule, sauf a la premiere iteration) : une resolution longue ne fait pas
-deborder l'entrainement. Si la limite l'arrete, sa borne duale reste valide et le planning est le meilleur trouve (le
-planning precedent si aucun), et l'iteration s'arrete alors sans passe avant/arriere (sa borne et son planning suffisent :
-les coupes qu'elle creerait ne serviraient a aucune politique evaluee a temps). La premiere iteration va toujours au bout.
+Train the policy (Algorithm 2). At least one stopping criterion is required: `iteration_limit` and/or
+`time_limit` (total seconds). With `time_limit`, the root MIP is capped to the remaining time (except at
+the first iteration); its dual bound stays valid and the schedule is the best found (the previous one if
+none). An iteration that runs out of time skips its forward/backward passes; the first iteration never does.
 
-`passes_per_mip` (1 par defaut) est le nombre de passes avant/arriere faites, planning fixe, entre deux
-resolutions du MIP racine : avec 1, c'est l'algorithme usuel ; avec 10, on affine les coupes par 10 passes
-(des LP) avant de re-resoudre le MIP. Une « iteration » (`iteration_limit`, une ligne du journal) est un cycle
-complet : une resolution du MIP racine suivie de `passes_per_mip` passes.
+`passes_per_mip` (default 1): forward/backward passes (LPs) done with a fixed schedule between two root MIP
+solves. An "iteration" (`iteration_limit`, one log line) is one MIP solve followed by `passes_per_mip` passes.
 
-`mip_gap` fixe l'ecart d'optimalite relatif du MIP racine (par exemple `1e-2`) ; par defaut, celui du
-solveur. Un ecart plus large accelere nettement l'entrainement (le MIP racine en est le poste
-dominant) sans invalider la borne inferieure, qui reste la borne duale du MIP.
+`mip_gap`: relative optimality gap of the root MIP (default: the solver's). A larger gap speeds up
+training noticeably; the lower bound stays valid since it is the MIP dual bound.
 
-`interval_rule` (`:dual` par defaut ; formulation intervalle seulement, sans effet en 3-bin) choisit comment la passe
-avant construit le point de linearisation ytilde^k des intervalles non choisis (Sect. 4.2, voir `INTERVAL_RULES` et
-`forward_interval_state`) : `:dual`, la regle des prix (signe du signal de cout z^F) ; `:projection`, la production
-echantillonnee de l'unite projetee sur les successeurs de ytilde_{s-1} ; `:minimum` ou `:maximum`, toujours le plus
-petit ou le plus grand successeur. Tout point atteignable donne une coupe valide : la regle ne change que la force des
-coupes, donc la vitesse de convergence, pas la validite de la borne. Seule `:dual` lit les duaux des etapes.
+`interval_rule` (default `:dual`; interval formulation only): how the forward pass builds the
+linearization point ytilde^k of non-selected intervals (see `INTERVAL_RULES`, `forward_interval_state`).
+Every reachable point gives a valid cut, so the rule only affects cut strength, not bound validity.
+Only `:dual` reads the stage duals.
 
-`reuse_incumbent` (faux par defaut : le MIP racine est toujours resolu ; `true` pour l'eviter quand c'est inutile). A chaque iteration,
-le planning precedent est evalue avec la nouvelle approximation de la valeur future (cout d'engagement plus
-maximum des coupes de la racine, nouvelle coupe comprise). S'il est a moins de l'ecart d'optimalite du MIP
-(`mip_gap`, ou celui du solveur) de la meilleure borne inferieure, il est deja optimal pour le nouveau MIP
-a cet ecart pres : on le garde, sans resoudre. La borne publiee reste alors celle de l'iteration precedente
-et l'iteration est marquee `MIP evite` dans le journal (`Log.first_stage_solved`).
+`reuse_incumbent` (default `false`): skip the root MIP when the previous schedule, evaluated with the new
+approximation, is within the MIP gap of the best lower bound. The published bound is then unchanged and the
+iteration is flagged in the log (`Log.first_stage_solved`).
 """
 function train(
     model::PolicyGraph;

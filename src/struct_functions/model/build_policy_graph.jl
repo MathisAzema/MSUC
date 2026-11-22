@@ -22,8 +22,8 @@ mutable struct Node
     noise_terms::Vector{Noise}
     parameterize::Function
     states::Dict{Symbol,State{JuMP.VariableRef}}
-    power::Vector{State{JuMP.VariableRef}}      # production y_j, une par unite
-    zeta::Vector{State{JuMP.VariableRef}}       # etat d'incertitude zeta
+    power::Vector{State{JuMP.VariableRef}}
+    zeta::Vector{State{JuMP.VariableRef}}
     stage_objective::Any
     stage_objective_set::Bool
     bellman_function::Any
@@ -31,7 +31,7 @@ mutable struct Node
     incoming_state_bounds::Dict{Symbol,Tuple{Float64,Float64,Bool}}
     cuts::Vector{AbstractCut}
     demand_constraint::Vector{JuMP.ConstraintRef}
-    planning::Any   # racine : RootVariables ; etape : StageParameters (cf. UC/schedule.jl)
+    planning::Any   # RootVariables at the root, StageParameters at stage nodes
     computation_time::Vector{Float64}
 end
 
@@ -48,7 +48,7 @@ mutable struct PolicyGraph
     instance::Instance
     method::Method
     force::Float64
-    schedule::Union{Nothing,Schedule}   # planning x^k courant, fixe pendant l'iteration
+    schedule::Union{Nothing,Schedule}   # current x^k, fixed during the iteration
 
     function PolicyGraph(instance::Instance, method::Method, force::Float64)
         return new(

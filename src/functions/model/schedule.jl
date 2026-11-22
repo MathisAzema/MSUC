@@ -3,7 +3,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Position de u_{i,t}, v_{i,t}, w_{i,t} dans le vecteur plat x de `Schedule`.
+# Positions of u_{i,t}, v_{i,t}, w_{i,t} in the flat vector x of `Schedule`.
 commitment_dimension(instance::Instance) = instance.N * (3 * instance.TimeHorizon + 1)
 
 u_index(instance::Instance, i, t) = i + instance.N * t
@@ -17,11 +17,6 @@ function w_index(instance::Instance, i, t)
     return N * (T + 1) + N * T + i + N * (t - 1)
 end
 
-"""
-    commitment_variables(root, instance)
-
-Variables du planning de la racine, dans l'ordre du vecteur plat `Schedule.x`.
-"""
 function commitment_variables(root::RootVariables, instance::Instance)
     N, T = instance.N, instance.TimeHorizon
     return vcat(
@@ -31,13 +26,8 @@ function commitment_variables(root::RootVariables, instance::Instance)
     )
 end
 
-"""
-    shutdown_cap(unit, schedule, i, t)
-
-Enveloppe d'arret (46) de l'unite `i` a l'etape `t` : si l'unite s'arrete en b <= T, sa
-production doit pouvoir redescendre jusqu'a MinPower, d'ou min{Pmax, Pmin + R^D (b-1-t)}.
-Sans arret a venir, ou unite eteinte, la borne de capacite suffit : Pmax.
-"""
+# Shutdown envelope (46) of unit `i` at stage `t`: if it shuts down at b <= T, its output must be
+# able to ramp down to MinPower, i.e. min{Pmax, Pmin + R^D (b-1-t)}; otherwise Pmax.
 function shutdown_cap(unit::ThermalUnit, schedule::Schedule, i::Int, t::Int)
     schedule.u[i, t+1] > 0.5 || return unit.MaxPower
     for b in (t+1):size(schedule.w, 2)
@@ -48,11 +38,6 @@ function shutdown_cap(unit::ThermalUnit, schedule::Schedule, i::Int, t::Int)
     return unit.MaxPower
 end
 
-"""
-    set_stage_parameters!(params, instance, schedule, t)
-
-Fixe les parametres du sous-probleme de l'etape `t` au planning `schedule`.
-"""
 function set_stage_parameters!(
     params::StageParameters,
     instance::Instance,
@@ -74,12 +59,8 @@ function set_stage_parameters!(
     return
 end
 
-"""
-    extract_schedule(model)
-
-Planning x^k lu dans la solution courante de la racine, arrondi a {0, 1} : les tolerances
-entieres du solveur (1e-5) ne doivent pas se propager aux etapes de dispatch.
-"""
+# Schedule x^k read from the current root solution, rounded to {0, 1} so that the solver's
+# integrality tolerance (1e-5) does not propagate to the dispatch stages.
 function extract_schedule(model::PolicyGraph)
     instance = model.instance
     N, T = instance.N, instance.TimeHorizon
@@ -92,12 +73,8 @@ function extract_schedule(model::PolicyGraph)
     return Schedule(u, v, w, selected, [k[1] for k in keys])
 end
 
-"""
-    set_schedule!(model, schedule)
-
-Fixe le planning courant : parametres des etapes de dispatch, puis second membre et pentes
-de chaque coupe stockee (qui dependent du planning).
-"""
+# Fix the schedule in the dispatch stages, then update the right-hand side and slopes of every
+# stored cut (they depend on the schedule).
 function set_schedule!(model::PolicyGraph, schedule::Schedule)
     model.schedule = schedule
     N = model.instance.N
@@ -110,12 +87,6 @@ function set_schedule!(model::PolicyGraph, schedule::Schedule)
     return
 end
 
-"""
-    schedule_commitment_cost(instance, schedule)
-
-Cout d'engagement (objectif du probleme racine) d'un planning : cout a vide, de demarrage et d'arret
-sur tout l'horizon. `schedule.u` est indexe de t = 0 a T, `v` et `w` de t = 1 a T.
-"""
 function schedule_commitment_cost(instance::Instance, schedule::Schedule)
     return sum(
         unit.ConstTerm * schedule.u[unit.name, t+1] +

@@ -1,27 +1,11 @@
-# =============================================================================
-#  Sous-problemes d'etape des deux formulations.
-#
-#  Noeud 1 (racine)  : le probleme d'engagement, (7) en 3-bin et (19) en intervalle.
-#                      C'est le seul noeud non convexe.
-#  Noeuds t+1 >= 2   : le probleme de dispatch de l'etape t.
-#
-#  Les ETATS portes d'un noeud a l'autre sont seulement
-#    y_{j,t}   production physique de l'unite j        (`power`)
-#    zeta_t    etat d'incertitude de la recursion ARMA   (`ζ`)
-#  Le planning x = (u, v, w) est decide a la racine puis fixe : c'est un PARAMETRE des
-#  etapes de dispatch (cf. schedule.jl), pas un etat. Les deux formulations partagent
-#  tout le sous-probleme d'etape, sauf la faisabilite d'arret :
-#    3-bin      lignes (44), une par decalage h, ecrites sur les parametres w_{t+h} :
-#               leurs duaux portent les coefficients de la coupe sur x ;
-#    intervalle une ligne (46), power <= cap, ou `cap` est l'enveloppe d'arret de
-#               l'intervalle actif : aucun dual sur x, le support local en forme close
-#               (Thermal_unit.jl) tient lieu de coefficient.
-#  Chaque builder renseigne directement les champs du noeud (`power`, `zeta`,
-#  `demand_constraint`, `planning`).
-# =============================================================================
+# Stage subproblems of both formulations. Node 1 is the (only nonconvex) root commitment problem,
+# nodes t+1 >= 2 are the dispatch problem of stage t. States are the power y and the uncertainty
+# state zeta; the schedule x = (u, v, w) is a fixed parameter of the dispatch stages (see
+# schedule.jl). The formulations differ only in the shutdown feasibility rows: 3-bin uses lines
+# (44), one per lag h, on parameters w_{t+h}; the interval formulation uses the single line (46),
+# `power <= cap`, with no dual on x (the closed-form local support in thermal_unit.jl replaces it).
 
-# Etats : production et etat d'incertitude. Declares a TOUS les noeuds, racine comprise,
-# pour que l'espace d'etat soit le meme partout.
+# States are declared at every node, root included, so the state space is the same everywhere.
 function _declare_states!(subproblem, instance)
     N = instance.N
     units = instance.Thermalunits
@@ -39,8 +23,8 @@ function _declare_states!(subproblem, instance)
     return node.power, node.zeta
 end
 
-# `basis` : base du planning dans les etapes de dispatch (`:bins` ou `:intervals`, donc les coupes). `root_basis`
-# (par defaut `basis`) : celle du probleme racine, qui avec `:intervals` porte en plus les variables gamma.
+# `basis` (`:bins` or `:intervals`) is the schedule basis in the dispatch stages, hence the cut type.
+# `root_basis` (default `basis`) is the root problem's; with `:intervals` it adds the gamma variables.
 function _stage_builder!(instance, subproblem, node_index, force, basis; root_basis = basis)
     power, ζ = _declare_states!(subproblem, instance)
     node = get_node(subproblem)
@@ -57,9 +41,7 @@ end
 """
     subproblem_builder_UC_def(instance, force, subproblem, node)
 
-Sous-probleme de la formulation 3-bin de reference (Sect. 2). La faisabilite d'arret est
-imposee par les lignes (44), une par decalage h : le planning 3-bin ne porte pas l'instant
-d'arret, il faut donc enumerer les decalages.
+Subproblem of the reference 3-bin formulation (Sect. 2).
 """
 function subproblem_builder_UC_def(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     return _stage_builder!(instance, subproblem, node, force, :bins)
@@ -68,12 +50,10 @@ end
 """
     subproblem_builder_UC_def_gamma(instance, force, subproblem, node)
 
-Formulation 3-bin (Sect. 2) dont le probleme racine porte en plus les variables gamma_{j,a,b} reliees au planning
-par (19c), comme en formulation intervalle : les etapes de dispatch et les coupes (12) sont celles de la 3-bin,
-a utiliser avec `SDDPFormulation`. Les gamma ne resserrent pas la relaxation du MIP racine dans l'espace de x
-(mesure : memes valeurs LP et MIP avec les memes coupes), car les inegalites de duree minimale de la 3-bin
-decrivent deja l'enveloppe convexe des plannings : cette variante ne change que la taille du modele.
-`extract_schedule` en lit les intervalles choisis (`Schedule.selected`), que les coupes 3-bin n'utilisent pas.
+3-bin formulation whose root problem also carries the gamma_{j,a,b} variables linked by (19c).
+Dispatch stages and cuts (12) are the 3-bin ones; use with `SDDPFormulation`. The gammas do not
+tighten the root relaxation in x-space (same LP and MIP values with the same cuts), so this only
+changes the model size.
 """
 function subproblem_builder_UC_def_gamma(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     return _stage_builder!(instance, subproblem, node, force, :bins; root_basis = :intervals)
@@ -82,10 +62,8 @@ end
 """
     subproblem_builder_UC_extended(instance, force, subproblem, node)
 
-Sous-probleme de la formulation intervalle (Sect. 3). A la racine, les variables
-gamma_{j,a,b} (Def. 1) sont reliees au planning par (19c). Aux etapes de dispatch, la
-faisabilite d'arret est la ligne (46) : l'instant d'arret est explicite, aucun decalage a
-enumerer, et le sous-probleme n'a plus aucune variable gamma.
+Subproblem of the interval formulation (Sect. 3): gamma variables (Def. 1) at the root, shutdown
+line (46) in the dispatch stages.
 """
 function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     return _stage_builder!(instance, subproblem, node, force, :intervals)

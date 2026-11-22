@@ -6,10 +6,8 @@
 """
     StageDuals
 
-Multiplicateurs d'un sous-probleme d'etape, dans les notations du papier :
-`σ` duaux des lignes d'epigraphe, `ν` du bilan par noeud, `β` et `δ` des etats entrants y et
-zeta, `τ` des parametres du planning. En formulation intervalle, `β` et `τ` sont vides (3-bin
-seulement) : les pentes en y et en x y sont calculees en forme close.
+Duals of a stage subproblem: `σ` epigraph rows, `ν` demand balance, `β`/`δ` incoming states
+y/zeta, `τ` schedule parameters. `β` and `τ` are empty in the interval formulation.
 """
 struct StageDuals
     σ::Vector{Float64}

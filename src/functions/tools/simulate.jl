@@ -6,18 +6,15 @@
 """
     simulate(model; schedule = nothing, samples = 1000, max_paths = 4096, seed = 1234)
 
-Simule la politique apres `train` : resout le probleme racine avec les coupes finales, fixe le
-planning x^k obtenu (`set_schedule!`), puis resout les etapes de dispatch le long de trajectoires
-d'alea. Avec `schedule`, le probleme racine n'est pas resolu : on simule la politique de ce planning
-(par exemple celui que l'algorithme avait choisi a une iteration donnee). Quand le nombre de
-trajectoires `S^T` ne depasse pas `max_paths`, elles sont toutes enumerees et le cout espere est
-EXACT ; sinon on tire `samples` trajectoires avec la graine `seed`.
+Simulates the policy after `train`: solves the root problem with the final cuts, fixes the
+resulting schedule x^k, then solves the dispatch stages along noise paths. With `schedule`, the root
+problem is not solved and the policy of that schedule is simulated instead. If the number of paths
+`S^T` is at most `max_paths`, all are enumerated and the expected cost is exact; otherwise `samples`
+paths are drawn with `seed`.
 
-Renvoie `(cost, commitment_cost, dispatch_cost, exhaustive, npaths, costs, weights, stderr, ci95)`.
-`cost` est le cout espere de la politique, donc un majorant de l'optimum (valeur exacte si
-`exhaustive`). `stderr` est l'erreur standard de `cost` et `ci95 = (bas, haut)` son intervalle de
-confiance a 95 % (approximation normale, `cost ± 1.96 stderr`) ; tous deux sont nuls si `exhaustive`,
-puisque le cout espere est alors exact.
+Returns `(cost, commitment_cost, dispatch_cost, exhaustive, npaths, costs, weights, stderr, ci95)`.
+`cost` is the expected policy cost (an upper bound on the optimum); `stderr` and
+`ci95 = cost ± 1.96 stderr` are zero when `exhaustive`.
 """
 function simulate(
     model::PolicyGraph;
@@ -29,7 +26,7 @@ function simulate(
     T = model.instance.TimeHorizon
     S = length(model[2].noise_terms)
 
-    # Probleme racine : planning de la politique et son cout d'engagement.
+    # Root problem: the policy's schedule and its commitment cost.
     state = initial_state(model.instance)
     if schedule === nothing
         root = model[model.first_node]
@@ -56,7 +53,6 @@ function simulate(
         ([draw() for _ in 1:samples], fill(1 / samples, samples))
     end
 
-    # Etapes de dispatch le long de chaque trajectoire.
     costs = Float64[]
     for path in paths
         current = state

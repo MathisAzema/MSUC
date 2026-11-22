@@ -3,11 +3,9 @@
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
 
-# --- Valeur future de chaque noeud : variable theta et coupe initiale -----------------------
-
 bellman_term(bellman_function::BellmanFunction) = bellman_function.theta
 
-# Coupe nulle : theta >= 0, point de depart des deux formulations.
+# Initial cut theta >= 0, the starting point of both formulations.
 function _trivial_cut(model::PolicyGraph, row)
     instance = model.instance
     nz = zeta_dimension(instance.arma)

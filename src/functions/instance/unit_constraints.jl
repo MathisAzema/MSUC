@@ -1,18 +1,11 @@
-# =============================================================================
-#  Contraintes partagees par le builder SDDP et les formulations extensives.
-#
-#  Elles sont ecrites sur des expressions quelconques (variables de decision,
-#  parametres ou etats), pour que chaque ligne du modele n'existe qu'une fois :
-#  `u`, `v`, `w` sont indexes `[unit.name, t]` ; `y`, `y_prev`, `u`, ... des
-#  scalaires dans `add_unit_dynamics!`.
-# =============================================================================
+# Constraints shared by the SDDP builder and the extensive formulations. They are written on
+# arbitrary expressions (variables, parameters or states) so each model row is defined once.
 
 """
     add_commitment_constraints!(model, instance, u, v, w)
 
-Contraintes d'engagement sur x = (u, v, w) : equation de transition (1a), duree minimale
-de marche et d'arret, conditions initiales, et maintien en marche d'une unite demarree au
-dessus de MinPower le temps de redescendre. `u` est indexe sur `0:T`, `v` et `w` sur `1:T`.
+Commitment constraints on x = (u, v, w): transition (1a), minimum up/down times, initial
+conditions. `u` is indexed `[unit.name, t]` on `0:T`; `v` and `w` on `1:T`.
 """
 function add_commitment_constraints!(model, instance, u, v, w)
     T = instance.TimeHorizon
@@ -33,11 +26,6 @@ function add_commitment_constraints!(model, instance, u, v, w)
     return
 end
 
-"""
-    commitment_cost(instance, u, v, w)
-
-Cout d'engagement : cout a vide, de demarrage et d'arret sur tout l'horizon.
-"""
 function commitment_cost(instance, u, v, w)
     return sum(
         unit.ConstTerm * u[unit.name, t] +
@@ -46,13 +34,7 @@ function commitment_cost(instance, u, v, w)
     )
 end
 
-"""
-    add_unit_dynamics!(model, unit, y, y_prev, u, u_prev, v, w)
-
-Capacite et rampes de l'unite a l'etape t, ecrites sur le planning x = (u, v, w) :
-production `y` a t, `y_prev` a t-1, `u` et `u_prev` le statut a t et t-1, `v` et `w` le
-demarrage et l'arret a t. Avec S^U = S^D = MinPower, on retrouve (49a)-(49c).
-"""
+# Capacity and ramp constraints (49a)-(49c) of one unit at stage t, with S^U = S^D = MinPower.
 function add_unit_dynamics!(model, unit, y, y_prev, u, u_prev, v, w)
     @constraint(model, y <= unit.MaxPower * u)
     @constraint(model, y >= unit.MinPower * u)
@@ -61,11 +43,6 @@ function add_unit_dynamics!(model, unit, y, y_prev, u, u_prev, v, w)
     return
 end
 
-"""
-    add_line_constraints!(model, line, flow, θ_from, θ_to)
-
-Capacite de la ligne et flux DC : -Fmax <= flow <= Fmax et flow = B12 (θ_from - θ_to).
-"""
 function add_line_constraints!(model, line, flow, θ_from, θ_to)
     @constraint(model, flow <= line.Fmax)
     @constraint(model, flow >= -line.Fmax)

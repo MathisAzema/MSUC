@@ -3,20 +3,13 @@
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
 
-# --- Coupes au planning courant -------------------------------------------------------
-#
-# A l'etape de dispatch le planning est fixe a x^k : la coupe se reduit a
-#     theta >= A + delta' zeta + b' y,   A = alpha + (terme en x^k),   b_j = coefficient de y_j,
-# dont on ne reecrit que le second membre A et les coefficients b a chaque nouveau planning.
+# At a dispatch stage the schedule is fixed to x^k, so a cut reduces to
+#     theta >= A + delta' zeta + b' y,
+# and only the right-hand side A and the slopes b are rewritten when the schedule changes.
 
-"""
-    instantiate(cut, schedule, N) -> (A, b)
-
-Second membre `A` et pentes `b` (une par unite) de la coupe au planning `schedule`.
-  * 3-bin      : A = alpha + tau' x^k, b = beta.
-  * intervalle : A = alpha + somme des tau_{a,b} des intervalles choisis,
-                 b_j = somme des beta_{a,b} de ceux de l'unite j.
-"""
+# Right-hand side `A` and per-unit slopes `b` of `cut` at `schedule`.
+#   3-bin:    A = alpha + tau' x^k, b = beta.
+#   interval: A = alpha + sum of tau_{a,b} over selected intervals, b_j = sum of beta_{a,b} over those of unit j.
 function instantiate(cut::BinCut, schedule::Schedule, N::Int)
     return cut.alpha + LinearAlgebra.dot(cut.tau, schedule.x), cut.beta
 end
@@ -31,22 +24,14 @@ function instantiate(cut::IntervalCut, schedule::Schedule, N::Int)
     return A, b
 end
 
-# Ligne d'epigraphe d'une coupe de noeud d'etape : `theta - zeta_term >= A` plus `-b_j y_j`.
 const CutRef = JuMP.ConstraintRef{
     JuMP.Model,
     MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64},MOI.GreaterThan{Float64}},
     JuMP.ScalarShape,
 }
 
-"""
-    instantiate_cuts!(cuts, y_out, schedule, N)
-
-Ecrit dans le sous-probleme le second membre et les pentes en y de `cuts` au planning `schedule`. Les
-modifications sont envoyees au solveur en deux lots (seconds membres, puis pentes), et seules les
-pentes qui different de celles deja ecrites (`cut.applied`) y sont envoyees : d'une iteration a la
-suivante le planning ne change que pour quelques unites, et en 3-bin les pentes ne changent jamais. Envoyer
-chaque coefficient separement coutait bien plus cher que la resolution des LP.
-"""
+# Writes the right-hand sides and y-slopes of `cuts` at `schedule` in two batched solver calls, sending
+# only slopes that differ from `cut.applied`. Per-coefficient updates were far slower than the LP solves.
 function instantiate_cuts!(cuts::AbstractVector{<:AbstractCut}, y_out, schedule::Schedule, N::Int)
     isempty(cuts) && return
     rhs_refs, rhs = CutRef[], Float64[]
@@ -78,8 +63,8 @@ end
 instantiate_cut!(cut::AbstractCut, y_out, schedule::Schedule, N::Int) =
     instantiate_cuts!([cut], y_out, schedule, N)
 
-# A la racine le planning est variable : la partie de la coupe qui ne depend ni de zeta ni
-# de theta s'ecrit sur les variables de decision.
+# At the root the schedule is a decision: the part of the cut not involving zeta or theta is written
+# on the decision variables.
 function root_term(cut::BinCut, node::Node, instance::Instance)
     expr = JuMP.AffExpr(0.0)
     x = commitment_variables(node.planning, instance)
@@ -92,7 +77,7 @@ function root_term(cut::BinCut, node::Node, instance::Instance)
     return expr
 end
 
-# Formulation intervalle a la racine : V(gamma, y~_0, zeta_0), ou y~_{j,a,b,0} vaut (17).
+# Interval formulation at the root: V(gamma, y~_0, zeta_0), with y~_{j,a,b,0} given by (17).
 function root_term(cut::IntervalCut, node::Node, instance::Instance)
     expr = JuMP.AffExpr(0.0)
     idx = instance.intervals
@@ -105,12 +90,7 @@ function root_term(cut::IntervalCut, node::Node, instance::Instance)
     return expr
 end
 
-"""
-    root_cut_value(model, cut, schedule)
-
-Valeur de `cut` a la racine au planning `schedule` : la meme expression que la ligne d'epigraphe ecrite par
-`add_cut!` (`root_term`), evaluee en x^k, en y_0 et en zeta_0, sans passer par le solveur.
-"""
+# Value of `cut` at the root for `schedule` (same expression as `add_cut!`/`root_term`), without the solver.
 function root_cut_value(model::PolicyGraph, cut::BinCut, schedule::Schedule)
     start = initial_state(model.instance)
     return cut.alpha +
@@ -130,14 +110,9 @@ function root_cut_value(model::PolicyGraph, cut::IntervalCut, schedule::Schedule
     return value
 end
 
-"""
-    add_cut!(model, node, cut)
-
-Ajoute `cut` aux coupes du noeud : cree sa ligne d'epigraphe, ecrite sur les variables de
-decision a la racine et reduite au planning courant aux etapes de dispatch. Tant qu'aucun planning
-n'est fixe (modele neuf dont on recharge des coupes), la ligne n'est pas instanciee : le prochain
-`set_schedule!` s'en charge.
-"""
+# Adds `cut` to `node`: written on the decision variables at the root, reduced to the current schedule at
+# dispatch stages. If no schedule is set yet (reloading cuts into a fresh model), the next `set_schedule!`
+# instantiates it.
 function add_cut!(model::PolicyGraph, node::Node, cut::AbstractCut)
     subproblem = node.subproblem
     θ = bellman_term(node.bellman_function)

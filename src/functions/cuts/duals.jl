@@ -3,13 +3,7 @@
 #  v. 2.0. If a copy of the MPL was not distributed with this file, You can
 #  obtain one at http://mozilla.org/MPL/2.0/.
 
-"""
-    commitment_duals(params, instance, t)
-
-Coefficients locaux sur x de la valeur de l'etape `t` (3-bin) : duaux des parametres du
-planning, places a leur position dans le vecteur plat de `Schedule.x`. Les coordonnees
-qui n'apparaissent pas dans les contraintes de l'etape restent nulles.
-"""
+# 3-bin slopes on x for stage `t`: duals of the schedule parameters, placed in the flat vector `Schedule.x`.
 function commitment_duals(params::StageParameters, instance::Instance, t::Int)
     τ = zeros(commitment_dimension(instance))
     for i in 1:instance.N
@@ -24,28 +18,25 @@ function commitment_duals(params::StageParameters, instance::Instance, t::Int)
     return τ
 end
 
-# Mettre a `false` pour lire les duaux des coupes un par un avec `JuMP.dual` (repli generique, plus lent).
+# Set to `false` to read cut duals one by one with `JuMP.dual` (generic, slower fallback).
 const BULK_CUT_DUALS = Ref(true)
 
-# Mettre a `true` pour comparer, a chaque lecture groupee, avec `JuMP.dual` et s'arreter au moindre ecart.
+# Set to `true` to check every bulk read against `JuMP.dual` and error on any mismatch.
 const CHECK_BULK_CUT_DUALS = Ref(false)
 
-# Optimiseur Gurobi interne du sous-probleme, ou `nothing` si le solveur n'est pas Gurobi.
+# Inner Gurobi optimizer of the subproblem, or `nothing` for another solver.
 function _gurobi_optimizer(subproblem::JuMP.Model)
     inner = JuMP.unsafe_backend(subproblem)
     return inner isa Gurobi.Optimizer ? inner : nothing
 end
 
-# Ligne (numerotee depuis 0) de la coupe dans le modele Gurobi.
+# 0-based row of the cut in the Gurobi model.
 _cut_row(inner::Gurobi.Optimizer, cut) =
     Cint(Gurobi._info(inner, JuMP.optimizer_index(cut.constraint_ref)).row - 1)
 
-# Lignes des coupes de `node` dans le modele Gurobi, calculees une seule fois par coupe puis gardees dans
-# `node.ext` : retrouver une ligne a partir d'une coupe coute bien plus cher que la lecture des duaux.
-# ATTENTION : si le solveur recopie tout le modele (rattrapage numerique : `reset_optimizer`, qui vide ce
-# cache ; ou un `Parameter` JuMP modifie, ce que le code evite), il range les lignes dans un autre ordre
-# (les coupes anciennes se retrouvent regroupees, les nouvelles en fin de modele). Filet de securite : si la
-# derniere ligne gardee n'est plus la bonne, tout le cache est refait.
+# Gurobi rows of the cuts of `node`, cached in `node.ext` since looking up a row costs far more than
+# reading the duals. If the solver copies the whole model (numerical recovery, or a modified JuMP
+# `Parameter`), rows get reordered: when the last cached row is stale, the whole cache is rebuilt.
 function _cut_rows(node::Node, inner::Gurobi.Optimizer)
     rows = get!(() -> Cint[], node.ext, :cut_rows)::Vector{Cint}
     if !isempty(rows) && _cut_row(inner, node.cuts[length(rows)]) != rows[end]
@@ -57,16 +48,10 @@ function _cut_rows(node::Node, inner::Gurobi.Optimizer)
     return rows
 end
 
-"""
-    _cut_duals(node)
-
-Duaux (σ) des coupes de `node` au dernier probleme resolu, dans l'ordre de `node.cuts`. Avec Gurobi, ils
-sont lus en un seul appel (le vecteur `Pi` de toutes les lignes) au lieu d'un `JuMP.dual` par coupe,
-dont le cout (environ 0,4 µs et 300 octets chacun, et plus a grand nombre de coupes) dominait la passe
-arriere ; seuls quelques pourcents d'entre eux sont non nuls. Meme valeur que `JuMP.dual`, signe compris
-(Gurobi.jl renvoie `Pi` en minimisation et `-Pi` en maximisation). Autre solveur, certificat
-d'infaisabilite ou `BULK_CUT_DUALS[] = false` : lecture coupe par coupe.
-"""
+# Duals (σ) of the cuts of `node` in the order of `node.cuts`. With Gurobi they are read in one call (the
+# `Pi` vector) instead of one `JuMP.dual` per cut, which dominated the backward pass. Same values and sign
+# as `JuMP.dual` (Gurobi.jl returns `Pi` for minimization, `-Pi` for maximization). Falls back to
+# per-cut reads for other solvers, infeasibility certificates or `BULK_CUT_DUALS[] = false`.
 function _cut_duals(node::Node)
     inner = BULK_CUT_DUALS[] ? _gurobi_optimizer(node.subproblem) : nothing
     if inner === nothing || inner.has_infeasibility_cert
@@ -88,14 +73,8 @@ function _cut_duals(node::Node)
     return duals
 end
 
-"""
-    get_dual_solution(node)
-
-Multiplicateurs du sous-probleme d'etape `node`, resolu au point courant (`StageDuals`). En
-formulation intervalle, les pentes en y (`β`) et en x (`τ`) sont calculees en forme close
-(`local_support`) et non lues dans les duaux : ces deux champs restent vides, ce qui evite un appel
-`JuMP.dual` (environ 0,4 µs) par unite et par resolution.
-"""
+# Multipliers of the stage subproblem (`StageDuals`). With the interval formulation, `β` and `τ` are
+# computed in closed form (`local_support`) and left empty here.
 function get_dual_solution(node::Node)
     if !_has_dual_solution(node)
         model = node.subproblem.ext[:MSUC_policy_graph]

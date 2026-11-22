@@ -1,74 +1,28 @@
-# Experiences sur l'instance IEEE 118 noeuds (Data/IEEE/118_syst) : 54 groupes, reseau en flux DC.
-#
-# Meme fonctionnement que `runSMS.jl`, restreint a cette seule instance : deux etapes, chacune
-# parallelisee sur `Nbworkers` coeurs (un run par coeur) :
-#
-#   run_train     entraine la politique (SDDP, formulation 3-bin ou intervalle) et enregistre,
-#                 pour chaque run, la borne inferieure, le temps passe dans chaque phase, ainsi que
-#                 les plannings et les coupes qui permettent de rejouer la politique ;
-#   run_simulate  rejoue la politique telle qu'elle etait a differents instants de
-#                 l'entrainement et estime son cout par simulation ;
-#   run_simulate_iterations   la meme chose, mais on donne les iterations au lieu des instants.
-#
-# Utilisation, depuis la racine du depot (la premiere fois seulement :
-# `julia --project=. -e 'import Pkg; Pkg.instantiate()'`), lancer `julia`, puis :
+# Experiments on the IEEE 118-bus instance (Data/IEEE/118_syst): 54 units, DC network flow.
+# Works like `runSMS.jl` (see it for the options and output files), restricted to this instance.
 #
 #     include("runIEEE.jl")
-#
-#     methods = ["interval_dual", "bin3"]       # voir `MSUC.METHODS` ; "interval_projection", "interval_minimum" et
-#                                               # "interval_maximum" : autres regles du point de linearisation (`interval_rule`)
-#                                               # "bin3_gamma" : 3-bin avec les variables gamma en plus a la racine
-#
-#     # 1. Entrainement : un run de 3 600 s par combinaison (methode, S, sigma, ...).
+#     methods = ["interval_dual", "bin3"]
 #     run_train(methods, [3600]; S_list = [3, 5], sigma_list = [0.25, 1.0])
-#
-#     # 2. Simulation de la politique a 60, 600 et 3 600 s, sur 1 000 trajectoires. Les listes
-#     #    doivent contenir les valeurs de l'entrainement (elles peuvent etre un sous-ensemble).
 #     run_simulate(methods, [3600], [60, 600, 3600], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0])
-#
-#     # 2 bis. Ou, au lieu des instants, les iterations a simuler (la politique de l'iteration k est le
-#     #        planning x^k et les coupes d'etape jusqu'a l'iteration k-1) :
 #     run_simulate_iterations(methods, [3600], [10, 50, 100], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0])
 #
-# On peut lancer `run_simulate` plus tard, dans une autre session, avec d'autres instants ou un
-# autre nombre de trajectoires : tout ce qu'il faut est dans le dossier de chaque run.
-#
-# Options communes a `run_train` et `run_simulate` (valeurs par defaut entre parentheses). Les listes
-# donnent un run par element de leur produit cartesien (avec les methodes et les temps) :
-#   T (24)                       horizon (au plus 24 : le profil de charge couvre 24 heures)
-#   S_list ([5])                 tailles du support de l'innovation ARMA
-#   sigma_list ([1.0])           amplitude de l'alea : sigma multiplie l'ecart-type de l'innovation de
-#                                l'ARMA (variance = 2.9e-4 * sigma^2) ; meme role que `force` de `PolicyGraph`
-#                                (sigma = 0 : probleme deterministe)
-#   mip_gap_list ([1e-2])        ecarts d'optimalite du MIP racine (nothing : defaut du solveur, 1e-4) ;
-#                                le MIP racine est le poste dominant du temps d'entrainement
-#   passes_per_mip_list ([1])    passes avant/arriere entre deux resolutions du MIP racine
-#
-# La graine est fixee a 1 pour tous les runs (`MSUC.SEED`), entrainement et simulation.
-#
-# Les fichiers ecrits sont ceux de `runSMS.jl` (config.csv, log.csv, states.csv, phases.csv, timers.csv,
-# schedules.csv, used_components.csv, cuts.csv, simulation_<N>.csv, simulation_<t>_<N>.csv et, pour
-# `run_simulate_iterations`, simulation_iterations_<N>.csv, simulation_it<k>_<N>.csv), dans
-#
-#     results_ieee/<methode>_T<T>_S<S>_sigma<s>_passes<p>_gap<g>/118_syst/time_<t>/
-#
-# Le travail d'un run (construire le modele, entrainer, ecrire et relire la politique, simuler) est dans
-# `src/functions/run/`, partage avec `runSMS.jl` ; ce fichier ne contient que la mise en place de
-# `Distributed` et les deux points d'entree, qui repartissent les runs sur les workers.
+# Differences from runSMS.jl: T <= 24 (the load profile covers 24 hours), and `mip_gap_list` defaults to
+# [1e-2] since the root MIP dominates the training time.
+# Results: results_ieee/<method>_T<T>_S<S>_sigma<s>_passes<p>_gap<g>/118_syst/time_<t>/
 
 import Pkg
 Pkg.activate(".")
 
 using Distributed
 
-# Nombre de runs menes en parallele, un coeur chacun (`NBWORKERS=2 julia` pour changer). Une seule instance :
-# il y a au plus un run par methode et par reglage, donc 2 workers suffisent pour comparer les deux methodes.
-# `GurobiThreads` est le nombre de fils de Gurobi pour chaque run. Garder Nbworkers * GurobiThreads <= nombre
-# de coeurs physiques : le temps est la quantite mesuree, une machine sur-souscrite fausserait les resultats.
+# Keep Nbworkers * GurobiThreads <= physical cores: time is the measured quantity, so an oversubscribed
+# machine would skew the results. There is at most one run per method and setting, so 2 workers
+# (`NBWORKERS=2 julia`) suffice to compare two methods.
 GurobiThreads = 1
 Nbworkers = parse(Int, get(ENV, "NBWORKERS", "10"))
 
-# `nprocs() > 1` n'est vrai que s'il y a de vrais workers (le master est compte dans `nworkers()`).
+# `nprocs() > 1` only holds with real workers (the master is counted in `nworkers()`).
 if nprocs() > 1
     rmprocs(workers())
 end
@@ -79,8 +33,8 @@ addprocs(Nbworkers)
 @everywhere using MSUC
 @everywhere using Gurobi
 
-# Un environnement Gurobi par worker, enregistre dans le package : les jobs le relisent localement,
-# `pmap` n'a rien a envoyer (sinon Distributed tenterait de copier l'environnement du master).
+# One Gurobi environment per worker, read locally by the jobs: `pmap` sends nothing (Distributed would
+# otherwise try to copy the master's environment).
 @everywhere const GRB_ENV = Gurobi.Env()
 @everywhere Gurobi.GRBsetintparam(GRB_ENV, "Threads", $GurobiThreads)
 @everywhere MSUC.set_run_optimizer!(() -> Gurobi.Optimizer(GRB_ENV))
@@ -88,9 +42,8 @@ addprocs(Nbworkers)
 """
     run_train(methods, time_max_list; T, S_list, sigma_list, mip_gap_list, passes_per_mip_list)
 
-Entraine un modele par combinaison (methode, temps limite, S, sigma, mip_gap, passes_per_mip) sur l'instance
-IEEE 118 noeuds, `Nbworkers` a la fois, et enregistre les resultats de chaque run dans son dossier (voir
-l'en-tete du fichier). `methods` designe des cles de `MSUC.METHODS`.
+Train one model per combination of (method, time limit, S, sigma, mip_gap, passes_per_mip) on the IEEE
+118-bus instance, `Nbworkers` at a time, and write each run's results to its own folder.
 """
 function run_train(
     method_list,
@@ -116,10 +69,9 @@ end
     run_simulate(methods, time_max_list, time_list, N; T, S_list, sigma_list, mip_gap_list,
                  passes_per_mip_list)
 
-Simule la politique de chaque run entraine (memes arguments que `run_train`, memes options) a chacun
-des instants de `time_list` (secondes depuis le debut de l'entrainement), sur `N` trajectoires. Si le
-nombre de trajectoires `S^T` ne depasse pas 4096 elles sont toutes enumerees et le cout est exact.
-Ecrit `simulation_<N>.csv` et `simulation_<instant>_<N>.csv` dans le dossier de chaque run.
+Simulate the policy of each trained run (same arguments as `run_train`) at the times in `time_list`
+(seconds since the start of training) on `N` trajectories. If `S^T <= 4096`, all trajectories are
+enumerated and the cost is exact.
 """
 function run_simulate(
     method_list,
@@ -148,11 +100,8 @@ end
     run_simulate_iterations(methods, time_max_list, iteration_list, N; T, S_list, sigma_list, mip_gap_list,
                             passes_per_mip_list)
 
-Comme `run_simulate`, mais on donne les iterations a simuler au lieu des instants : la politique de
-l'iteration k est le planning x^k et les coupes d'etape jusqu'a l'iteration k-1. Une iteration absente
-d'un run est ignoree avec un avertissement. Ecrit `simulation_iterations_<N>.csv` (un resume par
-iteration, avec son temps de fin) et `simulation_it<k>_<N>.csv` dans le dossier de chaque run, sans
-toucher aux fichiers de `run_simulate`.
+Like `run_simulate`, but for given iterations: the policy of iteration k is the schedule x^k with the
+stage cuts up to iteration k-1. Iterations missing from a run are skipped with a warning.
 """
 function run_simulate_iterations(
     method_list,

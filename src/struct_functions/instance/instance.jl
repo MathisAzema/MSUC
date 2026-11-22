@@ -26,10 +26,8 @@ end
 """
     IntervalIndex
 
-Indexation plate des intervalles d'exploitation [a:b] de toutes les unites : l'identifiant `id`
-numerote les intervalles unite par unite, dans l'ordre de `unit.intervals`. `unit[id]`, `a[id]`,
-`b[id]` donnent l'intervalle, et `id[(j, a, b)]` l'identifiant d'un intervalle. Les coupes
-intervalle stockent leurs coefficients dans des vecteurs indexes par cet identifiant.
+Flat indexing of the operating intervals [a:b] of all units, unit by unit in the order of
+`unit.intervals`. `unit[id]`, `a[id]`, `b[id]` give an interval; `id[(j, a, b)]` its identifier.
 """
 struct IntervalIndex
     unit::Vector{Int}
@@ -59,7 +57,6 @@ struct Instance
     Lines::Dict{Tuple{Int64, Int64}, Line}
     Next::Vector{Vector{Int64}}
     Demandbus::Vector{Vector{Float64}}
-    # Processus ARMA de l'erreur de prevision (Sect. 2.1, eq. 1g)
     arma::ARMAProcess
     optimizer::Any
 end
