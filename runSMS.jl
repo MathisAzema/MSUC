@@ -6,7 +6,8 @@
 #                 pour chaque run, la borne inferieure, le temps passe dans chaque phase, ainsi que
 #                 les plannings et les coupes qui permettent de rejouer la politique ;
 #   run_simulate  rejoue la politique telle qu'elle etait a differents instants de
-#                 l'entrainement et estime son cout par simulation.
+#                 l'entrainement et estime son cout par simulation ;
+#   run_simulate_iterations   la meme chose, mais on donne les iterations au lieu des instants.
 #
 # Utilisation, depuis la racine du depot (la premiere fois seulement :
 # `julia --project=. -e 'import Pkg; Pkg.instantiate()'`), lancer `julia`, puis :
@@ -25,6 +26,10 @@
 #     # 2. Simulation de la politique a 60, 600 et 3 600 s, sur 1 000 trajectoires. Les listes
 #     #    doivent contenir les valeurs de l'entrainement (elles peuvent etre un sous-ensemble).
 #     run_simulate(size_list, id_list, methods, [3600], [60, 600, 3600], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
+#
+#     # 2 bis. Ou, au lieu des instants, les iterations a simuler (la politique de l'iteration k est le
+#     #        planning x^k et les coupes d'etape jusqu'a l'iteration k-1) :
+#     run_simulate_iterations(size_list, id_list, methods, [3600], [10, 50, 100], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
 #
 # Les tailles disponibles sont 10, 20, 50, 75, 100, 150 et 200 ; les identifiants vont de 1 a 5, sauf pour
 # 200 groupes (1 a 11). Une combinaison sans fichier est ignoree avec un avertissement.
@@ -83,6 +88,9 @@
 #                                la politique, cout d'engagement, erreur standard et intervalle de
 #                                confiance a 95 % `ci95_low`, `ci95_high` : cout espere +- 1.96 erreur standard)
 #   simulation_<t>_<N>.csv       cout de dispatch de chaque trajectoire a l'instant t
+#   simulation_iterations_<N>.csv   resume de `run_simulate_iterations` : memes colonnes que
+#                                `simulation_<N>.csv`, avec `iteration` puis `time` (fin de l'iteration)
+#   simulation_it<k>_<N>.csv     cout de dispatch de chaque trajectoire a l'iteration k
 #
 # Les phases de `phases.csv` sont : solve_first_stage_problem (MIP racine), set_schedule (planning
 # fixe dans les etapes), forward_pass, backward_pass, et leurs sous-phases (solve_subproblem,
@@ -90,7 +98,7 @@
 #
 # Le travail d'un run (construire le modele, entrainer, ecrire et relire la politique, simuler) est dans
 # `src/functions/run/` ; ce fichier ne contient que la mise en place de `Distributed` et les deux
-# points d'entree, `run_train` et `run_simulate`, qui repartissent les runs sur les workers.
+# points d'entree, `run_train`, `run_simulate` et `run_simulate_iterations`, qui repartissent les runs sur les workers.
 
 import Pkg
 Pkg.activate(".")
@@ -180,6 +188,41 @@ function run_simulate(
     pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
         folder = MSUC.results_folder(instance, method, time_max, settings)
         MSUC.simulate_job(folder, instance, method, time_list, N, settings)
+        MSUC.release_memory()
+    end
+    return
+end
+
+"""
+    run_simulate_iterations(size_list, id_list, methods, time_max_list, iteration_list, N; T, S_list,
+                            sigma_list, mip_gap_list, passes_per_mip_list)
+
+Comme `run_simulate`, mais on donne les iterations a simuler au lieu des instants : la politique de
+l'iteration k est le planning x^k et les coupes d'etape jusqu'a l'iteration k-1. Une iteration absente
+d'un run est ignoree avec un avertissement. Ecrit `simulation_iterations_<N>.csv` (un resume par
+iteration, avec son temps de fin) et `simulation_it<k>_<N>.csv` dans le dossier de chaque run, sans
+toucher aux fichiers de `run_simulate`.
+"""
+function run_simulate_iterations(
+    size_list,
+    id_list,
+    method_list,
+    time_max_list,
+    iteration_list,
+    N::Int;
+    T = 24,
+    S_list = [5],
+    sigma_list = [1.0],
+    mip_gap_list = [nothing],
+    passes_per_mip_list = [1],
+)
+    combos = MSUC.run_combos(
+        size_list, id_list, method_list, time_max_list;
+        T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
+    )
+    pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
+        folder = MSUC.results_folder(instance, method, time_max, settings)
+        MSUC.simulate_iterations_job(folder, instance, method, iteration_list, N, settings)
         MSUC.release_memory()
     end
     return

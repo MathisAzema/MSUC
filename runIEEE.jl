@@ -7,7 +7,8 @@
 #                 pour chaque run, la borne inferieure, le temps passe dans chaque phase, ainsi que
 #                 les plannings et les coupes qui permettent de rejouer la politique ;
 #   run_simulate  rejoue la politique telle qu'elle etait a differents instants de
-#                 l'entrainement et estime son cout par simulation.
+#                 l'entrainement et estime son cout par simulation ;
+#   run_simulate_iterations   la meme chose, mais on donne les iterations au lieu des instants.
 #
 # Utilisation, depuis la racine du depot (la premiere fois seulement :
 # `julia --project=. -e 'import Pkg; Pkg.instantiate()'`), lancer `julia`, puis :
@@ -24,6 +25,10 @@
 #     # 2. Simulation de la politique a 60, 600 et 3 600 s, sur 1 000 trajectoires. Les listes
 #     #    doivent contenir les valeurs de l'entrainement (elles peuvent etre un sous-ensemble).
 #     run_simulate(methods, [3600], [60, 600, 3600], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0])
+#
+#     # 2 bis. Ou, au lieu des instants, les iterations a simuler (la politique de l'iteration k est le
+#     #        planning x^k et les coupes d'etape jusqu'a l'iteration k-1) :
+#     run_simulate_iterations(methods, [3600], [10, 50, 100], 1000; S_list = [3, 5], sigma_list = [0.25, 1.0])
 #
 # On peut lancer `run_simulate` plus tard, dans une autre session, avec d'autres instants ou un
 # autre nombre de trajectoires : tout ce qu'il faut est dans le dossier de chaque run.
@@ -42,7 +47,8 @@
 # La graine est fixee a 1 pour tous les runs (`MSUC.SEED`), entrainement et simulation.
 #
 # Les fichiers ecrits sont ceux de `runSMS.jl` (config.csv, log.csv, states.csv, phases.csv, timers.csv,
-# schedules.csv, used_components.csv, cuts.csv, simulation_<N>.csv, simulation_<t>_<N>.csv), dans
+# schedules.csv, used_components.csv, cuts.csv, simulation_<N>.csv, simulation_<t>_<N>.csv et, pour
+# `run_simulate_iterations`, simulation_iterations_<N>.csv, simulation_it<k>_<N>.csv), dans
 #
 #     results_ieee/<methode>_T<T>_S<S>_sigma<s>_passes<p>_gap<g>/118_syst/time_<t>/
 #
@@ -60,7 +66,7 @@ using Distributed
 # `GurobiThreads` est le nombre de fils de Gurobi pour chaque run. Garder Nbworkers * GurobiThreads <= nombre
 # de coeurs physiques : le temps est la quantite mesuree, une machine sur-souscrite fausserait les resultats.
 GurobiThreads = 1
-Nbworkers = parse(Int, get(ENV, "NBWORKERS", "2"))
+Nbworkers = parse(Int, get(ENV, "NBWORKERS", "10"))
 
 # `nprocs() > 1` n'est vrai que s'il y a de vrais workers (le master est compte dans `nworkers()`).
 if nprocs() > 1
@@ -133,6 +139,39 @@ function run_simulate(
     pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
         folder = MSUC.results_folder(instance, method, time_max, settings)
         MSUC.simulate_job(folder, instance, method, time_list, N, settings)
+        MSUC.release_memory()
+    end
+    return
+end
+
+"""
+    run_simulate_iterations(methods, time_max_list, iteration_list, N; T, S_list, sigma_list, mip_gap_list,
+                            passes_per_mip_list)
+
+Comme `run_simulate`, mais on donne les iterations a simuler au lieu des instants : la politique de
+l'iteration k est le planning x^k et les coupes d'etape jusqu'a l'iteration k-1. Une iteration absente
+d'un run est ignoree avec un avertissement. Ecrit `simulation_iterations_<N>.csv` (un resume par
+iteration, avec son temps de fin) et `simulation_it<k>_<N>.csv` dans le dossier de chaque run, sans
+toucher aux fichiers de `run_simulate`.
+"""
+function run_simulate_iterations(
+    method_list,
+    time_max_list,
+    iteration_list,
+    N::Int;
+    T = 24,
+    S_list = [5],
+    sigma_list = [1.0],
+    mip_gap_list = [1e-2],
+    passes_per_mip_list = [1],
+)
+    combos = MSUC.ieee_combos(
+        method_list, time_max_list;
+        T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
+    )
+    pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
+        folder = MSUC.results_folder(instance, method, time_max, settings)
+        MSUC.simulate_iterations_job(folder, instance, method, iteration_list, N, settings)
         MSUC.release_memory()
     end
     return

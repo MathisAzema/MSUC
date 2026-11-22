@@ -106,6 +106,33 @@ function train_job(instance_name, method, time_max, settings)
     return
 end
 
+# Simule la politique de l'iteration `k` (planning x^k, coupes d'etape jusqu'a l'iteration k-1, chargees dans
+# `model` a partir de `loaded`) sur `N` trajectoires, ecrit le cout de dispatch de chacune dans
+# `simulation_<label>_<N>.csv` et renvoie les colonnes de resume communes aux deux entrees (`simulate_job` et
+# `simulate_iterations_job`). Il faut l'appeler avec des `k` croissants : les coupes ne sont jamais retirees.
+function simulate_iteration!(model, data, folder, log, k, label, N, settings, loaded)
+    load_cuts!(model, data, settings.passes_per_mip, k - 1, loaded)
+    schedule = data.schedules[k]              # le planning x^k de l'iteration k
+    seconds = @elapsed sim = simulate(model; schedule, samples = N, seed = SEED)
+    CSV.write(
+        joinpath(folder, "simulation_$(label)_$(N).csv"),
+        DataFrame(path = 1:length(sim.costs), dispatch_cost = sim.costs, weight = sim.weights),
+    )
+    return (
+        bound = log.bound[k],
+        cuts = sum(loaded),
+        policy_cost = sim.cost,
+        commitment_cost = sim.commitment_cost,
+        dispatch_cost = sim.dispatch_cost,
+        stderr = sim.stderr,
+        ci95_low = sim.ci95[1],
+        ci95_high = sim.ci95[2],
+        exhaustive = sim.exhaustive,
+        npaths = sim.npaths,
+        simulate_seconds = seconds,
+    )
+end
+
 # Rejoue, par instants croissants, la politique de l'entrainement `folder` : a un instant donne, la
 # politique de la derniere iteration k terminee (`time` <= instant), c'est-a-dire le planning x^k et les
 # coupes d'etape jusqu'a l'iteration k-1, simulee sur `N` trajectoires d'alea. Un instant anterieur a la
@@ -124,37 +151,35 @@ function simulate_job(folder, instance_name, method, time_list, N, settings)
             @warn "aucune iteration terminee a $(time_limit) s : instant ignore" folder
             continue
         end
-        load_cuts!(model, data, settings.passes_per_mip, k - 1, loaded)
-
-        schedule = data.schedules[k]              # le planning x^k de l'iteration k
-        seconds = @elapsed sim = simulate(model; schedule, samples = N, seed = SEED)
-        CSV.write(
-            joinpath(folder, "simulation_$(time_limit)_$(N).csv"),
-            DataFrame(
-                path = 1:length(sim.costs),
-                dispatch_cost = sim.costs,
-                weight = sim.weights,
-            ),
-        )
-        push!(
-            rows,
-            (
-                time_limit = time_limit,
-                iteration = k,
-                bound = log.bound[k],
-                cuts = sum(loaded),
-                policy_cost = sim.cost,
-                commitment_cost = sim.commitment_cost,
-                dispatch_cost = sim.dispatch_cost,
-                stderr = sim.stderr,
-                ci95_low = sim.ci95[1],
-                ci95_high = sim.ci95[2],
-                exhaustive = sim.exhaustive,
-                npaths = sim.npaths,
-                simulate_seconds = seconds,
-            ),
-        )
+        row = simulate_iteration!(model, data, folder, log, k, time_limit, N, settings, loaded)
+        push!(rows, (time_limit = time_limit, iteration = k, row...))
     end
     CSV.write(joinpath(folder, "simulation_$(N).csv"), DataFrame(rows))
+    return
+end
+
+# Comme `simulate_job`, mais on donne les iterations a simuler au lieu des instants : la politique de
+# l'iteration k est le planning x^k et les coupes d'etape jusqu'a l'iteration k-1. Une iteration absente de
+# l'entrainement (k < 1 ou k plus grand que le nombre d'iterations) est ignoree avec un avertissement.
+# Ecrit `simulation_it<k>_<N>.csv` (cout de dispatch de chaque trajectoire) et `simulation_iterations_<N>.csv`
+# (un resume par iteration, avec le temps `time` de fin de l'iteration), sans toucher aux fichiers de
+# `simulate_job`.
+function simulate_iterations_job(folder, instance_name, method, iteration_list, N, settings)
+    log = CSV.read(joinpath(folder, "log.csv"), DataFrame)
+
+    model = build_model(instance_name, method, settings, run_optimizer())
+    data = read_policy(folder, model)
+
+    loaded = zeros(Int, length(model.nodes))
+    rows = NamedTuple[]
+    for k in sort(unique(iteration_list))
+        if !(1 <= k <= nrow(log))
+            @warn "iteration $(k) absente de l'entrainement ($(nrow(log)) iterations) : ignoree" folder
+            continue
+        end
+        row = simulate_iteration!(model, data, folder, log, k, "it$(k)", N, settings, loaded)
+        push!(rows, (iteration = k, time = log.time[k], row...))
+    end
+    CSV.write(joinpath(folder, "simulation_iterations_$(N).csv"), DataFrame(rows))
     return
 end

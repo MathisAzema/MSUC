@@ -255,7 +255,7 @@ Trois briques la rendent possible :
 
 [`runSMS.jl`](runSMS.jl) entraîne puis simule la politique sur les instances de `Data/T-Ramp`, un run par
 cœur (`Distributed`). Le script ne contient que la mise en place des workers et les deux points d'entrée
-`run_train` et `run_simulate` ; le travail d'un run (`train_job`, `simulate_job`, écriture et relecture de la
+`run_train`, `run_simulate` et `run_simulate_iterations` ; le travail d'un run (`train_job`, `simulate_job`, `simulate_iterations_job`, écriture et relecture de la
 politique) est dans [`src/functions/run/`](src/functions/run/). Depuis la racine du dépôt :
 
 ```julia
@@ -272,6 +272,10 @@ run_train(size_list, id_list, methods, [3600];
 # 2. Politique telle qu'elle était à 60, 600 et 3 600 s, simulée sur 1 000 trajectoires
 run_simulate(size_list, id_list, methods, [3600], [60, 600, 3600], 1000;
              S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
+
+# 2 bis. Ou la politique de certaines itérations (au lieu d'instants), par exemple les itérations 10, 50 et 100
+run_simulate_iterations(size_list, id_list, methods, [3600], [10, 50, 100], 1000;
+                        S_list = [3, 5], sigma_list = [0.25, 1.0], mip_gap_list = [1e-2])
 ```
 
 Les tailles disponibles sont 10, 20, 50, 75, 100, 150 et 200 ; les identifiants vont de 1 à 5, sauf pour
@@ -291,7 +295,10 @@ instants ou un autre nombre de trajectoires. À un instant donné, la politique 
 dernière itération `k` terminée : son planning $x^k$ (celui du MIP racine) et les coupes d'étape qui
 existaient quand il a été calculé, c'est-à-dire celles jusqu'à l'itération `k-1`. C'est la politique que
 simule la passe avant de l'itération `k`, et la borne `bound` de cette itération repose sur ces mêmes
-coupes. Un instant antérieur à la fin de la première itération est ignoré. `run_simulate` reconstruit
+coupes. Un instant antérieur à la fin de la première itération est ignoré. `run_simulate_iterations` donne directement les
+itérations `k` (une itération absente du run est ignorée avec un avertissement) et écrit `simulation_iterations_<N>.csv`
+(mêmes colonnes que `simulation_<N>.csv`, avec `iteration` puis `time`, la fin de l'itération) et `simulation_it<k>_<N>.csv`, sans
+toucher aux fichiers de `run_simulate`. `run_simulate` reconstruit
 un modèle neuf, y recharge ces coupes d'étape (les instants sont traités par ordre croissant, sans rien
 recharger), fixe le planning enregistré (`simulate(model; schedule = ...)`) puis simule `N` trajectoires :
 le MIP racine n'est jamais re-résolu. Si `S^T ≤ 4096` les trajectoires sont toutes énumérées et le coût est exact. Les options
@@ -324,6 +331,8 @@ Chaque run écrit, dans `results_sms/<méthode>_T<T>_S<S>_sigma<σ>_passes<p>_ga
 | `cuts.csv` | coupes d'étape restreintes à ces composantes, sans en-tête, une ligne par coupe dans l'ordre de création : nœud, $\alpha$, $\delta$, $\tau$, $\beta$ |
 | `simulation_<N>.csv` | un résumé par instant : dernière itération terminée, sa borne, nombre de coupes d'étape, coût espéré de la politique, coût d'engagement, erreur standard et intervalle de confiance à 95 % (`ci95_low`, `ci95_high` : coût espéré $\pm\,1{,}96$ erreur standard ; nul si les trajectoires sont énumérées, le coût est alors exact) |
 | `simulation_<t>_<N>.csv` | coût de dispatch de chaque trajectoire à l'instant `t` |
+| `simulation_iterations_<N>.csv` | un résumé par itération demandée à `run_simulate_iterations` (mêmes colonnes que `simulation_<N>.csv`, avec `iteration` puis `time`, la fin de l'itération) |
+| `simulation_it<k>_<N>.csv` | coût de dispatch de chaque trajectoire à l'itération `k` |
 
 Les phases de `phases.csv` sont `solve_first_stage_problem` (le MIP racine), `set_schedule`,
 `forward_pass` et `backward_pass`, avec leurs sous-phases (`backward_pass/compute_coefficients`,
