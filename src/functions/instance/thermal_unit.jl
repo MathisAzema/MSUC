@@ -1,6 +1,7 @@
 # Standard capacity + ramp model (Sect. 4) for unit j, interval [a:b] in T_j and stage t.
-# Paper symbol -> function: u_{a,b,t} (15a) -> is_on_interval, R^U (45b) -> ramp_up, R^D (45c) -> ramp_down,
-# q (49) -> reference_output, ytilde_{j,a,b,0} (17) -> initial_interval_output, Qhat (48)-(49) -> local_support.
+# Paper symbol -> function: u_{a,b,t} (Sect. 3.1) -> is_on_interval, ramp constraints (44b)-(44c) -> ramp_up /
+# ramp_down, ybar_{j,a,b,t} (46) -> reference_output, ytilde_{j,a,b,0} (16) -> initial_interval_output,
+# Q_{j,a,b,t} (47)-(49) -> local_support.
 # Here S^U_j = S^D_j = MinPower.
 
 is_on_interval(a, b, t) = a <= t <= b - 1
@@ -36,7 +37,7 @@ end
 
 p_lower(unit, a, b, t) = is_on_interval(a, b, t) ? unit.MinPower : 0.0
 
-# Local upper bound (Sect. 4.2), including the shutdown line (46). The startup cone is not
+# Local upper bound Pbar_{j,a,b,t} (45), including the shutdown envelope. The startup cone is not
 # included here: it belongs to the reference trajectory, see `reference_output`.
 function p_upper(unit, a, b, t, T)
     is_on_interval(a, b, t) || return 0.0
@@ -45,7 +46,7 @@ function p_upper(unit, a, b, t, T)
            unit.MaxPower
 end
 
-# R^U_{j,a,b,t}: right-hand side of (45b) on x_{a,b}.
+# Right-hand side of the ramp-up constraint (44b) on x_{a,b}, in the form written by `add_unit_dynamics!`.
 function ramp_up(unit, a, b, t)
     if t == a
         return unit.MinPower
@@ -58,7 +59,7 @@ function ramp_up(unit, a, b, t)
     end
 end
 
-# R^D_{j,a,b,t}: right-hand side of (45c) on x_{a,b}.
+# Right-hand side of the ramp-down constraint (44c) on x_{a,b}, in the form written by `add_unit_dynamics!`.
 function ramp_down(unit, a, b, t)
     if t == b
         return unit.MinPower
@@ -73,7 +74,7 @@ end
 
 initial_interval_output(unit, a) = a <= 0 ? unit.InitialPower : 0.0
 
-# q_{j,a,b,t} (eq. (52)): the largest output the interval admits, i.e. the trajectory of an interval
+# ybar_{j,a,b,t} (eq. (46)): the largest output the interval admits, i.e. the trajectory of an interval
 # whose cost signal is negative at every stage. It gives the coefficients of the first cuts, when all
 # balance prices equal the load-shedding cost.
 function reference_output(unit, a, b, t, T)
@@ -89,9 +90,9 @@ end
 """
     local_support(unit, a, b, t, T, y_prev, z) -> (h, beta)
 
-Closed-form affine support (47)-(49) of the local problem Qhat_{j,a,b,t}(., z), with
-`Qhat(y_prev, z) == h + beta * y_prev`. `y_prev` is the linearization point: any value gives a
-valid support, it only selects the branch (Prop. 4).
+Closed-form affine support (47)-(49) of the local operating cost Q_{j,a,b,t}(., z), with
+`Q(y_prev, z) == h + beta * y_prev`. `y_prev` is the linearization point: any value gives a
+valid support (36), it only selects the branch.
 """
 function local_support(unit, a, b, t, T, y_prev::Float64, z::Float64)
     p_lo = p_lower(unit, a, b, t)

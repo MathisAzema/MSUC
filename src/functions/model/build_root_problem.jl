@@ -12,7 +12,7 @@ function _root_problem!(subproblem, instance, power, ζ, basis)
 
     gamma = Dict{Tuple{Int,Int,Int},JuMP.VariableRef}()
     if basis === :intervals
-        # gamma_{j,a,b} >= 0 linked to x by (19c).
+        # gamma_{j,a,b} >= 0 linked to x by (18c).
         for i in 1:N, (a, b) in units[i].intervals
             gamma[i, a, b] = @variable(subproblem, lower_bound = 0.0, base_name = "gamma_$(i)_$(a)_$(b)")
         end

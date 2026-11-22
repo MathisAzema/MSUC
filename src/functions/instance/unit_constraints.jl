@@ -34,7 +34,7 @@ function commitment_cost(instance, u, v, w)
     )
 end
 
-# Capacity and ramp constraints (49a)-(49c) of one unit at stage t, with S^U = S^D = MinPower.
+# Capacity and ramp constraints (44a)-(44c) of one unit at stage t, with S^U = S^D = MinPower.
 function add_unit_dynamics!(model, unit, y, y_prev, u, u_prev, v, w)
     @constraint(model, y <= unit.MaxPower * u)
     @constraint(model, y >= unit.MinPower * u)

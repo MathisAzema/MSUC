@@ -77,7 +77,7 @@ function root_term(cut::BinCut, node::Node, instance::Instance)
     return expr
 end
 
-# Interval formulation at the root: V(gamma, y~_0, zeta_0), with y~_{j,a,b,0} given by (17).
+# Interval formulation at the root: V(gamma, y~_0, zeta_0), with y~_{j,a,b,0} given by (16).
 function root_term(cut::IntervalCut, node::Node, instance::Instance)
     expr = JuMP.AffExpr(0.0)
     idx = instance.intervals

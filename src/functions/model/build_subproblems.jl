@@ -2,7 +2,7 @@
 # nodes t+1 >= 2 are the dispatch problem of stage t. States are the power y and the uncertainty
 # state zeta; the schedule x = (u, v, w) is a fixed parameter of the dispatch stages (see
 # schedule.jl). The formulations differ only in the shutdown feasibility rows: 3-bin uses lines
-# (44), one per lag h, on parameters w_{t+h}; the interval formulation uses the single line (46),
+# (44d), one per lag h, on parameters w_{t+h}; the interval formulation uses the single line (45),
 # `power <= cap`, with no dual on x (the closed-form local support in thermal_unit.jl replaces it).
 
 # States are declared at every node, root included, so the state space is the same everywhere.
@@ -50,7 +50,7 @@ end
 """
     subproblem_builder_UC_def_gamma(instance, force, subproblem, node)
 
-3-bin formulation whose root problem also carries the gamma_{j,a,b} variables linked by (19c).
+3-bin formulation whose root problem also carries the gamma_{j,a,b} variables linked by (18c).
 Dispatch stages and cuts (12) are the 3-bin ones; use with `SDDPFormulation`. The gammas do not
 tighten the root relaxation in x-space (same LP and MIP values with the same cuts), so this only
 changes the model size.
@@ -63,7 +63,7 @@ end
     subproblem_builder_UC_extended(instance, force, subproblem, node)
 
 Subproblem of the interval formulation (Sect. 3): gamma variables (Def. 1) at the root, shutdown
-line (46) in the dispatch stages.
+line (45) in the dispatch stages.
 """
 function subproblem_builder_UC_extended(instance::MSUC.Instance, force::Float64, subproblem::Model, node::Int)
     return _stage_builder!(instance, subproblem, node, force, :intervals)

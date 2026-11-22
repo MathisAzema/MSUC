@@ -85,7 +85,7 @@ function print_iteration(io, log::Log)
     print(io, " ", print_value(log.bound))
     print(io, " ", print_value(log.time))
     print(io, " ", print_value(log.total_solves))
-    log.first_stage_solved || print(io, "   MIP evite")
+    log.first_stage_solved || print(io, "   MIP skipped")
     println(io)
     return
 end
@@ -103,7 +103,7 @@ function print_footer(io, training_results::TrainingResults)
     num_issues = sum(l -> l.serious_numerical_issue, training_results.log)
     println(io, "numeric issues : ", num_issues)
     skipped = count(l -> !l.first_stage_solved, training_results.log)
-    skipped > 0 && println(io, "MIP evites     : ", skipped)
+    skipped > 0 && println(io, "MIPs skipped   : ", skipped)
     println(io, _RULE)
     println(io)
     return

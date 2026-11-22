@@ -68,7 +68,7 @@ function _cut_duals(node::Node)
     if CHECK_BULK_CUT_DUALS[]
         reference = [JuMP.dual(cut.constraint_ref) for cut in node.cuts]
         duals == reference ||
-            error("duaux des coupes du noeud $(node.index) : la lecture groupee differe de JuMP.dual")
+            error("cut duals of node $(node.index): bulk read differs from JuMP.dual")
     end
     return duals
 end

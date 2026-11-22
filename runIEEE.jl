@@ -58,7 +58,7 @@ function run_train(
         method_list, time_max_list;
         T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
     )
-    pmap(combos; on_error = e -> (@warn("job d'entrainement en echec", exception = e); nothing)) do (instance, method, time_max, settings)
+    pmap(combos; on_error = e -> (@warn("training job failed", exception = e); nothing)) do (instance, method, time_max, settings)
         MSUC.train_job(instance, method, time_max, settings)
         MSUC.release_memory()
     end
@@ -88,7 +88,7 @@ function run_simulate(
         method_list, time_max_list;
         T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
     )
-    pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
+    pmap(combos; on_error = e -> (@warn("simulation job failed", exception = e); nothing)) do (instance, method, time_max, settings)
         folder = MSUC.results_folder(instance, method, time_max, settings)
         MSUC.simulate_job(folder, instance, method, time_list, N, settings)
         MSUC.release_memory()
@@ -118,7 +118,7 @@ function run_simulate_iterations(
         method_list, time_max_list;
         T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
     )
-    pmap(combos; on_error = e -> (@warn("job de simulation en echec", exception = e); nothing)) do (instance, method, time_max, settings)
+    pmap(combos; on_error = e -> (@warn("simulation job failed", exception = e); nothing)) do (instance, method, time_max, settings)
         folder = MSUC.results_folder(instance, method, time_max, settings)
         MSUC.simulate_iterations_job(folder, instance, method, iteration_list, N, settings)
         MSUC.release_memory()

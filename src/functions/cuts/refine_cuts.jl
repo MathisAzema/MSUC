@@ -14,7 +14,7 @@ function refine_bellman_function(model::PolicyGraph, node::Node, items, y_k, ζ_
     TimerOutputs.@timeit model.timer_output "compute_coefficients" begin
         if model.method == ExtendedFormulation
             interval_state === nothing &&
-                error("la formulation intervalle a besoin de l'etat par intervalle de la passe avant")
+                error("the interval formulation needs the per-interval state of the forward pass")
             α, τ, β, δ = compute_coefficients_extended(model, node, items, y_k, ζ_k, interval_state)
             cut = IntervalCut(α, τ, β, δ, nothing)
         else
@@ -75,7 +75,7 @@ function _weighted_sum(cuts, weights, field::Symbol)
     return _weighted_sum!(zeros(n), cuts, weights, field)
 end
 
-# Coefficients (α, τ, β, δ) of the interval cut (Prop. 4); τ and β are vectors over intervals. The outer
+# Coefficients (α, τ, β, δ) of the interval cut (Prop. 6); τ and β are vectors over intervals. The outer
 # multipliers (σ, ν) come from the projected 3-bin subproblem, the local coefficients from the closed form
 # `local_support`, linearized at `interval_state` (ytilde^k from the forward pass).
 function compute_coefficients_extended(model::PolicyGraph, node::Node, items, y_k, ζ_k, interval_state)

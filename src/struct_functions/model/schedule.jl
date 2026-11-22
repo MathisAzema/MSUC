@@ -15,8 +15,8 @@ end
     StageParameters
 
 Schedule values fixed (`JuMP.fix`) in the stage-`t` subproblem: `u_prev`, `u`, `v`, `w`, plus
-  * 3-bin:    `w_future[j][h]` = w_{t+h}, used by the shutdown-feasibility rows (44);
-  * interval: `cap[j]`, the shutdown envelope (46) of the active interval.
+  * 3-bin:    `w_future[j][h]` = w_{t+h}, used by the shutdown-feasibility rows (44d);
+  * interval: `cap[j]`, the shutdown envelope (45) of the active interval.
 """
 struct StageParameters
     u_prev::Vector{JuMP.VariableRef}

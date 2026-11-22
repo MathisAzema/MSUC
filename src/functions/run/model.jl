@@ -49,9 +49,9 @@ function run_combos(
     wanted = [instance_name(n_units, id) for n_units in size_list for id in id_list]
     instances = filter(name -> isfile("Data/T-Ramp/$(name).nc4"), wanted)
     absent = setdiff(wanted, instances)
-    isempty(absent) || @warn "instances absentes de Data/T-Ramp, ignorees" absent
+    isempty(absent) || @warn "instances missing from Data/T-Ramp, ignored" absent
     isempty(instances) &&
-        error("aucune instance de Data/T-Ramp pour size_list = $(size_list) et id_list = $(id_list)")
+        error("no instance in Data/T-Ramp for size_list = $(size_list) and id_list = $(id_list)")
     return campaign(
         instances, method_list, time_max_list;
         T, S_list, sigma_list, passes_per_mip_list, mip_gap_list,
@@ -87,8 +87,8 @@ set_run_optimizer!(factory) = (RUN_OPTIMIZER[] = factory; nothing)
 
 function run_optimizer()
     RUN_OPTIMIZER[] === nothing && error(
-        "aucun optimiseur enregistre : appeler `MSUC.set_run_optimizer!(() -> Gurobi.Optimizer(env))` " *
-        "sur chaque processus (voir runSMS.jl)",
+        "no optimizer registered: call `MSUC.set_run_optimizer!(() -> Gurobi.Optimizer(env))` " *
+        "on each process (see runSMS.jl)",
     )
     return RUN_OPTIMIZER[]
 end

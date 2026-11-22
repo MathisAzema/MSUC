@@ -7,7 +7,7 @@
     backward_pass(model, sampled_states_power, sampled_states_zeta; root_cut = true,
                   sampled_states_interval = nothing)
 
-Backward pass (Algorithm 2, lines 12-20): from the last stage to the root, solve the next stage at the
+Backward pass (Algorithm 2, lines 13-20): from the last stage to the root, solve the next stage at the
 state visited by the forward pass for every noise realization and build a cut for the current node.
 With `root_cut = false` the (dense) root cut is not added. With `sampled_states_interval`, interval
 cut coefficients are linearized at the forward-pass interval states.

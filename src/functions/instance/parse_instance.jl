@@ -88,7 +88,7 @@ function parse_IEEE(
     profile =
         CSV.read(joinpath(dir, "load_distribution_profile.csv"), DataFrame; header = false)[:, 2] / 100
     T <= length(profile) ||
-        error("le profil de charge couvre $(length(profile)) heures, T = $T est trop grand")
+        error("the load profile covers $(length(profile)) hours, T = $T is too large")
     Demandbus = [max_load[b, 2] * profile[1:T] for b in 1:nbus]
 
     lines = CSV.read(joinpath(dir, "lines.csv"), DataFrame; header = false)

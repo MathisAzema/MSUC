@@ -75,7 +75,7 @@ function _dispatch_common!(subproblem, instance, force, power, ζ, t)
     for line in values(instance.Lines)
         add_line_constraints!(subproblem, line, flow[line.b1, line.b2], θ[line.b1], θ[line.b2])
     end
-    # (1g) node balance; its duals nu_{n,t} feed z_{j,a,b} (Prop. 4).
+    # (1g) node balance; its duals nu_{n,t} feed z_{j,a,b} (eq. (35c)).
     demand = [
         @constraint(
             subproblem,

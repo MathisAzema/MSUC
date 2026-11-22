@@ -24,11 +24,11 @@ TOL   = 1e-6
 SEED  = 1234    # the forward pass samples from the global rand(): fixed so both formulations see the same scenarios
 
 instance = MSUC.parse_nc4("Data/T-Ramp/10_0_1_w.nc4", optimizer, T; S = S)
-@printf("jouet : T = %d, S = %d, %d unites, %d intervalles, %d scenarios\n\n",
+@printf("toy: T = %d, S = %d, %d units, %d intervals, %d scenarios\n\n",
         T, S, instance.N, sum(length(u.intervals) for u in instance.Thermalunits), S^T)
 
 opt = MSUC.multistage_extensive(instance; force = FORCE, gap = 1e-9, timelimit = 300)[1]
-@printf("optimum multi-etages EXACT (arbre de %d noeuds) = %.4f\n\n",
+@printf("EXACT multistage optimum (tree of %d nodes) = %.4f\n\n",
         sum(S^t for t in 0:T), opt)
 
 function run(builder, method, label)
@@ -42,20 +42,20 @@ function run(builder, method, label)
     k = findfirst(x -> (opt - x) / opt < TOL, bounds)
     sim = MSUC.simulate(model)
 
-    @printf("%-16s borne = %.4f   politique = %.4f   converge a l'iteration %s\n",
+    @printf("%-16s bound = %.4f   policy = %.4f   converges at iteration %s\n",
             label, bounds[end], sim.cost, k === nothing ? "> $ITER" : string(k))
-    @printf("%-16s encadrement = %.2e   (%d chemins, exhaustif = %s)\n",
+    @printf("%-16s gap = %.2e   (%d paths, exhaustive = %s)\n",
             "", (sim.cost - bounds[end]) / opt, sim.npaths, sim.exhaustive)
 
-    @assert bounds[end] <= opt * (1 + TOL)  "borne superieure a l'optimum"
-    @assert sim.cost >= opt * (1 - TOL)     "politique inferieure a l'optimum"
+    @assert bounds[end] <= opt * (1 + TOL)  "bound above the optimum"
+    @assert sim.cost >= opt * (1 - TOL)     "policy cost below the optimum"
     return bounds, sim
 end
 
-b_ext, s_ext = run(MSUC.subproblem_builder_UC_extended, MSUC.ExtendedFormulation, "intervalle (39)")
+b_ext, s_ext = run(MSUC.subproblem_builder_UC_extended, MSUC.ExtendedFormulation, "interval (38)")
 b_3bin, s_3bin = run(MSUC.subproblem_builder_UC_def, MSUC.SDDPFormulation, "3-bin (13)")
 
-println("\n it   intervalle (39)   3-bin (13)     % optimum (int. / 3-bin)")
+println("\n it   interval (38)     3-bin (13)     % optimum (int. / 3-bin)")
 for k in 1:min(ITER, length(b_ext), length(b_3bin))
     @printf("%3d  %15.2f  %13.2f     %6.2f / %6.2f\n",
             k, b_ext[k], b_3bin[k], 100 * b_ext[k] / opt, 100 * b_3bin[k] / opt)
@@ -64,8 +64,8 @@ end
 # Prop. 3: both formulations have the same optimum.
 @assert abs(b_ext[end] - b_3bin[end]) / opt < TOL
 println()
-@printf("OK  borne <= optimum <= politique, verifie pour les deux formulations.\n")
-@printf("OK  les deux bornes convergent vers le meme optimum (Prop. 3).\n")
-@printf("    optimum exact    %.4f\n", opt)
-@printf("    intervalle       borne %.4f / politique %.4f\n", b_ext[end], s_ext.cost)
-@printf("    3-bin            borne %.4f / politique %.4f\n", b_3bin[end], s_3bin.cost)
+@printf("OK  bound <= optimum <= policy cost, verified for both formulations.\n")
+@printf("OK  both bounds converge to the same optimum (Prop. 3).\n")
+@printf("    exact optimum    %.4f\n", opt)
+@printf("    interval         bound %.4f / policy %.4f\n", b_ext[end], s_ext.cost)
+@printf("    3-bin            bound %.4f / policy %.4f\n", b_3bin[end], s_3bin.cost)

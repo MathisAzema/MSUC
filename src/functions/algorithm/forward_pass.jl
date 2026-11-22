@@ -6,7 +6,7 @@
 """
     forward_pass(model, options)
 
-Forward pass (Algorithm 2, lines 6-11): sample a noise trajectory and solve each dispatch stage from the
+Forward pass (Algorithm 2, lines 6-12): sample a noise trajectory and solve each dispatch stage from the
 initial state. Assumes the root is solved and the schedule x^k is fixed (see `one_iteration`). Returns
 the outgoing states `(y, zeta)` along the trajectory, root included.
 

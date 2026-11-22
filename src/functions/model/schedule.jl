@@ -26,7 +26,7 @@ function commitment_variables(root::RootVariables, instance::Instance)
     )
 end
 
-# Shutdown envelope (46) of unit `i` at stage `t`: if it shuts down at b <= T, its output must be
+# Shutdown envelope (45) of unit `i` at stage `t`: if it shuts down at b <= T, its output must be
 # able to ramp down to MinPower, i.e. min{Pmax, Pmin + R^D (b-1-t)}; otherwise Pmax.
 function shutdown_cap(unit::ThermalUnit, schedule::Schedule, i::Int, t::Int)
     schedule.u[i, t+1] > 0.5 || return unit.MaxPower

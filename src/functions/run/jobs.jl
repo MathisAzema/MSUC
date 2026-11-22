@@ -45,12 +45,12 @@ function save_run(folder, model, snapshots, schedules, states, passes, config)
     for i in 2:nodes
         expected = i == nodes ? 0 : passes * (length(schedules) - skipped)
         length(model[i].cuts) - 1 == expected ||
-            error("noeud $i : $(length(model[i].cuts) - 1) coupes, $expected attendues")
+            error("node $i: $(length(model[i].cuts) - 1) cuts, $expected expected")
     end
 
     all(length(s) == (skipped && k == length(states) ? 0 : passes) for (k, s) in enumerate(states)) &&
         length(states) == length(log) ||
-        error("etats echantillonnes : $passes trajectoires par iteration attendues")
+        error("sampled states: $passes trajectories per iteration expected")
 
     write_policy(folder, model, schedules)
 
@@ -140,7 +140,7 @@ function simulate_job(folder, instance_name, method, time_list, N, settings)
     for time_limit in sort(time_list)
         k = count(<=(time_limit), log.time)
         if k == 0
-            @warn "aucune iteration terminee a $(time_limit) s : instant ignore" folder
+            @warn "no iteration finished by $(time_limit) s: time ignored" folder
             continue
         end
         row = simulate_iteration!(model, data, folder, log, k, time_limit, N, settings, loaded)
@@ -162,7 +162,7 @@ function simulate_iterations_job(folder, instance_name, method, iteration_list, 
     rows = NamedTuple[]
     for k in sort(unique(iteration_list))
         if !(1 <= k <= nrow(log))
-            @warn "iteration $(k) absente de l'entrainement ($(nrow(log)) iterations) : ignoree" folder
+            @warn "iteration $(k) not in the training run ($(nrow(log)) iterations): ignored" folder
             continue
         end
         row = simulate_iteration!(model, data, folder, log, k, "it$(k)", N, settings, loaded)

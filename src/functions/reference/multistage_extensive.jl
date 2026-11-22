@@ -1,5 +1,5 @@
 # Deterministic equivalent of the scenario tree: the exact optimum of the multistage problem (1),
-# with nonanticipativity (1j). Used as a reference for the SDDP bounds. The tree has
+# with nonanticipativity (1i). Used as a reference for the SDDP bounds. The tree has
 # sum_{t=0}^T S^t nodes, so it is tractable only for small S and T; with an instance built with
 # S = 1 it reduces to a path (the deterministic problem).
 
@@ -8,7 +8,7 @@
 
 ARMA scenario tree, indexed by `(t, k)` with `k in 1:S^t`. For each stage `t in 0:T` it returns the
 parent node, the innovation index, the node probability and the relative error `eta` of each bus.
-Since `eta` is deterministic along a path, recursion (1g) is evaluated numerically (no `zeta` variable).
+Since `eta` is deterministic along a path, recursion (1f) is evaluated numerically (no `zeta` variable).
 """
 function scenario_tree(instance::Instance, T::Int)
     a = instance.arma
@@ -50,8 +50,8 @@ end
     multistage_extensive(instance; force, silent, gap, timelimit, res_gamma)
 
 Solve the scenario-tree deterministic equivalent (exact optimum of problem (1)). The commitment is
-shared by the whole tree and dispatch is indexed by tree node, which encodes (1j). The shutdown
-feasibility lines (44)/(46) are omitted: over the full horizon the ramps imply them, so the
+shared by the whole tree and dispatch is indexed by tree node, which encodes (1i). The shutdown
+feasibility lines (44d)/(45) are omitted: over the full horizon the ramps imply them, so the
 reference is independent of them.
 
 Returns `(value, bound, time, schedule)`, or `nothing` on failure. `res_gamma` fixes the

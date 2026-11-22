@@ -1,17 +1,13 @@
 # ARMA(p,q) process for the relative net-demand forecast error (Sect. 2.1):
 #   eta_t = sum_i Phi_i eta_{t-i} + xi_t + sum_k Theta_k xi_{t-k}
 # Markovian form with state zeta_t = (eta_t, .., eta_{t-p+1}, xi_t, .., xi_{t-q+1}):
-#   zeta_t = Psi zeta_{t-1} + E xi_t,   eta_t = S_eta zeta_t
-#
-# Notation differs from the PSCC paper, eq. (40), where the parameters come from:
-# PSCC epsilon = our eta (relative error), PSCC eta = our xi (innovation).
+#   zeta_t = Psi zeta_{t-1} + E xi_t,   eta_t = S_eta zeta_t      (eq. (1f); E is H in the paper)
 
-# Calibrated ARMA(1,1) coefficients, PSCC eq. (40).
+# Calibrated ARMA(1,1) coefficients (Sect. 5.2, eq. (51)).
 const ARMA_PHI = [0.67]
 const ARMA_THETA = [0.117]
 
-# Base innovation variance: xi_t ~ N(0, 2.9e-4), the second argument being a variance.
-# `sigma` scales the standard deviation here (variance = 2.9e-4 * sigma^2); in PSCC it scales the variance.
+# Base innovation variance: xi_t ~ N(0, 2.9e-4 * sigma^2) (eq. (51)); `sigma` scales the standard deviation.
 const ARMA_INNOVATION_VARIANCE = 2.9e-4
 
 const ARMA_SUPPORT_SIZE = 5
@@ -86,7 +82,7 @@ function innovation_support(
     elseif discretization === :equiprobable
         equiprobable_normal(S)
     else
-        error("discretization inconnue : $discretization (:gauss_hermite ou :equiprobable)")
+        error("unknown discretization: $discretization (:gauss_hermite or :equiprobable)")
     end
     if match_variance && S > 1
         m2 = sum(weights .* nodes .^ 2)

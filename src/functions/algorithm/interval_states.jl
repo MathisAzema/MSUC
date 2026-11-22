@@ -8,7 +8,7 @@ const INTERVAL_RULES = (:dual, :projection, :minimum, :maximum)
 """
     initial_interval_state(instance) -> Vector{Float64}
 
-ytilde_{j,a,b,0} (eq. (17)) for all intervals: the unit's initial output if the interval covers t = 0,
+ytilde_{j,a,b,0} (eq. (16)) for all intervals: the unit's initial output if the interval covers t = 0,
 zero otherwise.
 """
 function initial_interval_state(instance::Instance)
@@ -28,10 +28,10 @@ Also returns the cost signal z^F_{j,a,b,s} of each active interval (NaN otherwis
 `rule == :dual`). For an interval [a:b] active at stage s:
 
   * selected by the schedule: the sampled output, ytilde_s = y_{j,s};
-  * otherwise, a point of the successor set (50) of ytilde_{s-1}, with
+  * otherwise, a point of the successor set (45) of ytilde_{s-1}, with
     hi = min{Pbar_{a,b,s}, ytilde_{s-1} + R^U_{a,b,s}} and lo = max{P_j, ytilde_{s-1} - R^D}, given by `rule`:
-      - `:dual`: with z_{j,a,b,s} = c_{j,s} - nu_{n(j),s} + sum_l sigma_l betatilde^l_{j,a,b,s+1} (eq. (55)),
-        hi if z < -SIGNAL_TOLERANCE, lo if z > SIGNAL_TOLERANCE (eq. (56)), else (indifferent, typically
+      - `:dual`: with z_{j,a,b,s} = c_{j,s} - nu_{n(j),s} + sum_l sigma_l betatilde^l_{j,a,b,s+1} (eq. (35c)),
+        hi if z < -SIGNAL_TOLERANCE, lo if z > SIGNAL_TOLERANCE (eq. (50)), else (indifferent, typically
         the marginal unit) the sampled output projected on [lo, hi];
       - `:projection`: the sampled output projected on [lo, hi];
       - `:minimum`: lo;
